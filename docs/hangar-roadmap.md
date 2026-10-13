@@ -1,7 +1,7 @@
 # Hangar expansion plan
 
-This plan covers the public Hangar product, based on 0.26.2. It distinguishes
-existing features, local additions awaiting review, and proposed work. Priority
+This plan covers the public Hangar product as of 0.26.4. It distinguishes
+released features and proposed work. Priority
 and effort below are design estimates, not measured implementation times.
 
 ## Current starting point
@@ -12,7 +12,7 @@ jumps and films. Automatic cameras, manual camera selection, look controls,
 light switches and saved/exported show presets already exist. A single local
 wall picture or video can already be loaded.
 
-Three coordinated themes have been added locally: **Industrial**, **Hypnotic**
+Three coordinated themes were released in 0.26.3: **Industrial**, **Hypnotic**
 and **Melodic**. They add wall image families, theme colours, arch patterns and
 laser choices, with gradual transitions and preset storage. They preserve the
 existing moving-head directions, scene cues, truss targets and audio connection.
@@ -28,10 +28,10 @@ audio file; an audio input alone does not supply reliable track identity.
 
 | Step | Work | Visible result | Relative effort |
 | --- | --- | --- | --- |
-| 0 | Review the three themes with music and resolve the browser-check failure | A tested, reviewable base for the next release | Investigation |
+| 0 | Review the three themes with music; technical release checks have passed | A tested, reviewable base for the next release | Investigation |
 | 1 | Musical VJ variants within each theme | Break, build and peak feel different while keeping the same visual identity | Medium |
-| 2 | Implemented locally: composed light-group responses | Stage heads, hall heads and arches answer one another instead of changing together every time | Medium |
-| 3 | Camera choreography tied to the chosen light composition | A strong light picture remains readable; cuts reveal the next composition | Medium |
+| 2 | Released in 0.26.3: composed light-group responses | Stage heads, hall heads and arches answer one another instead of changing together every time | Medium |
+| 3 | Proposed: camera choreography tied to the chosen light composition | A strong light picture remains readable; cuts reveal the next composition | Medium |
 | 4 | Crowd zones and subtle DJ reactions | Different parts of the room respond with different enthusiasm and delays | Medium–large |
 | 5 | Clip bank and compact scene buttons | More direct creative control without repeatedly opening file dialogs or presets | Medium–large |
 
@@ -74,7 +74,8 @@ accents. Select a composition at an existing musical cue and keep it stable
 between cues. Add recent-choice memory to avoid repeating the same composition.
 The original automatic behaviour should remain selectable.
 
-For step 3, reuse the existing cameras and manual freeze control. Automatic
+Step 3 is a proposal; no new camera behaviour is included in 0.26.4.
+Reuse the existing cameras and manual freeze control. Automatic
 drop cuts and section-dependent shots already exist; the addition is to choose
 a shot that shows the selected light composition and allow a longer hold when
 it is still developing. Manual views must retain control. Do not change camera

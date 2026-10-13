@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.26.4
+
+- Checkpoint release of the completed Hangar themes and light choreography.
+- Show behaviour is unchanged from 0.26.3; no unfinished camera changes are included.
+- Updated expansion-plan status to distinguish released features from future proposals.
+
 ## 0.26.3
 
 - Three coordinated Hangar themes: Industrial, Hypnotic and Melodic.

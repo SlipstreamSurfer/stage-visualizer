@@ -180,6 +180,27 @@ function setPanelVisible(visible) {
   $('panel').classList.toggle('hidden', !visible); $('openPanel').hidden = visible;
   $('openPanel').setAttribute('aria-expanded', String(visible));
 }
+const quickLights = $('quickLights'), quickLightsToggle = $('quickLightsToggle'), quickLightPanel = $('quickLightPanel');
+const hoverQuickLights = matchMedia('(hover: hover) and (pointer: fine)');
+function setQuickLightsVisible(visible) {
+  quickLightPanel.hidden = !visible;
+  quickLightsToggle.setAttribute('aria-expanded', String(visible));
+}
+quickLightsToggle.onclick = () => {
+  quickLights.dataset.pinned = String(quickLights.dataset.pinned !== 'true');
+  setQuickLightsVisible(quickLights.dataset.pinned === 'true');
+};
+quickLights.addEventListener('pointerenter', () => {
+  if (hoverQuickLights.matches) { quickLights.dataset.hovering = 'true'; setQuickLightsVisible(true); }
+});
+quickLights.addEventListener('pointerleave', () => {
+  if (hoverQuickLights.matches) quickLights.dataset.hovering = 'false';
+  if (hoverQuickLights.matches && quickLights.dataset.pinned !== 'true' && !quickLights.contains(document.activeElement)) setQuickLightsVisible(false);
+});
+quickLights.addEventListener('focusin', () => setQuickLightsVisible(true));
+quickLights.addEventListener('focusout', e => {
+  if (!quickLights.contains(e.relatedTarget) && quickLights.dataset.pinned !== 'true' && quickLights.dataset.hovering !== 'true') setQuickLightsVisible(false);
+});
 $('hidePanel').onclick = () => { setPanelVisible(false); $('openPanel').focus(); };
 $('openPanel').onclick = () => { setPanelVisible(true); document.querySelector('.menu-tabs [aria-selected="true"]').focus(); };
 selectMenuPage(kept('menuTab', 'Show'));
@@ -272,6 +293,8 @@ function fillSwitches() {
     }
     group.append(legend, list); $('switches').append(group);
   }
+  $('quickLights').hidden = !$('switches').childElementCount;
+  if ($('quickLights').hidden) setQuickLightsVisible(false);
   refreshEffects();
 }
 function persistControls() { keep('controls', JSON.stringify(controls)); }

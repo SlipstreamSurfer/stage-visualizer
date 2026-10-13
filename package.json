@@ -13,7 +13,7 @@
     "record": "node tools/record.mjs",
     "check": "node tools/check.mjs",
     "look": "node tools/look.mjs",
-    "test:browser": "node tools/test-hangar.mjs --browser",
+    "test:browser": "node tools/test-hangar.mjs --browser && node --test tests/quick-lights.test.mjs",
     "test:extended": "node tools/test-hangar.mjs --extended",
     "test:audio": "node tools/test-hangar.mjs --audio"
   },

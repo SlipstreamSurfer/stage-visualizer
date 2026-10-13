@@ -12,28 +12,33 @@
   #loading { position: fixed; inset: 0; display: grid; place-items: center; color: #777; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; pointer-events: none; }
   body.idle { cursor: none; }
   [hidden] { display: none !important; }
-  #panel { position: fixed; top: 16px; left: 16px; width: 300px; max-height: calc(100dvh - 32px); display: flex; flex-direction: column;
-    background: rgba(12, 12, 14, .9); border: 1px solid #2a2a2e; border-radius: 12px; color: #ddd; font-size: 13px; backdrop-filter: blur(10px); overflow: hidden; }
+  #panel { --glass: rgba(16, 18, 24, .72); position: fixed; top: 16px; left: 16px; width: min(470px, calc(100vw - 32px)); max-height: calc(100dvh - 32px);
+    display: grid; grid-template-columns: 78px minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "head head" "audio audio" "nav page" "foot foot";
+    background: var(--glass); border: 1px solid rgba(255,255,255,.2); border-radius: 18px; color: #e8eaf0; font-size: 13px;
+    backdrop-filter: blur(18px) saturate(125%); -webkit-backdrop-filter: blur(18px) saturate(125%);
+    box-shadow: 0 18px 55px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.07); overflow: hidden; }
   #panel.hidden { display: none; }
   #panel h1 { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #fff; }
-  .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid #26262b; flex-shrink: 0; }
+  .panel-header { grid-area: head; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.1); }
   .panel-actions { display: flex; gap: 6px; }
   #panel .panel-actions button { width: 28px; height: 28px; padding: 0; margin: 0; font-size: 16px; }
-  #panel .audio-card { padding: 0 14px 12px; flex-shrink: 0; max-height: calc(100dvh - 190px); overflow-y: auto; scrollbar-width: thin; }
+  #panel .audio-card { grid-area: audio; padding: 0 14px 12px; max-height: min(220px, 30dvh); overflow-y: auto; scrollbar-width: thin; }
   #panel .audio-card details { border: 0; margin: 0; max-height: min(260px, 28dvh); overflow-y: auto; scrollbar-width: thin; }
   #panel .audio-card summary { font-size: 12px; }
   #panel .audio-card select { margin-top: 8px; }
   #panel .audio-card label + select { margin-top: 0; }
-  #panel .menu-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 4px 10px 8px; border-bottom: 1px solid #2a2a2e; flex-shrink: 0; }
-  #panel .menu-tabs button { margin: 0; border-color: transparent; background: transparent; font-size: 12px; padding: 8px 4px; color: #999; }
-  #panel .menu-tabs button[aria-selected="true"] { color: #fff; background: #27272e; border-color: #41414b; }
-  .panel-pages { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #45454d transparent; padding: 4px 14px 14px; }
+  #panel .menu-tabs { grid-area: nav; display: flex; flex-direction: column; gap: 7px; padding: 12px 8px; border-right: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.035); }
+  #panel .menu-tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-height: 62px; margin: 0; border: 1px solid transparent; background: transparent; font-size: 10px; padding: 7px 3px; color: #b4b9c5; border-radius: 10px; text-transform: uppercase; letter-spacing: .04em; }
+  #panel .menu-tabs button .tab-glyph { font-size: 18px; line-height: 1; color: #d9deea; }
+  #panel .menu-tabs button[aria-selected="true"] { color: #fff; background: linear-gradient(145deg, rgba(255,100,61,.27), rgba(184,198,224,.1)); border-color: rgba(255,255,255,.2); box-shadow: inset 2px 0 #ff6845, 0 4px 14px rgba(0,0,0,.18); }
+  .panel-pages { grid-area: page; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #45454d transparent; padding: 4px 14px 14px; }
   #panel h2 { margin: 14px 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #aaa; }
-  #panel .panel-footer { border-top: 1px solid #26262b; padding: 9px 14px; font-size: 10px; color: #85858f; flex-shrink: 0; }
+  #panel .panel-footer { grid-area: foot; border-top: 1px solid rgba(255,255,255,.1); padding: 9px 14px; font-size: 10px; color: #a1a6b1; }
   #panel .panel-note { color: #92929d; font-size: 11px; line-height: 1.5; margin: 8px 0 12px; }
   #panel label { display: block; margin: 10px 0 4px; color: #999; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
   #panel select, #panel button, #panel input { width: 100%; box-sizing: border-box; }
-  #panel input[type="text"], #panel select, #panel button { padding: 7px 8px; background: #1c1c20; color: #eee; border: 1px solid #3a3a40; border-radius: 6px; font-size: 13px; }
+  #panel input[type="text"], #panel select, #panel button { padding: 7px 8px; background: rgba(10,12,17,.62); color: #eee; border: 1px solid rgba(255,255,255,.16); border-radius: 8px; font-size: 13px; }
   #panel button { cursor: pointer; margin-top: 6px; }
   #panel button:hover { background: #2a2a30; }
   #panel button:focus-visible, #panel select:focus-visible, #panel input:focus-visible, #panel summary:focus-visible, #openPanel:focus-visible { outline: 2px solid #b1bac8; outline-offset: 2px; }
@@ -53,15 +58,15 @@
   #panel details { border-top: 1px solid #2a2a2e; margin-top: 14px; padding-top: 2px; }
   #panel summary { cursor: pointer; color: #ccc; margin-top: 10px; }
   .row { display: flex; gap: 6px; }
-  #panel .fixture-level { margin-top: 8px; }
-  #panel .switches .fixture-level label { display: block; font-size: 10px; color: #999; }
-  #panel .switches .fixture-level input { width: 100%; }
+  .switches .fixture-level { margin-top: 8px; }
+  .switches .fixture-level label { display: block; font-size: 10px; color: #999; }
+  .switches .fixture-level input { width: 100%; }
   #panel .coil-card { border-left: 2px solid #45454d; padding-left: 10px; margin-top: 12px; }
-  #panel .fixture-group { border: 0; border-top: 1px solid #2a2a2e; padding: 10px 0 3px; margin: 14px 0 0; min-width: 0; }
-  #panel .fixture-group legend { padding: 0 8px 0 0; color: #999; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
-  #panel .switch-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
-  #panel .switches label { display: flex; align-items: flex-start; gap: 7px; margin: 0; color: #ccc; font-size: 12px; line-height: 1.35; text-transform: none; letter-spacing: 0; cursor: pointer; }
-  #panel .switches input { width: auto; margin: 0; }
+  .fixture-group { border: 0; border-top: 1px solid rgba(255,255,255,.13); padding: 8px 0 3px; margin: 8px 0 0; min-width: 0; }
+  .fixture-group legend { padding: 0 8px 0 0; color: #aeb3be; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+  .switch-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+  .switches label { display: flex; align-items: flex-start; gap: 7px; margin: 0; color: #ddd; font-size: 12px; line-height: 1.35; text-transform: none; letter-spacing: 0; cursor: pointer; }
+  .switches input { width: auto; margin: 0; }
   #panel input[type="checkbox"], #panel input[type="range"] { accent-color: #b1bac8; }
   #panel .effect-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   #panel .effect-grid button { min-height: 62px; margin: 0; text-align: left; padding: 10px; }
@@ -86,8 +91,36 @@
   #panel #markList input, #panel #markList select { margin-top: 6px; }
   #fps { margin-top: 2px; color: #666; font-size: 11px; }
   #hint { margin-top: 8px; color: #666; font-size: 11px; line-height: 1.5; }
-  #openPanel { position: fixed; top: 16px; left: 16px; padding: 10px 14px; background: rgba(12,12,14,.9); border: 1px solid #3a3a40; border-radius: 8px; color: #ddd; font: inherit; font-size: 12px; cursor: pointer; }
-  @media (max-width: 480px) { #panel { top: 12px; left: 12px; width: calc(100vw - 24px); max-height: calc(100dvh - 24px); } #openPanel { top: 12px; left: 12px; } }
+  #quickLights { position: fixed; z-index: 5; right: 18px; bottom: max(18px, env(safe-area-inset-bottom)); color: #eee; font-size: 13px; }
+  #quickLightsToggle { min-width: 132px; min-height: 48px; padding: 10px 16px; border: 1px solid rgba(255,255,255,.24); border-radius: 14px; color: #fff; background: rgba(20,22,29,.78); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 10px 32px rgba(0,0,0,.38); cursor: pointer; font: inherit; }
+  #quickLightsToggle[aria-expanded="true"] { border-color: rgba(255,104,69,.75); background: rgba(47,31,32,.88); }
+  #quickLightPanel { position: absolute; right: 0; bottom: calc(100% + 10px); width: min(380px, calc(100vw - 32px)); max-height: 55dvh; overflow: auto; padding: 14px; border: 1px solid rgba(255,255,255,.2); border-radius: 16px; background: rgba(16,18,24,.88); backdrop-filter: blur(22px) saturate(130%); -webkit-backdrop-filter: blur(22px) saturate(130%); box-shadow: 0 18px 55px rgba(0,0,0,.44); }
+  #quickLightPanel h2 { margin: 0 0 5px; color: #fff; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  #quickLightPanel p { margin: 0 0 10px; color: #aeb3be; font-size: 11px; line-height: 1.45; }
+  #quickLightPanel .fixture-group { margin-top: 8px; }
+  #quickLightPanel .switch-list { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  #quickLightPanel .switch-list > div { padding: 7px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: rgba(255,255,255,.04); }
+  #quickLightPanel .switches label { align-items: center; min-height: 32px; }
+  #quickLightPanel input[type="checkbox"] { min-width: 18px; min-height: 18px; }
+  #quickLights:focus-within #quickLightsToggle { border-color: rgba(255,255,255,.36); }
+  #openPanel { position: fixed; top: 16px; left: 16px; padding: 10px 14px; background: rgba(16,18,24,.76); border: 1px solid rgba(255,255,255,.2); border-radius: 12px; color: #eee; font: inherit; font-size: 12px; cursor: pointer; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 8px 28px rgba(0,0,0,.32); }
+  @media (max-width: 600px) {
+    #panel { top: auto; bottom: max(72px, calc(env(safe-area-inset-bottom) + 64px)); left: 8px; width: calc(100vw - 16px); max-height: min(70dvh, 620px); border-radius: 18px; grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto auto minmax(0,1fr) auto; grid-template-areas: "head" "audio" "nav" "page" "foot"; }
+    #panel .panel-header { padding: 10px 14px; }
+    #panel .audio-card { max-height: 24dvh; }
+    #panel .audio-card details { max-height: 20dvh; }
+    #panel .menu-tabs { flex-direction: row; padding: 5px 7px; gap: 4px; border-right: 0; border-top: 1px solid rgba(255,255,255,.1); border-bottom: 1px solid rgba(255,255,255,.1); }
+    #panel .menu-tabs button { flex: 1; min-width: 0; min-height: 52px; flex-direction: row; gap: 6px; font-size: 10px; }
+    #panel .menu-tabs button .tab-glyph { font-size: 16px; }
+    #panel .panel-pages { padding-bottom: 18px; }
+    #panel .effect-grid button { min-height: 68px; }
+    #panel .panel-actions button { min-width: 40px; min-height: 40px; }
+    #openPanel { top: auto; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; min-height: 44px; }
+    #quickLights { right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); }
+    #quickLightsToggle { min-width: 118px; min-height: 48px; }
+    #quickLightPanel { width: min(360px, calc(100vw - 24px)); max-height: 52dvh; }
+  }
+  @media (prefers-reduced-motion: no-preference) { #panel:not(.hidden) { animation: menu-arrive .16s ease-out; } @keyframes menu-arrive { from { opacity: .6; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } }
 </style>
 <script type="importmap">
 { "imports": { "three": "./vendor/three/three.webgpu.js", "three/webgpu": "./vendor/three/three.webgpu.js", "three/tsl": "./vendor/three/three.tsl.js", "three/addons/": "./vendor/three/addons/" } }
@@ -129,10 +162,10 @@
   </div>
   </div>
   <nav class="menu-tabs" role="tablist" aria-label="Control sections">
-    <button id="tabShow" type="button" role="tab" aria-controls="pageShow" aria-selected="true">Show</button>
-    <button id="tabLights" type="button" role="tab" aria-controls="pageLights" aria-selected="false" tabindex="-1">Lights</button>
-    <button id="tabEffects" type="button" role="tab" aria-controls="pageEffects" aria-selected="false" tabindex="-1">Effects</button>
-    <button id="tabSettings" type="button" role="tab" aria-controls="pageSettings" aria-selected="false" tabindex="-1">Settings</button>
+    <button id="tabShow" type="button" role="tab" aria-controls="pageShow" aria-selected="true"><span class="tab-glyph" aria-hidden="true">◉</span><span>Show</span></button>
+    <button id="tabLights" type="button" role="tab" aria-controls="pageLights" aria-selected="false" tabindex="-1"><span class="tab-glyph" aria-hidden="true">✳</span><span>Lights</span></button>
+    <button id="tabEffects" type="button" role="tab" aria-controls="pageEffects" aria-selected="false" tabindex="-1"><span class="tab-glyph" aria-hidden="true">ϟ</span><span>Effects</span></button>
+    <button id="tabSettings" type="button" role="tab" aria-controls="pageSettings" aria-selected="false" tabindex="-1"><span class="tab-glyph" aria-hidden="true">⚙</span><span>Settings</span></button>
   </nav>
   <div class="panel-pages">
   <section id="pageShow" class="panel-page" role="tabpanel" aria-labelledby="tabShow">
@@ -179,8 +212,7 @@
       <p class="panel-note">Changes the heights and beam arrangement. The steel moves gradually.</p>
       <div id="coilControls"></div>
     </details>
-    <h2>Lights and fixtures</h2>
-    <div id="switches" class="switches"></div>
+    <p class="panel-note">Use Quick lights at the bottom for fast fixture switches.</p>
   <details>
     <summary>Fine tune the look</summary>
     <label for="lookLight">Light <output id="lookLightValue" for="lookLight">1.00×</output></label><input id="lookLight" type="range" min="0.1" max="1.3" step="0.05" value="1">
@@ -230,6 +262,14 @@
   </div>
   <footer class="panel-footer">H &middot; hide controls &nbsp; F &middot; fullscreen</footer>
 </div>
+<aside id="quickLights" aria-label="Quick light controls">
+  <button id="quickLightsToggle" type="button" aria-expanded="false" aria-controls="quickLightPanel">✳ &nbsp; Quick lights</button>
+  <div id="quickLightPanel" hidden>
+    <h2>Quick lights</h2>
+    <p>Switch fixture groups on or off during the show.</p>
+    <div id="switches" class="switches"></div>
+  </div>
+</aside>
 <button id="openPanel" type="button" aria-controls="panel" aria-expanded="false" hidden>Show controls</button>
 <script type="module" src="src/main.js"></script>
 </body>

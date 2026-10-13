@@ -1,6 +1,6 @@
 // Opens a page of the show in a real browser window, on the real graphics card, waits, and reports what it sees:
 // frames a second, errors, and a picture in rec/look/. Needs the local server (npm start) and Chromium.
-//   node tools/look.mjs "?venue=club&cam=1" club          the show in the Club, picture rec/look/club.jpg
+//   node tools/look.mjs "?venue=hangar&cam=1" hangar        the show in Hangar, picture rec/look/hangar.jpg
 //   node tools/look.mjs --all "cam=0&hide" tour 7 [keys]   every venue (or those named, comma-separated) in one go:
 //                                                          rec/look/tour-<venue>.jpg and a line for each
 // A fourth argument (not with --all) is JavaScript to run in the page two seconds before the picture.

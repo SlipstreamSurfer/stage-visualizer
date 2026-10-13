@@ -1,5 +1,4 @@
-// The show without a picture: every venue lays out, the director answers the music in every one of them, and
-// there is a mood for every genre.
+// Extended Hangar checks without a browser: layout, all moods and musical light response.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { VENUES } from '../src/venues/index.js';
@@ -70,8 +69,8 @@ for (const key of Object.keys(VENUES)) {
   });
 }
 
-test('every mood runs through its demo track without a wrong number, in a hall and in a concert hall', () => {
-  for (const key of ['hangar', 'concerthall']) for (const mood of Object.keys(MOODS)) {
+test('every mood runs through its demo track without a wrong number, in Hangar', () => {
+  for (const key of ['hangar']) for (const mood of Object.keys(MOODS)) {
     play(key, mood, 45, ({ t, groups }) => {
       for (const list of Object.values(groups)) for (const f of list) {
         const numbers = [f.ch.dim, f.ch.pan, f.ch.tilt, f.ch.zoom, ...f.ch.color];
@@ -81,14 +80,14 @@ test('every mood runs through its demo track without a wrong number, in a hall a
   }
 });
 
-test('every genre has a venue made for it, and every family of genres is listed', () => {
+test('Hangar lists valid preferred moods and every mood belongs to a known family', () => {
   const made = new Set(Object.keys(VENUES).flatMap(key => layout(VENUES[key]).genres));
-  for (const mood of Object.keys(MOODS)) assert.ok(made.has(mood), `no venue lists ${MOODS[mood].name} among its genres`);
+  for (const mood of made) assert.ok(mood in MOODS, `unknown Hangar mood ${mood}`);
   for (const mood of Object.values(MOODS)) assert.ok(FAMILIES.includes(mood.family), `${mood.name} is in a family that is not listed: ${mood.family}`);
 });
 
 test('a drop is answered with strobes, blinders and CO2, and a break is darker than the peak', () => {
-  for (const key of ['hangar', 'club', 'field', 'arena']) {
+  for (const key of ['hangar']) {
     let strobe = 0, blinder = 0, dropAt = 0, breakLight = [], peakLight = [];
     const { groups } = play(key, 'techno', 60, ({ t, signals, groups }) => {
       if (signals.ev.drop) dropAt = t;
@@ -108,7 +107,7 @@ test('a drop is answered with strobes, blinders and CO2, and a break is darker t
 
 test('music with no beat is followed by how loud it is: no strobes, the stage always lit, more light when it swells', () => {
   let strobe = 0, quiet = [], loud = [], washMin = Infinity;
-  play('concerthall', 'classical', 90, ({ t, signals, groups, director }) => {
+  play('hangar', 'classical', 90, ({ t, signals, groups, director }) => {
     strobe = Math.max(strobe, ...(groups.strobe || []).map(f => f.ch.dim), 0);
     if (t < 6) return;
     washMin = Math.min(washMin, ...groups.wash.map(f => f.ch.dim));

@@ -13,6 +13,10 @@ recordings, reference tracks, machine-specific notes and private experiments
 belong outside this repository. Ignored files are not release inputs. A public
 branch is not a private storage location.
 
-Venues are fictional descriptions in `src/venues/`. Add a venue by registering
-its descriptor in `src/venues/index.js`. Shared fixtures and lighting behavior
-belong in the corresponding source modules, not duplicated venue code.
+Hangar is the only public venue and the main development stage. Improve its
+lighting, motion, cameras and musical response before adding product scope.
+Other venue experiments belong in private development.
+
+Use `npm test` for the short daily check, `npm run test:audio` for audio-engine changes and `npm run test:browser` for a real
+Hangar page check. Run `npm run test:extended` only when broader application
+changes require it. Do not tour unrelated venues for a Hangar change.

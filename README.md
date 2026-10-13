@@ -8,8 +8,8 @@
 </p>
 
 A browser show engine: lights, cameras and a crowd that follow the music you play.
-Choose from **33 fictional venues** and **48 moods**, from small clubs to open-air
-stages. WebGPU renders the show when available; WebGL provides a fallback.
+**Hangar** is the single public venue and the main stage for developing SV.
+Choose from **48 moods** to shape its show. WebGPU renders the show when available; WebGL provides a fallback.
 
 ## Start
 
@@ -80,11 +80,15 @@ npm run listen -- track.mp3
 npm run check -- track.mp3
 ```
 
-The tests use generated audio and synthetic rigs. Browser checks require Chrome,
-Edge or Chromium; `BROWSER_PATH` selects an executable. The page check uses
-Hangar by default. `PAGE_VENUES=club,arena npm test` selects others, while
-`PAGE_VENUES=all npm test` tours all public venues. Audio-analysis commands need
-ffmpeg. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
+`npm test` runs the fast Hangar and audio-engine checks. Use `npm run test:browser`
+for one real Hangar render, generated audio, camera controls and quality changes.
+`npm run test:audio` adds the longer listening and mix regressions.
+`npm run test:extended` runs the longer regression checks when audio, rendering
+or playback changes warrant them. Every browser check uses Hangar.
+
+Browser checks require Chrome, Edge or Chromium; `BROWSER_PATH` selects an
+executable. Tests use generated audio and synthetic fixtures. Audio-analysis
+commands need ffmpeg. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

@@ -21,7 +21,7 @@ test('file controls show track time, preserve annotated marks and export CSV', {
   const downloads = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-marks-'));
   try {
     await withPage(['--use-angle=swiftshader', '--enable-unsafe-swiftshader'], async ({ send, evaluate, until, errors, port }) => {
-      const url = `http://127.0.0.1:${port}/?venue=studio&quality=low&webgl`;
+      const url = `http://127.0.0.1:${port}/?venue=hangar&quality=low&webgl`;
       const loadFile = name => evaluate(`(async () => {
         const rate = 22050, seconds = 90, buffer = new ArrayBuffer(44 + rate * seconds * 2), view = new DataView(buffer);
         const text = (at, s) => [...s].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
@@ -66,7 +66,7 @@ test('file controls show track time, preserve annotated marks and export CSV', {
       const csv = fs.readFileSync(exported, 'utf8');
       assert.match(csv, /^start_seconds,end_seconds,event,notes,/);
       assert.ok(csv.includes('"40.25","40.25","observation","Build-up, ""too bright""","build_after_drop"'), 'CSV quotes notes and keeps precise track time and feedback');
-      assert.ok(csv.includes('"studio"'), 'CSV includes the show context');
+      assert.ok(csv.includes('"hangar"'), 'CSV includes the show context');
       await until(`document.getElementById('feedbackSave').textContent.includes('Saved to this project')`, 'Feedback was not saved directly to the project');
       const file = await evaluate('window.__show.audio.fileInfo');
       const id = createHash('sha256').update(JSON.stringify([file.name, file.size, file.lastModified])).digest('hex').slice(0, 20);

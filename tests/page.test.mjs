@@ -1,6 +1,6 @@
 // Opens the real page in a headless Chromium and checks that a venue builds and the show runs in it: no errors, the
 // demo track plays and the pyro fires; then an audio file is dropped on the page. The show is checked in the
-// Hangar by default; PAGE_VENUES selects other public venues.
+// Hangar by default; Only Hangar is exercised.
 // Chrome, Edge or Chromium is required; BROWSER_PATH can select its executable.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,11 +9,8 @@ import { RATE, listen } from '../tools/hear.mjs';
 import { track } from './synth.mjs';
 import { VENUES } from '../src/venues/index.js';
 
-// A software browser needs ten to twenty seconds a venue, so the page is checked in one: the Hangar. That every
-// venue lays out and plays is checked without a browser in show.test.mjs. PAGE_VENUES names other venues to tour
-// (PAGE_VENUES=hangar,arena), or "all" for every venue of the show.
-const ASKED = process.env.PAGE_VENUES || 'hangar', EVERY = ASKED === 'all';
-const TOUR = EVERY ? VENUES : Object.fromEntries(ASKED.split(',').map(key => { if (!VENUES[key]) throw new Error(`PAGE_VENUES asks for "${key}", which is not a venue`); return [key, VENUES[key]]; }));
+// The extended replay also stays in Hangar.
+const TOUR = { hangar: VENUES.hangar }, EVERY = false;
 
 // samples as a 16-bit mono WAV file
 function wav(pcm) {
@@ -29,7 +26,7 @@ function wav(pcm) {
 // for its WebGL way of drawing here: the same page, the same scene and the same materials, with every fixture on, at
 // the lightest quality so that a software browser gets through all the venues. What only WebGPU has (the smoke as
 // particles) is not covered.
-for (const [title, page, store, venues] of [[`the show: ${EVERY ? 'every venue' : Object.values(TOUR).map(v => v.name).join(', ')} builds`, 'index.html?webgl&all&quality=low&', 'sv.', TOUR]])
+for (const [title, page, store, venues] of [['the show: Hangar builds', 'index.html?webgl&all&quality=low&', 'sv.', TOUR]])
 test(`${title}, the demo show runs, the pyro fires and a dropped audio file is heard`, { timeout: 900000 }, () => withPage(['--use-angle=swiftshader', '--enable-unsafe-swiftshader'], async ({ send, errors, port }) => {
     const look = async () => JSON.parse((await send('Runtime.evaluate', { returnByValue: true, expression:
       `JSON.stringify({ loading: !!document.getElementById('loading'), status: document.getElementById('status')?.textContent, flow: !!window.__show?.director.mood.flow, beat: window.__show?.signals.beats ?? -1, phase: window.__show?.signals.m.phase, venue: window.__show?.world.layout.name, fixtures: window.__show?.world.layout.things.length })` })).result.value);
@@ -62,11 +59,10 @@ test(`${title}, the demo show runs, the pyro fires and a dropped audio file is h
     // An audio file dropped on the page: the browser plays it, and the show has to hear in it exactly what a replay
     // of the same samples hears (the kick coming in, the break, the drop), however slowly this browser draws.
     const { pcm } = track(128, [{ beats: 40, kick: true, hats: 0.6, pad: 0.5 }, { beats: 16, pad: 0.5 }, { beats: 24, kick: true, hats: 0.6, pad: 0.5 }]);   // four bars without the kick: a break, and a drop
-    // Venue rendering is checked above. Exercise real file detection in a small
-    // public venue to reduce software-renderer contention for the audio clock.
-    // Cross-venue file/input continuity is covered separately in switch.test.mjs.
-    await send('Page.navigate', { url: `http://127.0.0.1:${port}/index.html?webgl&quality=low&venue=studio` });
-    await new Promise(resolve => setTimeout(resolve, 6000));
+    // Exercise file detection in Hangar; the short browser check covers quality/audio continuity.
+    await send('Page.navigate', { url: `http://127.0.0.1:${port}/index.html?webgl&quality=low&venue=hangar` });
+    await send('Emulation.setDeviceMetricsOverride', { width: 320, height: 180, deviceScaleFactor: 1, mobile: false });
+    await new Promise(resolve => setTimeout(resolve, 1000));
     const expected = listen(pcm).events.filter(e => ['start', 'break', 'drop'].includes(e.type)).map(e => ({ t: e.t, what: e.type === 'start' ? 'kick comes in' : e.type }));
     await send('Runtime.evaluate', { awaitPromise: true, expression: `(async () => {
       const file = new File([Uint8Array.from(atob('${wav(pcm).toString('base64')}'), c => c.charCodeAt(0))], 'test-track.wav', { type: 'audio/wav' });

@@ -26,7 +26,7 @@ test('synthetic hall high views keep the stage sightline below the lighting ring
 });
 
 test('a venue opened later in the show gets a full first camera hold', () => {
-  const list = shots(layout(VENUES.studio)), camera = new CameraDirector(list, 1200);
+  const list = shots(layout(VENUES.hangar)), camera = new CameraDirector(list, 1200);
   const signals = { m: { section: 'groove', phase: 'groove' }, ev: {}, beats: 1 };
   assert.equal(camera.update(signals, 1200), list[0]);
   assert.equal(camera.pending, null, 'no immediate fade after the new venue appears');
@@ -66,8 +66,8 @@ test('every venue keeps all camera moves and their targets within its walls, flo
   }
 });
 
-test('small-room dance floor and pit cameras move smoothly across the entire shot', () => {
-  for (const key of ['studio', 'bunker', 'loft', 'tunnel']) {
+test('Hangar dance floor and pit cameras move smoothly across the entire shot', () => {
+  for (const key of ['hangar']) {
     const L = layout(VENUES[key]);
     for (const name of ['Dance floor', 'Pit']) {
       const shot = shots(L).find(s => s.name === name), dt = 1 / 60;
@@ -83,26 +83,8 @@ test('small-room dance floor and pit cameras move smoothly across the entire sho
   }
 });
 
-test('raked floors lift low cameras and keep high views and their targets above the seats', () => {
-  const L = layout(VENUES.cinema), list = shots(L);
-  for (const shot of list) {
-    for (const k of [0, 20, 40]) checkPoint(L, shot.pos(42, k), `raked floor/${shot.name}`);
-    checkPoint(L, shot.look, `raked floor/${shot.name} target`, true);
-  }
-  const back = list.find(s => s.name === 'High at the back').pos(0, 0);
-  assert.equal(back[1], L.plan.H * 0.82, 'a flying camera keeps its absolute height');
-});
-
-test('the studio pit follows the shallow stage edge and keeps out of the audience', () => {
-  const L = layout(VENUES.studio), shot = shots(L).find(s => s.name === 'Pit');
-  for (let k = 0; k <= 40; k += 0.5) {
-    const [x, , z] = shot.pos(150 + k, k);
-    assert.ok(L.onStage(x, z, 0.45), 'the camera stays in the clearance that keeps the crowd away from the booth');
-  }
-});
-
 test('extra facility views receive the same bounds without changing their source data', () => {
-  const L = layout(VENUES.studio);
+  const L = layout(VENUES.hangar);
   const extra = { name: 'Bar', fov: 62, pos: () => [50, 10, -50], look: [40, -5, 40] };
   const list = shots(L, [extra]), shot = list.at(-1);
   assert.equal(list.length, 10);
@@ -111,17 +93,4 @@ test('extra facility views receive the same bounds without changing their source
   checkPoint(L, shot.look, 'extra bar target', true);
   assert.deepEqual(extra.look, [40, -5, 40]);
   assert.deepEqual(extra.pos(), [50, 10, -50]);
-});
-
-test('terrace cameras stay on the platform while the outdoor drone can fly beyond it', () => {
-  for (const key of ['rooftop', 'pool', 'mountain']) {
-    const L = layout(VENUES[key]), list = shots(L);
-    let flewOutside = false;
-    for (const shot of list) for (let t = 0; t < 240; t += 7) {
-      const [x, , z] = shot.pos(t, 40);
-      if (shot.name === 'Drone') flewOutside ||= !L.inside(x, z);
-      else assert.ok(L.inside(x, z, 0.5), `${key}/${shot.name}: above the platform`);
-    }
-    assert.ok(flewOutside, `${key}: drone keeps its wide outdoor views`);
-  }
 });

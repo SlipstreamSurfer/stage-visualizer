@@ -80,7 +80,7 @@ test('white palette overrides genre tints and beam width reaches both head group
 });
 
 test('presets round-trip independently, reject invalid records and sanitize frozen views', () => {
-  const input = { id: 'one', name: '  Favourite  ', venue: 'round', mood: 'techno', controls: normalizeControls({ ringLook: 'Arena' }), look: { light: 0.8, off: { coil: true } }, pose: { position: [1, 2, 3], quaternion: [0, 0, 0, 1], fov: 62 } };
+  const input = { id: 'one', name: '  Favourite  ', venue: 'hangar', mood: 'techno', controls: normalizeControls({ ringLook: 'Arena' }), look: { light: 0.8, off: { coil: true } }, pose: { position: [1, 2, 3], quaternion: [0, 0, 0, 1], fov: 62 } };
   const p = normalizePresets(JSON.parse(JSON.stringify([null, input, input])));
   assert.equal(p.length, 1); assert.equal(p[0].name, 'Favourite'); assert.deepEqual(p[0].pose, input.pose);
   input.controls.levels.coil = 0;

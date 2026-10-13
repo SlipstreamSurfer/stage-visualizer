@@ -6,7 +6,7 @@ import { withPage } from './browser.mjs';
 for (const backend of ['webgl', 'webgpu']) test(`${backend}: looks, remembered sliders, mood lock and manual effect release`, { timeout: 300000 }, async context => {
   await withPage(backend === 'webgl' ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : [], async ({ send, evaluate, until, errors, port }) => {
     await send('Emulation.setDeviceMetricsOverride', { width: 640, height: 480, deviceScaleFactor: 1, mobile: false });
-    await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=studio&mood=house&quality=low&${backend === 'webgl' ? 'webgl' : ''}` });
+    await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=hangar&mood=house&quality=low&${backend === 'webgl' ? 'webgl' : ''}` });
     await until('!!window.__show?.ready', 'The controls page did not start');
     if (backend === 'webgpu' && !await evaluate('(async () => !!(navigator.gpu && await navigator.gpu.requestAdapter()))()')) {
       context.skip('No hardware WebGPU adapter available; WebGL is covered separately.'); return;
@@ -42,7 +42,7 @@ for (const backend of ['webgl', 'webgpu']) test(`${backend}: looks, remembered s
     await change('mood', 'ambient');
     assert.equal(await evaluate(`new URL(location.href).searchParams.get('mood')`), 'ambient', 'a mood supplied by a link cannot override a later selection on reload');
     await evaluate(`document.getElementById('moodLock').click()`);
-    await switchTo('turbine');
+    await switchTo('hangar');
     assert.equal(await evaluate(`document.getElementById('mood').value`), 'ambient', 'a locked mood survives an incompatible venue');
     assert.equal((await states()).btnPyro, 'off', 'present flames are visibly off by default');
     await fixture('Flames', true);
@@ -56,7 +56,7 @@ for (const backend of ['webgl', 'webgpu']) test(`${backend}: looks, remembered s
 
     const beforeReload = await evaluate('performance.timeOrigin');
     await send('Page.reload');
-    await until(`performance.timeOrigin !== ${beforeReload} && !!window.__show?.ready && window.__show.world.layout.name === 'Turbine Hall'`, 'Remembered controls did not reload');
+    await until(`performance.timeOrigin !== ${beforeReload} && !!window.__show?.ready && window.__show.world.layout.name === 'Hangar'`, 'Remembered controls did not reload');
     assert.deepEqual(await evaluate(`({ mood: document.getElementById('mood').value, lock: document.getElementById('moodLock').checked, look: document.getElementById('lookPreset').value, light: document.getElementById('lookLightValue').value, sens: document.getElementById('sensValue').value })`), { mood: 'ambient', lock: true, look: 'custom', light: '0.75×', sens: '1.65×' });
     await evaluate(`document.getElementById('resetSliders').click()`);
     assert.deepEqual(await evaluate(`['sens','lookLight','lookBloom','lookHaze','lookHall'].map(id => document.getElementById(id + 'Value').value)`), Array(5).fill('1.00×'));
@@ -71,20 +71,15 @@ for (const backend of ['webgl', 'webgpu']) test(`${backend}: looks, remembered s
       window.__controlsProbe = { stream: audio.stream, source: audio.source, ear: audio.ear, signals: window.__show.signals };
     })()`);
     await change('lookPreset', 'cinematic');
-    await switchTo('club');
+    await switchTo('hangar');
     assert.equal(await evaluate(`document.getElementById('mood').value`), 'ambient');
     await evaluate(`document.getElementById('moodLock').click()`);
     await change('quality', 'normal');
     await until(`!window.__show.changing && window.__show.quality === 'normal'`, 'Quality change did not finish');
     assert.equal(await evaluate(`document.getElementById('mood').value`), 'ambient', 'quality changes preserve the chosen mood even when unlocked');
-    await switchTo('studio');
-    assert.notEqual(await evaluate(`document.getElementById('mood').value`), 'ambient', 'an unlocked venue selects a suitable mood');
+    await switchTo('hangar');
+    assert.equal(await evaluate(`document.getElementById('mood').value`), 'ambient', 'reselecting Hangar preserves the visible mood');
     assert.equal(await evaluate(`window.__controlsProbe.stream === window.__show.audio.stream && window.__controlsProbe.source === window.__show.audio.source && window.__controlsProbe.ear === window.__show.audio.ear && window.__controlsProbe.signals === window.__show.signals && window.__show.audio.stream.getAudioTracks()[0].readyState === 'live'`), true, 'controls keep the live input and listener');
-    assert.equal((await states()).btnBlinder, 'missing', 'unavailable fixtures have a distinct state');
-    await key('keydown', 'b');
-    assert.equal(await evaluate('window.__show.director.manual.blinder'), false);
-    await key('keyup', 'b');
-
     await pointer('btnStrobe', 'pointerdown');
     assert.equal((await states()).btnStrobe, 'held');
     await key('keydown', ' ', 'Space');
@@ -103,7 +98,7 @@ for (const backend of ['webgl', 'webgpu']) test(`${backend}: looks, remembered s
     assert.equal((await states()).btnStrobe, 'off', 'disabling a held fixture releases it');
     assert.equal(await evaluate('window.__show.director.manual.strobe'), false);
     await fixture('Strobes', true);
-    await switchTo('club');
+    await switchTo('hangar');
     await key('keydown', 'b');
     assert.equal((await states()).btnBlinder, 'held');
     await evaluate(`Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new Event('visibilitychange')); delete document.hidden;`);

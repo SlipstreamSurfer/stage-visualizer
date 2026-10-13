@@ -3,20 +3,19 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { withPage, waitFor } from './browser.mjs';
 
-test('camera controls render every small-room view and retain the chosen view on venue changes', { timeout: 240000 }, async () => {
+test('Hangar camera controls render the hall views', { timeout: 240000 }, async () => {
   await withPage([], async ({ send, evaluate, until, errors, port }) => {
     await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 760, deviceScaleFactor: 1, mobile: false });
-    await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=studio&quality=normal&skip=24&details` });
+    await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=hangar&quality=normal&skip=24&details` });
     await until('!!window.__show?.ready', 'The camera preview did not start');
     fs.mkdirSync('rec/look/cameras', { recursive: true });
-    for (const key of ['studio', 'bunker', 'loft', 'club', 'tunnel', 'cave', 'cinema', 'dome', 'rooftop', 'hangar']) {
+    for (const key of ['hangar']) {
       const previousCamera = await evaluate(`document.getElementById('cam').value`);
       await evaluate(`document.getElementById('venue').value = '${key}'; document.getElementById('venue').dispatchEvent(new Event('change'));`);
       await until(`!window.__show.changing && window.__show.world.layout.name === document.getElementById('venue').selectedOptions[0].textContent`, `The venue ${key} did not load`);
       assert.equal(await evaluate(`document.getElementById('cam').value`), previousCamera, 'the selected standard camera survives a venue change');
       const count = await evaluate('window.__show.cams.list.length');
-      const small = ['studio', 'bunker', 'loft', 'club'].includes(key);
-      const indices = small ? Array.from({ length: 9 }, (_, i) => i) : [0, 2, 4, 6, 8, ...Array.from({ length: Math.max(0, count - 9) }, (_, i) => i + 9)];
+      const indices = Array.from({ length: count }, (_, i) => i);
       for (const i of indices) {
         await evaluate(`document.getElementById('cam').value = '${i}'; document.getElementById('cam').dispatchEvent(new Event('change')); window.__show.cams.lastCut = -40;`);
         await waitFor(150);

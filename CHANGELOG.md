@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.26.1
+
+- Hangar is the only public venue and the main stage for improving SV.
+- Fast daily tests and a separate Hangar browser check replace routine venue tours.
+- Broader Hangar regression checks remain available when needed.
+
 ## 0.26.0
 
 - Browser show engine with 33 fictional venues and 48 music moods.

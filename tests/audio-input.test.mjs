@@ -23,7 +23,7 @@ test('audio input picker: exact device, signal, permission failure, hotplug and 
         return destination.stream;
       };
     ` });
-    const url = `http://127.0.0.1:${port}/?venue=studio&quality=low&webgl`;
+    const url = `http://127.0.0.1:${port}/?venue=hangar&quality=low&webgl`;
     await send('Page.navigate', { url });
     await until('!!window.__show?.ready', 'The show did not start');
     await evaluate(`document.getElementById('audioSource').value = 'input'; document.getElementById('audioSource').dispatchEvent(new Event('change'));`);

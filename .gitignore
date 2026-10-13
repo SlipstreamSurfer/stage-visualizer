@@ -1,0 +1,25 @@
+.DS_Store
+.claude/
+.codex/
+node_modules/
+
+# Local-only media, notes, environments and generated packages
+rec/
+runtime/
+dist/
+private/
+local/
+testtracks/
+HANDOFF*.md
+.env
+.env.*
+*.mp3
+*.flac
+*.wav
+*.m4a
+*.aac
+*.ogg
+*.opus
+*.aif
+*.aiff
+*.webm

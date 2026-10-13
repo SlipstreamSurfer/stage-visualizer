@@ -1,0 +1,20 @@
+{
+  "name": "stage-visualizer",
+  "version": "0.26.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "rekordbox": "node tools/serve.mjs --rekordbox",
+    "rekordbox:simulate": "node tools/rekordbox-simulate.mjs",
+    "test": "node --test tests/",
+    "listen": "node tools/replay.mjs",
+    "record": "node tools/record.mjs",
+    "check": "node tools/check.mjs",
+    "look": "node tools/look.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -74,7 +74,7 @@ export function layout(venue) {
     let mount = mountOf(item);
     if (item.truss && item.moves) {
       mount = movers.length; movers.push([a, b]);
-      things.push({ type: 'truss', role: 'truss', mover: mount, pos: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], props: {}, u: 0.5, row: (rows.truss = (rows.truss ?? -1) + 1) });
+      things.push({ type: 'truss', role: 'truss', mover: mount, pos: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], props: item.props || {}, u: 0.5, row: (rows.truss = (rows.truss ?? -1) + 1) });
     } else if (item.truss) { trusses.push([a, b]); if (mount === undefined) fixedTrusses.push([a, b]); }
     for (const h of item.hang) {
       const row = rows[h.role] = (rows[h.role] ?? -1) + 1, inset = h.inset ?? 0.06;

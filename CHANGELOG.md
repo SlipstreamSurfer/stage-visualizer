@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.26.2
+
+- Smoother Hangar rig movement and more coherent scene transitions.
+- Clearer Hangar layout with visible FOH, delay speakers, barrier and walking lanes.
+- More detailed flown PA arrays and improved crowd edge anti-aliasing.
+- Subtle speaker grilles, DJ booth monitors and clearer FOH display details.
+- Show controls and presets are easier to inspect, recover and use.
+
 ## 0.26.1
 
 - Hangar is the only public venue and the main stage for improving SV.

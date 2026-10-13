@@ -58,18 +58,24 @@ export function buildPools(env, add, most) {
   // A beam in haze. A cone that is brightest where you look along its surface, with a hot core and a soft halo,
   // thinning out along its length. The haze it shines through is not even: it drifts, so the beam shows slow streaks
   // of thicker and thinner air. A gobo breaks the beam into separate shafts that turn.
-  const geo = new THREE.CylinderGeometry(0.03, 1, 1, 28, 1, true).translate(0, -0.5, 0), bCol = dyn(most, 3), bGobo = dyn(most, 2);   // from the lens along -y
+  const geo = new THREE.CylinderGeometry(0.03, 1, 1, 28, 1, true).translate(0, -0.5, 0), bCol = dyn(most, 3), bGobo = dyn(most, 4);   // from the lens along -y
   geo.setAttribute('aCol', bCol); geo.setAttribute('aGobo', bGobo);
   const mat = new THREE.MeshBasicNodeMaterial({ side: THREE.DoubleSide, ...additive });
   const facing = abs(dot(normalize(normalView), normalize(positionViewDirection))), body = pow(facing, 2.5).mul(0.9).add(pow(facing, 14).mul(0.8));
   const along = positionGeometry.y.negate(), reach = float(1).div(along.mul(3).add(1)).mul(fall(1.0, 0.8, along)).mul(smoothstep(0.0, 0.03, along));
   const drift = vec3(env.uTime.mul(0.09), env.uTime.mul(-0.035), env.uTime.mul(0.17));
   const air = mx_noise_float(positionWorld.mul(0.33).add(drift)).mul(0.45).add(sin(dot(positionWorld, vec3(1.1, 0.7, 1.3)).sub(env.uTime.mul(0.3))).mul(0.12)).add(1.05);
-  const gobo = attribute('aGobo', 'vec2'), shafts = mix(1, smoothstep(0.25, 0.5, abs(fract(uv().x.mul(7).add(gobo.y)).sub(0.5)).mul(2)).mul(1.7), gobo.x);
-  mat.colorNode = attribute('aCol', 'vec3').mul(body).mul(reach).mul(air).mul(shafts);
+  const gobo = attribute('aGobo', 'vec4'), divisions = select(gobo.z.lessThan(0.5), 7, select(gobo.z.lessThan(1.5), 6, 10));
+  const shafts = mix(1, smoothstep(0.25, 0.5, abs(fract(uv().x.mul(divisions).add(gobo.y)).sub(0.5)).mul(2)).mul(env.hangarRig ? 1.4 : 1.7), gobo.x);
+  const extinction = exp(along.mul(gobo.w).mul(-0.025));
+  mat.colorNode = attribute('aCol', 'vec3').mul(body).mul(reach).mul(air).mul(shafts).mul(extinction);
   const beams = add(new THREE.InstancedMesh(geo, mat, most)); beams.count = 0; beams.frustumCulled = false; beams.renderOrder = 1;
   env.beams = { take: () => beams.count++,
-    set(i, at, way, wide, length, c, I, gobo, spin) { beams.setMatrixAt(i, m4.compose(at, q4.setFromUnitVectors(DOWN, way), v.set(wide, length, wide))); bCol.setXYZ(i, c.r * I, c.g * I, c.b * I); bGobo.setXY(i, gobo, spin); },
+    set(i, at, way, wide, length, c, I, gobo, spin, mode = 0) {
+      beams.setMatrixAt(i, m4.compose(at, q4.setFromUnitVectors(DOWN, way), v.set(wide, length, wide)));
+      const scatter = env.hangarRig ? I / (1 + I * 0.65) : I;
+      bCol.setXYZ(i, c.r * scatter, c.g * scatter, c.b * scatter); bGobo.setXYZW(i, gobo || 0, spin || 0, mode, env.hangarRig ? length : 0);
+    },
     hide(i) { beams.setMatrixAt(i, NONE); bCol.setXYZ(i, 0, 0, 0); } };
 
   // the glare round a lamp: a soft spot that always faces the camera
@@ -103,34 +109,44 @@ function movingHead(env, thing, base = {}) {
   const bodies = env.pool('headBody', () => new THREE.CylinderGeometry(0.13, 0.16, 0.36, 12), dark), iBody = bodies.take();
   const lenses = env.pool('lens', () => new THREE.CircleGeometry(0.12, 16).rotateX(Math.PI / 2).translate(0, -0.185, 0), lamp, true), iLens = lenses.take();
   const iBeam = env.beams.take(), iFlare = env.flares.take();
-  let pan = ch.pan = 0, tilt = ch.tilt = p.stand ? 1.9 : 0, panV = 0, tiltV = 0, gobo = 0, spin = 0;
+  let pan = ch.pan = 0, tilt = ch.tilt = p.stand ? 1.9 : 0, panV = 0, tiltV = 0, gobo = 0, spin = 0, zoom = 1;
+  // Small, fixed calibration differences between lamps, without random frame-to-frame jitter.
+  const calibration = p.hangar ? 1 + Math.sin(thing.pos[0] * 1.71 + thing.pos[1] * 0.13 + thing.pos[2] * 0.37) * 0.035 : 1;
   const at = new THREE.Vector3(), way = new THREE.Vector3(), color = new THREE.Color();
   return { object, update(dt) {
     if (!p.fixed) {   // a real head takes time to get there
       // the motors speed up, run at their top speed and brake: the head eases into a move and settles at the end
       const top = ch.slow ? 1.2 : 3.4, w = ch.slow ? 3.5 : 7, d = Math.min(dt, 0.05);
-      panV = Math.max(-top, Math.min(top, panV + ((ch.pan - pan) * w * w - 2 * w * panV) * d)); pan += panV * d;
+      const panDistance = Math.atan2(Math.sin(ch.pan - pan), Math.cos(ch.pan - pan));
+      panV = Math.max(-top, Math.min(top, panV + (panDistance * w * w - 2 * w * panV) * d)); pan += panV * d;
       tiltV = Math.max(-top, Math.min(top, tiltV + ((ch.tilt - tilt) * w * w - 2 * w * tiltV) * d)); tilt += tiltV * d;
     }
     yoke.rotation.y = pan; head.rotation.x = -tilt;
     head.updateWorldMatrix(true, false);   // wherever the truss it hangs on has moved to
     bases.put(iBase, object.matrixWorld); clamps?.put(iClamp, object.matrixWorld); yokes.put(iYoke, yoke.matrixWorld); bodies.put(iBody, head.matrixWorld); lenses.put(iLens, head.matrixWorld);
-    const I = ch.dim, on = I > 0.004, glowing = Math.min(1, I * 3) * 2.5;
+    zoom += ((ch.zoom ?? 1) - zoom) * (1 - Math.exp(-dt / 0.8));
+    const I = ch.dim * calibration, on = I > 0.004, glowing = Math.min(1, I * 3) * 2.5;
     color.setRGB(ch.color[0], ch.color[1], ch.color[2]);
     lenses.color(iLens, color.r * glowing, color.g * glowing, color.b * glowing);
     if (!on) { env.beams.hide(iBeam); env.flares.hide(iFlare); return; }
     // where the lens is and which way it points, and how far the beam goes: to the floor, or to the roof when it points up
     at.set(0, -0.18, 0).applyMatrix4(head.matrixWorld); way.set(0, -1, 0).transformDirection(head.matrixWorld);
-    const length = Math.min(p.reach, way.y < -0.03 ? at.y / -way.y : way.y > 0.03 ? (env.H - at.y) / way.y : p.reach);
-    const half = p.spread * (ch.zoom ?? 1);
+    let length = Math.min(p.reach, way.y < -0.03 ? at.y / -way.y : way.y > 0.03 ? (env.H - at.y) / way.y : p.reach);
+    if (p.hangar) {
+      // End the beam at the first wall hit, even when it points nearly horizontally.
+      for (const [origin, direction, extent] of [[at.x, way.x, env.W / 2], [at.z, way.z, env.D / 2]]) {
+        if (Math.abs(direction) > 0.0001) length = Math.min(length, Math.max(0.1, (Math.sign(direction) * extent - origin) / direction));
+      }
+    }
+    const half = p.spread * (p.hangar ? zoom : ch.zoom ?? 1);
     gobo += ((ch.gobo || 0) - gobo) * Math.min(1, dt * 3); spin += dt * 0.25 * gobo;
-    env.beams.set(iBeam, at, way, length * Math.tan(half) + 0.1, length, color, I * 0.38 * (0.25 + 0.75 * Math.min(1.6, env.haze)) * (p.fixed ? 0.3 : 1), gobo, spin);
+    env.beams.set(iBeam, at, way, length * Math.tan(half) + 0.1, length, color, I * 0.38 * (0.25 + 0.75 * Math.min(1.6, env.haze)) * (p.fixed ? 0.3 : 1), gobo, spin, ch.goboMode || 0);
     // a lamp that points at you is blinding, one that points away is a dim glow: the flare follows how squarely the
     // lens faces the camera, and stretches sideways like in a lens
     const glare = Math.pow(Math.max(0, way.dot(v.subVectors(env.cam, at).normalize())), 12);
     const near = Math.min(1, Math.max(0, (env.cam.distanceTo(at) - 2.5) / 7)), k = I * (0.5 + glare * 5) * near;   // a lamp right beside the lens must not fill the picture
     env.flares.set(iFlare, at, (0.6 + I * 0.8) * (1 + glare * 2.4), (0.6 + I * 0.8) * (1 + glare * 0.8), color.r * k, color.g * k, color.b * k);
-    env.cast(at, way.x, way.y, way.z, color, I * (p.fixed ? 0.5 : 1), half);   // and it lights what it lands on
+    env.cast(at, way.x, way.y, way.z, color, I * (p.fixed ? 0.5 : 1), half, p.hangar ? gobo : 0, spin, ch.goboMode || 0);   // and it lights what it lands on
   } };
 }
 
@@ -334,11 +350,19 @@ const FIXTURES = {
     return { object: mesh, update(dt, t) {
       const ch = thing.ch; c.setRGB(...ch.color); c2.setRGB(...(ch.color2 || ch.color));
       for (let f = 0, i = 0; f <= n; f++) {
-        // a pulse leaves the stage on every kick and travels down the hall
-        const pulse = Math.exp(-Math.pow((f - (ch.travel ?? 99)) * 0.9, 2));
+        // Scene-stable gestures: a pulse down the hall, its return, paired groups,
+        // or a slow wave that moves at phrase pace.
+        const pattern = ch.pattern || 0, travel = pattern === 1 ? n - (ch.travel ?? 99) : (ch.travel ?? 99);
+        let pulse = pattern === 1 ? Math.exp(-Math.pow((f - travel) * 0.9, 2)) : (pattern === 3 ? 0 : (ch.kickPulse || 0));
+        if (pattern === 2 && f % 2 !== Math.floor((ch.beat || 0) / 4) % 2) pulse = 0;
         for (let k = 0; k < SEG; k++, i++) {
-          const along = Math.pow(Math.max(0, Math.cos((k / SEG * 2 - (ch.phase || 0) * 0.5 + f * 0.13) * Math.PI)), 8);
-          const level = ch.dim * (0.05 + pulse * 0.9 + along * (ch.chase || 0)) + (ch.flash || 0);
+          const u = k / SEG, phase = ch.phase || 0;
+          const along = pattern === 3
+            ? 0.5 + 0.5 * Math.cos(phase * Math.PI / 16 - f * 0.72 + u * Math.PI * 2)
+            : Math.pow(Math.max(0, Math.cos((u * 2 - phase / 8 + f * 0.13) * Math.PI)), 8);
+          const level = pattern === 3
+            ? ch.dim * (0.1 + along * 0.46 + (ch.chase || 0) * 0.2) + (ch.flash || 0)
+            : ch.dim * (0.05 + pulse * 0.9 + along * (ch.chase || 0)) + (ch.flash || 0);
           const col = f % 2 ? c2 : c; mesh.instanceColor.setXYZ(i, col.r * level * 2, col.g * level * 2, col.b * level * 2);
         }
       }

@@ -24,9 +24,29 @@ export function buildStage(L, ctx) {
   const deck = st.floor ? surface(st.floor, { gain: 2 }) : plain(0x1d1d20, { roughness: 0.55, metalness: 0.1, gain: 2.2 });   // a stage floor is dark, not a hole
   if (st.height > 0.02) put(deck, st.round ? post(st.width / 2, st.height, 0, st.z, 0, 48) : box(Math.min(W - 0.2, st.width), st.height, st.depth, 0, st.height / 2, st.z));
   const pa = st.pa ?? (st.kind === 'centre' ? 'none' : H > 8 || open ? 'arrays' : 'stacks');
-  for (const s of [-1, 1]) {   // the PA: arrays hung beside the stage in a big room, stacks on the floor in a small one
+  for (const s of [-1, 1]) {   // the PA: flown line arrays in large rooms, compact stacks in small ones
     const x = s * Math.min(W / 2 - 1.2, st.width / 2 + 1.6);
-    if (pa === 'arrays') for (let j = 0; j < 8; j++) put(black, box(1.4, 0.48, 0.9, 0, 0, 0).rotateX(j * 0.055).translate(x, H * 0.72 - j * 0.5, st.front - 0.4 - j * j * 0.012));
+    if (pa === 'arrays') {
+      const face = plain(0x292c31, { roughness: 0.82, metalness: 0.22, gain: 0.85 });
+      const cone = plain(0x111317, { roughness: 0.72, metalness: 0.18, gain: 0.7 });
+      const rings = [], cones = [];
+      for (let j = 0; j < 8; j++) {
+        const tilt = j * 0.055, y = H * 0.72 - j * 0.5, z = st.front - 0.4 - j * j * 0.012;
+        put(black, box(1.4, 0.48, 0.9, 0, 0, 0).rotateX(tilt).translate(x, y, z));
+        // Two recessed-looking drivers on every cabinet face; the discs follow each cabinet's downward splay.
+        for (const offset of [-0.105, 0.105]) {
+          const cy = y + Math.cos(tilt) * offset - Math.sin(tilt) * 0.452;
+          const cz = z + Math.sin(tilt) * offset + Math.cos(tilt) * 0.452;
+          rings.push(post(0.126, 0.018, 0, 0, 0, 16).rotateX(Math.PI / 2).rotateX(tilt).translate(x, cy, cz));
+          cones.push(post(0.094, 0.02, 0, 0, 0, 16).rotateX(Math.PI / 2).rotateX(tilt).translate(x, cy, cz + 0.012));
+        }
+      }
+      put(face, rings); put(cone, cones);
+      // A flybar and two slim hang points make the array read as flown equipment, not floating boxes.
+      const topY = H * 0.72 + 0.25, topZ = st.front - 0.34;
+      put(face, box(1.58, 0.09, 0.16, x, topY, topZ));
+      for (const dx of [-0.52, 0.52]) put(face, post(0.025, H - 0.55 - topY, x + dx, topZ, topY, 6));
+    }
     if (pa === 'stacks') for (let j = 0; j < 3; j++) put(black, box(0.75, 0.6, 0.7, x, 0.3 + j * 0.62, st.front + 0.5));
   }
   const who = typeof st.performer === 'object' ? st.performer : { beat: st.performer || 'dj', flow: st.performer || 'dj' }, acts = {};
@@ -60,7 +80,7 @@ const PERFORMERS = {
 
   // the booth: a table with decks and a mixer, monitors either side, a work light, and the DJ
   dj(c) {
-    const { L, st, own, lit, black, deck } = c, { H } = L.plan, boothZ = L.focus[2], riser = st.riser ?? (H > 8 && st.height > 1) ? 0.4 : 0, base = st.height + riser, table = base + 1.05;
+    const { L, st, own, lit, plain, black, deck } = c, { H } = L.plan, boothZ = L.focus[2], riser = st.riser ?? (H > 8 && st.height > 1) ? 0.4 : 0, base = st.height + riser, table = base + 1.05;
     const mesh = (g, mat) => own(new THREE.Mesh(g, mat));
     if (riser) mesh(box(6.4, riser, 3.4, 0, st.height + riser / 2, boothZ - 0.5), deck);   // the DJ on a riser, in a big room
     // The work light: a spot straight down on the decks and whoever plays, from as high as an arm's length above a raised
@@ -83,10 +103,20 @@ const PERFORMERS = {
     mesh(mergeGeometries([-1, 1].flatMap(s => [box(0.012, 0.3, 0.012, s * 0.235, table + 0.15, boothZ + 0.02), box(0.012, 0.012, 0.16, s * 0.235, table + 0.3, boothZ - 0.055)])), black);
     mesh(mergeGeometries([-1, 1].map(s => box(0.05, 0.012, 0.022, s * 0.235, table + 0.292, boothZ - 0.125))), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.42, 0.33), fog: false }));
     const updateDJ = buildDJ({ add: own, lit, black, at: [0, base, boothZ - 0.72], top: table + 0.1, gearZ: boothZ - 0.2 });
+    const monitorFaces = [], monitorDrivers = [], monitorRings = [];
+    const monitorFace = plain(0x292c31, { roughness: 0.82, metalness: 0.15, gain: 0.85 });
+    const monitorCone = plain(0x101216, { roughness: 0.75, metalness: 0.12, gain: 0.75 });
     for (const s of [-1, 1]) {   // the DJ's own monitors: a bass cabinet with a mid/high cabinet on top at ear height, turned to the DJ
-      const mx = s * 1.9, mz = boothZ - 1.0, turn = Math.atan2(-mx, 0.3);
-      mesh(box(0.62, 0.74, 0.7, 0, 0, 0, turn).translate(mx, base + 0.37, mz), black); mesh(box(0.5, 0.8, 0.5, 0, 0, 0, turn).translate(mx, base + 1.16, mz), black);
+      const mx = s * 1.9, mz = boothZ - 1.0, turn = Math.atan2(-mx, 0.3), sn = Math.sin(turn), cs = Math.cos(turn);
+      const panel = (w, h, d, y) => new THREE.PlaneGeometry(w, h).rotateY(turn).translate(mx + sn * (d / 2 + 0.006), y, mz + cs * (d / 2 + 0.006));
+      const driver = (r, d, y) => new THREE.CircleGeometry(r, 16).rotateY(turn).translate(mx + sn * (d / 2 + 0.012), y, mz + cs * (d / 2 + 0.012));
+      mesh(box(0.62, 0.74, 0.7, 0, 0, 0, turn).translate(mx, base + 0.37, mz), black);
+      mesh(box(0.5, 0.8, 0.5, 0, 0, 0, turn).translate(mx, base + 1.16, mz), black);
+      monitorFaces.push(panel(0.5, 0.62, 0.7, base + 0.37), panel(0.4, 0.66, 0.5, base + 1.16));
+      monitorRings.push(driver(0.19, 0.7, base + 0.37), driver(0.14, 0.5, base + 1.16));
+      monitorDrivers.push(driver(0.145, 0.7, base + 0.37), driver(0.1, 0.5, base + 1.16));
     }
+    mesh(mergeGeometries(monitorFaces), monitorFace); mesh(mergeGeometries(monitorRings), monitorFace); mesh(mergeGeometries(monitorDrivers), monitorCone);
     return { update(t, dt, signals, director, look) {
       boothLight.intensity = director.manual.blackout ? 0 : lampPower * look.light; frontLight.intensity = director.manual.blackout ? 0 : frontPower * look.light;
       decks.update(t, dt, signals);

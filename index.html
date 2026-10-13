@@ -12,6 +12,11 @@
   #loading { position: fixed; inset: 0; display: grid; place-items: center; color: #777; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; pointer-events: none; }
   body.idle { cursor: none; }
   [hidden] { display: none !important; }
+  #miniStatus { display: none; position: fixed; left: 16px; bottom: 16px; max-width: calc(100vw - 200px); color: #ddd; background: #111c; border: 1px solid #444; border-radius: 10px; padding: 9px 12px; font-size: 12px; pointer-events: none; }
+  #panel.hidden ~ #miniStatus { display: block; }
+  #shortcutHelp { background: #14161c; color: #eee; border: 1px solid #555; border-radius: 14px; max-width: min(420px, 85vw); line-height: 1.8; }
+  #shortcutHelp::backdrop { background: #0009; }
+
   #panel { --glass: rgba(16, 18, 24, .72); position: fixed; top: 16px; left: 16px; width: min(470px, calc(100vw - 32px)); max-height: calc(100dvh - 32px);
     display: grid; grid-template-columns: 78px minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
     grid-template-areas: "head head" "audio audio" "nav page" "foot foot";
@@ -133,6 +138,7 @@
   <header class="panel-header">
     <h1>Stage Visualizer</h1>
     <div class="panel-actions">
+      <button id="helpButton" type="button" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
       <button id="fullscreenPanel" type="button" title="Fullscreen (F)" aria-label="Toggle fullscreen">⛶</button>
       <button id="hidePanel" type="button" title="Hide controls (H)" aria-label="Hide controls">−</button>
     </div>
@@ -197,6 +203,9 @@
     <label for="presetName">Preset name</label><input id="presetName" type="text" maxlength="60" placeholder="My favourite show">
     <button id="savePreset" type="button">Save as new</button>
     <div class="row"><button id="updatePreset" type="button" disabled>Update selected</button><button id="deletePreset" type="button" disabled>Delete selected</button></div>
+    <button id="undoDeletePreset" type="button" hidden>Undo deletion</button>
+    <div class="row"><button id="exportPresets" type="button">Export backup</button><button id="importPresets" type="button">Import backup</button></div>
+    <input id="presetBackupFile" type="file" accept="application/json,.json" hidden>
     <p class="panel-note">Saved in this browser: venue, mood, light settings, rings and camera. A frozen view is saved too.</p>
     <div id="presetStatus" class="panel-note" role="status"></div>
   </details>
@@ -256,7 +265,7 @@
     <input id="wallFile" type="file" accept="image/*,video/*" hidden>
   <details>
     <summary>Keyboard shortcuts</summary>
-    <div id="hint">H = hide panel &middot; F = fullscreen<br>G = good moment &middot; X = wrong moment<br>T = unrated moment<br>Space = strobe &middot; B = blinders<br>C = CO2 &middot; V = pyro &middot; K = confetti<br>1&ndash;9 = camera &middot; 0 = automatic &middot; M = mood</div>
+    <div id="hint">H = hide panel &middot; F = fullscreen<br>? = shortcuts &middot; P = pause camera &middot; N = next scene<br>G = good moment &middot; X = wrong moment<br>T = unrated moment<br>Space = strobe &middot; B = blinders<br>C = CO2 &middot; V = pyro &middot; K = confetti<br>1&ndash;9 = camera &middot; 0 = automatic &middot; M = mood<br>Double-click a slider to restore its default.</div>
   </details>
   </section>
   </div>
@@ -271,6 +280,8 @@
   </div>
 </aside>
 <button id="openPanel" type="button" aria-controls="panel" aria-expanded="false" hidden>Show controls</button>
+<div id="miniStatus"></div>
+<dialog id="shortcutHelp" aria-labelledby="shortcutHelpTitle"><h2 id="shortcutHelpTitle">Keyboard shortcuts</h2><div id="shortcutHelpContent"></div><form method="dialog"><button type="submit">Close · Esc</button></form></dialog>
 <script type="module" src="src/main.js"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@
 // WebGPU and WebGL.
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { Fn, Loop, uniform, uniformArray, materialColor, positionWorld, normalWorld, texture, vec2, vec3, abs, mix, smoothstep, dot, length, normalize, select } from 'three/tsl';
+import { Fn, Loop, If, uniform, uniformArray, materialColor, positionWorld, normalWorld, texture, vec2, vec3, abs, mix, smoothstep, dot, length, normalize, select, cross, sin, cos, atan, min, max, sqrt } from 'three/tsl';
 import { layout, byRole } from './layout.js';
 import { moveRig } from './rig-motion.js';
 import { FIXTURES, buildPools } from './fixtures.js';
@@ -23,14 +23,42 @@ const STRUCTURE = new Set(['stageRoof', 'tower', 'wings']);
 
 // Light from the beams on what they hit. Every beam is a cone (where it starts, which way it points, how wide, what
 // colour); a material that is lit this way tests each point of its surface against the brightest cones. n: how many.
-function lighting(n) {
+function lighting(n, shadowCount = 0) {
   const pos = uniformArray(Array.from({ length: n }, () => new THREE.Vector3(0, 1e4, 0))), dir = uniformArray(Array.from({ length: n }, () => new THREE.Vector4(0, -1, 0, 0.9))), col = uniformArray(Array.from({ length: n }, () => new THREE.Vector3()));
+  const optics = uniformArray(Array.from({ length: n }, () => new THREE.Vector4()));
+  const shadowMin = uniformArray(Array.from({ length: Math.max(1, shadowCount) }, () => new THREE.Vector3(1e4, 1e4, 1e4)));
+  const shadowMax = uniformArray(Array.from({ length: Math.max(1, shadowCount) }, () => new THREE.Vector3(1e4 + 1, 1e4 + 1, 1e4 + 1)));
   const flashPos = uniform(new THREE.Vector3(0, -1e4, 0)), flashCol = uniform(new THREE.Vector3());
   const light = Fn(([p, nrm]) => {
     const sum = vec3(0).toVar();
     Loop(n, ({ i }) => {
       const d = p.sub(pos.element(i)), dist = length(d), way = d.div(dist), edge = dir.element(i).w;
-      sum.addAssign(col.element(i).mul(smoothstep(edge, mix(edge, 1, 0.4), dot(way, dir.element(i).xyz))).mul(abs(dot(nrm, way)).mul(0.7).add(0.3)).div(dist.mul(dist).mul(0.006).add(1)));
+      const detail = vec3(1).toVar();
+      if (shadowCount) {
+        const axis = dir.element(i).xyz;
+        const right = normalize(select(abs(axis.y).greaterThan(0.9), vec3(1, 0, 0), cross(axis, vec3(0, 1, 0))));
+        const up = cross(axis, right), settings = optics.element(i);
+        const radius = dist.mul(sqrt(max(0.001, edge.oneMinus().mul(2)))).add(0.1);
+        const local = vec2(dot(d, right), dot(d, up)).div(radius);
+        const gx = local.x.mul(cos(settings.y)).sub(local.y.mul(sin(settings.y)));
+        const gy = local.x.mul(sin(settings.y)).add(local.y.mul(cos(settings.y)));
+        const stripes = smoothstep(-0.15, 0.2, sin(gx.mul(16)));
+        const petals = smoothstep(-0.2, 0.2, cos(atan(gy, gx).mul(6)));
+        const dots = smoothstep(0.35, 0.65, cos(gx.mul(16)).mul(cos(gy.mul(16))));
+        const mask = select(settings.z.lessThan(0.5), stripes, select(settings.z.lessThan(1.5), petals, dots));
+        detail.mulAssign(mix(1, mask.mul(0.85).add(0.15), settings.x));
+        // Only the two strongest beams cast structural shadows: bounded cost even with 96 heads.
+        If(i.lessThan(2), () => {
+          Loop(shadowCount, ({ i: j }) => {
+            const ray = d.add(vec3(0.00001));
+            const a = shadowMin.element(j).sub(pos.element(i)).div(ray), b = shadowMax.element(j).sub(pos.element(i)).div(ray);
+            const lo = min(a, b), hi = max(a, b), entry = max(lo.x, max(lo.y, lo.z)), exit = min(hi.x, min(hi.y, hi.z));
+            const blocked = exit.greaterThan(max(entry, 0.001)).and(entry.lessThan(0.998));
+            detail.mulAssign(select(blocked, 0.15, 1));
+          });
+        });
+      }
+      sum.addAssign(col.element(i).mul(detail).mul(smoothstep(edge, mix(edge, 1, 0.4), dot(way, dir.element(i).xyz))).mul(abs(dot(nrm, way)).mul(0.7).add(0.3)).div(dist.mul(dist).mul(0.006).add(1)));
     });
     const fd = p.sub(flashPos);   // fire and fireworks light everything around them
     return sum.add(flashCol.mul(abs(dot(nrm, normalize(fd))).mul(0.6).add(0.4)).div(dot(fd, fd).mul(0.02).add(1)));
@@ -51,22 +79,28 @@ function lighting(n) {
     m.emissiveNode = light(positionWorld, normalWorld).mul(albedo.add(0.03)).mul(gain);
     return m;
   };
-  return { n, pos, dir, col, flashPos, flashCol, light, lit };
+  return { n, pos, dir, col, optics, shadowMin, shadowMax, flashPos, flashCol, light, lit };
 }
 
 // quality: { crowd (share of the crowd, 0 to 1), beams (how many beams light the room), details (bars, exits,
 // people who walk: everything a venue lists besides its stage and lights) }
 export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   const L = layout(venue), { W, D, H } = L.plan, st = L.stage, sh = L.shell, open = !!sh.open, F = L.floor;
+  const hangarRig = L.things.some(f => f.props.hangar);
   const add = o => (scene.add(o), o), put = batcher(add);
-  const lights = lighting(quality.beams), { lit } = lights, { surface, plain } = surfaces(lit);
+  const lights = lighting(quality.beams, hangarRig ? 6 : 0), { lit } = lights, { surface, plain } = surfaces(lit);
+  if (hangarRig) {
+    const base = st.height + 0.4, z = L.focus[2];
+    lights.shadowMin.array[0].set(-2.08, base + 0.02, z - 0.58);
+    lights.shadowMax.array[0].set(2.08, base + 1.03, z + 0.58);
+  }
   const black = plain(0x0d0d0f, { roughness: 0.8, gain: 2.5 }), steel = plain(0x2c2c30, { roughness: 0.6, metalness: 0.4 });
-  const casts = Array.from({ length: 200 }, () => ({ I: 0, pos: new THREE.Vector3(), dir: new THREE.Vector4(), col: new THREE.Vector3() }));
+  const casts = Array.from({ length: 200 }, () => ({ I: 0, pos: new THREE.Vector3(), dir: new THREE.Vector4(), col: new THREE.Vector3(), optics: new THREE.Vector4() }));
   let nCast = 0, flashI = 0;
-  const env = { scene, W, D, H, haze: 1, hazeOut: 1, roomColor: [1, 1, 1], wallColor: new THREE.Color(), uPointScale: uniform(500), uTime: uniform(0), cam: new THREE.Vector3(), put, plain, surface, black, steel,
+  const env = { scene, W, D, H, hangarRig, haze: 1, hazeOut: 1, roomColor: [1, 1, 1], wallColor: new THREE.Color(), uPointScale: uniform(500), uTime: uniform(0), cam: new THREE.Vector3(), put, plain, surface, black, steel,
     media: null,   // a picture or video for the LED walls, or null
     // a beam reports where it shines, so the room can be lit by it
-    cast(at, dx, dy, dz, color, I, half) { if (nCast >= casts.length || I < 0.02) return; const k = casts[nCast++]; k.I = I; k.pos.copy(at); k.dir.set(dx, dy, dz, Math.cos(Math.min(1.2, half * 1.5 + 0.03))); k.col.set(color.r * I, color.g * I, color.b * I); },
+    cast(at, dx, dy, dz, color, I, half, gobo = 0, spin = 0, mode = 0) { if (nCast >= casts.length || I < 0.02) return; const k = casts[nCast++]; k.I = I; k.pos.copy(at); k.dir.set(dx, dy, dz, Math.cos(Math.min(1.2, half * 1.5 + 0.03))); k.col.set(color.r * I, color.g * I, color.b * I); k.optics.set(gobo, spin, mode, 0); },
     // fire reports a flash of light; the strongest one in a frame counts
     flash(pos, r, g, b, I) { if (I <= flashI) return; flashI = I; lights.flashPos.value.set(...pos); lights.flashCol.value.set(r * I, g * I, b * I); },
   };
@@ -110,9 +144,9 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
 
   // ----- what a venue lists besides its stage and lights: parked unless asked for, but for what is structure -----
   const details = !!quality.details;
-  const fac = buildFacilities({ ...L, fence: details, facilities: L.facilities.filter(f => details || STRUCTURE.has(f.type)) }, { add, lit, black, steel });
+  const fac = buildFacilities({ ...L, fence: details, facilities: L.facilities.filter(f => details || STRUCTURE.has(f.type) || (hangarRig && ['barrier', 'foh', 'delays'].includes(f.type))) }, { add, lit, black, steel });
   // aisles: a venue with people walking keeps a lane free down both sides and across the back
-  const lane = details && L.walkers && !L.walkPath ? { x: W / 2 - 6.6, z0: st.front + 5, z1: D / 2 - 7.2 } : null;
+  const lane = (details || hangarRig) && L.walkers && !L.walkPath ? { x: W / 2 - 6.6, z0: st.front + 5, z1: D / 2 - 7.2 } : null;
   // where people walk: the venue's own route, or the aisles; the crowd keeps a strip free along every stretch of it
   const route = details && L.walkers ? L.walkPath || (lane && [[-lane.x, lane.z0], [-lane.x, lane.z1], [lane.x, lane.z1], [lane.x, lane.z0]]) : null;
   const rect = (x0, x1, z0, z1) => (x, z) => x > x0 && x < x1 && z > z0 && z < z1;
@@ -248,13 +282,37 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
     const [a, b] = def;
     const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], parts = [], rel = p => [p[0] - mid[0], p[1] - mid[1], p[2] - mid[2]];
     truss([rel(a), rel(b)], parts);
-    const motors = [], cables = [];
-    for (const k of [0.08, 0.36, 0.64, 0.92]) { const p = rel([a[0] + (b[0] - a[0]) * k, a[1], a[2] + (b[2] - a[2]) * k]); strut([p[0], 0.2, p[2]], [p[0], H, p[2]], 0.025, parts); motors.push(new THREE.BoxGeometry(0.2, 0.36, 0.2).translate(p[0], 0.42, p[2])); }   // chains, long enough for the lowest position, each with its hoist
+    const motors = [], cables = [], pickUps = [];
+    for (const k of [0.08, 0.36, 0.64, 0.92]) {
+      const p = rel([a[0] + (b[0] - a[0]) * k, a[1], a[2] + (b[2] - a[2]) * k]);
+      if (!hangarRig) strut([p[0], 0.2, p[2]], [p[0], H, p[2]], 0.025, parts);
+      pickUps.push({ local: new THREE.Vector3(p[0], 0.2, p[2]), top: new THREE.Vector3(mid[0] + p[0], shell.ceil(mid[0] + p[0], mid[2] + p[2]) - 0.1, mid[2] + p[2]), radius: 0.0125 });
+      motors.push(new THREE.BoxGeometry(0.2, 0.36, 0.2).translate(p[0], 0.42, p[2]));
+    }
     const ra = rel(a), rb = rel(b), end = Math.abs(a[0]) > Math.abs(b[0]) ? ra : rb;
-    strut([ra[0], 0.27, ra[2]], [rb[0], 0.27, rb[2]], 0.09, cables); strut([end[0], 0.3, end[2]], [end[0], H, end[2]], 0.08, cables);   // the loom along the truss and up to the roof
+    strut([ra[0], 0.27, ra[2]], [rb[0], 0.27, rb[2]], 0.09, cables);
+    if (!hangarRig) strut([end[0], 0.3, end[2]], [end[0], H, end[2]], 0.08, cables);
+    pickUps.push({ local: new THREE.Vector3(end[0], 0.3, end[2]), top: new THREE.Vector3(mid[0] + end[0], shell.ceil(mid[0] + end[0], mid[2] + end[2]) - 0.1, mid[2] + end[2]), radius: 0.04 });
     rigOf(a, b, true);
     const group = add(new THREE.Group()); group.position.set(...mid); group.add(new THREE.Mesh(mergeGeometries(parts), trussMat), new THREE.Mesh(mergeGeometries(motors), hoistMat), new THREE.Mesh(mergeGeometries(cables), black));
-    return { group, mid, drop: 0, roll: 0, vel: 0, swing: 0, swingV: 0 };
+    let updateSupports;
+    if (hangarRig) {
+      const chains = add(new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 6), black, pickUps.length));
+      chains.frustumCulled = false;
+      const transform = new THREE.Object3D(), bottom = new THREE.Vector3(), delta = new THREE.Vector3(), vertical = new THREE.Vector3(0, 1, 0);
+      updateSupports = () => {
+        group.updateWorldMatrix(true, false);
+        pickUps.forEach(({ local, top, radius }, i) => {
+          bottom.copy(local).applyMatrix4(group.matrixWorld); delta.subVectors(top, bottom);
+          transform.position.copy(bottom).add(top).multiplyScalar(0.5);
+          transform.scale.set(radius, Math.max(0.01, delta.length()), radius); transform.quaternion.setFromUnitVectors(vertical, delta.normalize());
+          transform.updateMatrix(); chains.setMatrixAt(i, transform.matrix);
+        });
+        chains.instanceMatrix.needsUpdate = true;
+      };
+      updateSupports();
+    }
+    return { group, mid, drop: 0, velocity: 0, roll: 0, vel: 0, swing: 0, swingV: 0, updateSupports };
   });
   put(steel, rigging); put(hoistMat, hoists); put(black, looms);
   for (const thing of L.things) {
@@ -269,14 +327,22 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
         thing.ch.actualDrop = mv.drop; thing.ch.velocity = mv.velocity;
         return;
       }
-      // winches are slow, and quicker up than down
-      const want = Math.max(0, Math.min(mv.mid[1] - 5.5, thing.ch.drop || 0)), step = dt * (want < mv.drop ? 1.6 : 0.5);
+      const want = Math.max(0, Math.min(mv.mid[1] - 5.5, thing.ch.drop || 0));
       const before = mv.drop;
-      mv.drop += Math.max(-step, Math.min(step, want - mv.drop)); mv.roll += Math.max(-dt * 0.12, Math.min(dt * 0.12, (thing.ch.roll || 0) - mv.roll));
-      // a few tonnes on chains: when the winches start or stop, the truss swings a little and takes a while to hang still
+      if (thing.props.hangar) {
+        // A heavy hall truss eases into each cue and brakes before its next height.
+        moveRig(mv, want, dt, { speed: want < mv.drop ? 1.1 : 0.42, acceleration: 0.3, maxDrop: mv.mid[1] - 5.5 });
+      } else {
+        // Other winches retain their established slow-down / quick-up travel.
+        const step = dt * (want < mv.drop ? 1.6 : 0.5);
+        mv.drop += Math.max(-step, Math.min(step, want - mv.drop));
+      }
+      mv.roll += Math.max(-dt * 0.12, Math.min(dt * 0.12, (thing.ch.roll || 0) - mv.roll));
+      // A few tonnes on chains: when the winches start or stop, the truss swings a little and takes a while to hang still.
       const vel = dt > 0 ? (mv.drop - before) / dt : 0, d = Math.min(dt, 0.05);
       mv.swingV += ((mv.vel - vel) * 0.05 - mv.swing * 2.6 - mv.swingV * 0.5) * d * 4; mv.swing += mv.swingV * d; mv.vel = vel;
       mv.group.position.y = mv.mid[1] - mv.drop; mv.group.rotation.z = mv.roll; mv.group.rotation.x = mv.swing;
+      mv.updateSupports?.();
     } }); continue; }
     const make = FIXTURES[thing.type];
     if (!make) throw new Error(`the venue ${L.name} asks for a fixture "${thing.type}" that is not in the library`);
@@ -307,7 +373,11 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       flush();
       // the brightest beams light the room
       const top = casts.slice(0, nCast).sort((p, r) => r.I - p.I).slice(0, lights.n);
-      for (let i = 0; i < lights.n; i++) { if (i < top.length) { lights.pos.array[i].copy(top[i].pos); lights.dir.array[i].copy(top[i].dir); lights.col.array[i].copy(top[i].col).multiplyScalar(2.2); } else lights.col.array[i].set(0, 0, 0); }
+      for (let i = 0; i < lights.n; i++) { if (i < top.length) { lights.pos.array[i].copy(top[i].pos); lights.dir.array[i].copy(top[i].dir); lights.col.array[i].copy(top[i].col).multiplyScalar(2.2); lights.optics.array[i].copy(top[i].optics); } else lights.col.array[i].set(0, 0, 0); }
+      if (hangarRig) movers.slice(0, 5).forEach((mv, i) => {
+        lights.shadowMin.array[i + 1].set(mv.mid[0] - 17, mv.group.position.y - 0.15, mv.mid[2] - 0.15);
+        lights.shadowMax.array[i + 1].set(mv.mid[0] + 17, mv.group.position.y + 0.15, mv.mid[2] + 0.15);
+      });
       if (director.smokeAt !== smokeAt) { smokeAt = director.smokeAt; smoke.burst([0, st.height + 0.5, st.front - 1]); }   // CO2 or a drop: a bank of smoke off the stage
       smoke.update(dt, t, director.room.color, (0.0004 + signals.energy * 0.0011 + signals.kick * 0.0008 + director.flash * 0.012) * look.light * (director.manual.blackout ? 0 : 1), env.haze);
       // the crowd: hands rise with the energy and the build-up, a cheer when the kick drops out, jumping and filming
@@ -319,14 +389,14 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       hands += (want * (calm ? 0.5 : 1) - hands) * Math.min(1, dt * 2.5);
       filming += ((brk && m.hasGrooved ? 0.9 : signals.hype * 0.8) - filming) * Math.min(1, dt * 1.5);
       U.time.value = t; U.dance.value = signals.phase; U.hands.value = hands; U.film.value = filming; U.hype.value = signals.hype * (brk ? 0 : 1);
-      U.front.value.copy(env.wallColor).multiplyScalar(2.2).add(tone.setRGB(...director.room.color).multiplyScalar(director.room.level * 0.012)).multiplyScalar(look.light * (director.manual.blackout ? 0 : 1));
+      U.front.value.copy(env.wallColor).multiplyScalar(2.2).add(tone.setRGB(...director.room.color).multiplyScalar(director.room.level * (hangarRig ? 0.007 : 0.012))).multiplyScalar(look.light * (director.manual.blackout ? 0 : 1));
       U.rim.value.copy(stageLight.color).lerp(WHITE, 0.5).multiplyScalar((0.1 + signals.kick * 0.35 + signals.drop + director.blind) * look.light * (director.manual.blackout ? 0 : 1));
       phones.visible = filming > 0.05; phones.material.color.setRGB(0.6, 0.75, 1).multiplyScalar(filming * 1.5);
       const room = director.room, spill = look.hall < 1 ? look.hall : 1 + (look.hall - 1) * 1.5;
-      hall.color.setRGB(...room.color); hall.intensity = (spill * room.level * 0.42 + 0.4 * Math.pow(look.hall, 3)) * size;
+      hall.color.setRGB(...room.color); hall.intensity = (spill * room.level * (hangarRig ? 0.26 : 0.42) + 0.4 * Math.pow(look.hall, 3)) * size;
       stageLight.color.copy(env.wallColor).lerp(hall.color, 0.3); stageLight.intensity = (1.5 + env.wallColor.r + env.wallColor.g + env.wallColor.b) * 4 * spill * size * (director.manual.blackout ? 0 : 1);
       house.intensity = daylight * Math.pow(look.hall, 4);
-      scene.fog.density = 0.015 * env.haze / size * (open ? 0.45 : 1);
+      scene.fog.density = 0.015 * (hangarRig ? Math.min(1.5, env.haze) : env.haze) / size * (open ? 0.45 : 1);
       scene.fog.color.setRGB(...room.color).multiplyScalar((0.006 + signals.kick * 0.02 + director.flash * 0.08) * (1 + Math.max(0, look.haze - 1) * 5) * (director.manual.blackout ? 0 : 1));
       scene.fog.color.r += fogOf[0]; scene.fog.color.g += fogOf[1]; scene.fog.color.b += fogOf[2];   // and what distance fades to under this sky
       const amp = signals.m.activity < 0.15 ? 0.1 : signals.m.phase === 'break' ? 0.4 + signals.m.build * 0.4 : Math.min(1, 0.7 + signals.energy * 0.3 + signals.hype * 0.3);

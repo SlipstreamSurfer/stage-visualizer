@@ -45,6 +45,7 @@ export function buildFacilities(L, ctx) {
     return {
       box(w, h, d, x, y, z, mat = black) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; },
       plate(w, h, x, y, z, mat) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.position.set(x, y, z); g.add(m); return m; },
+      disc(r, x, y, z, mat) { const m = new THREE.Mesh(new THREE.CircleGeometry(r, 12), mat); m.position.set(x, y, z); g.add(m); return m; },
       // someone standing here; facing 0 looks into the room, Math.PI at the wall
       person(x, z, facing, kind) { const [wx, wz] = toWorld(x, z); people.push({ x: wx, y: 0, z: wz, ry: f.ry + facing, kind }); },
       light(x, y, z, colour, power, reach) { const p = new THREE.PointLight(colour, power, reach, 2); p.position.set(x, y, z); g.add(p); lamps.push(p); },
@@ -228,7 +229,12 @@ export function buildFacilities(L, ctx) {
       for (const [x, wide] of [[-2, 2], [0.2, 1.8], [2.2, 1.6]]) {
         p.box(wide, 0.06, 0.9, x, 1.35, -1.2, grey); for (const s of [-1, 1]) p.box(0.05, 0.9, 0.8, x + s * (wide / 2 - 0.05), 0.9, -1.2, steel);
         p.box(wide * 0.85, 0.12, 0.6, x, 1.45, -1.15, black);
-        for (let k = 0; k < 2; k++) p.plate(0.55, 0.34, x - 0.32 + k * 0.64, 1.82, -1.52, glow(0.02 + k * 0.015, 0.035, 0.06)).rotation.x = -0.2;   // screens, turned to the operator
+        for (let k = 0; k < 2; k++) {
+          const sx = x - 0.32 + k * 0.64;
+          p.plate(0.55, 0.34, sx, 1.82, -1.52, glow(0.035 + k * 0.012, 0.06, 0.11)).rotation.x = -0.2;   // quiet blue screens, turned to the operator
+          p.plate(0.34, 0.018, sx - 0.04, 1.78, -1.505, glow(0.1, 0.19, 0.36)).rotation.x = -0.2;   // a dim level trace
+          p.plate(0.13, 0.014, sx + 0.16, 1.735, -1.49, glow(0.18, 0.12, 0.035)).rotation.x = -0.2;   // status indicator
+        }
         p.box(wide * 0.8, 0.012, 0.02, x, 1.52, -0.86, glow(0.5, 0.2, 0.9));   // the desk's own little lights
         p.person(x, -0.25, Math.PI, 'crew');
       }
@@ -255,8 +261,16 @@ export function buildFacilities(L, ctx) {
       for (let i = 0; i < n; i++) { const x = (i - (n - 1) / 2) * 2.4; p.box(2.34, 1.15, 0.06, x, 0.6, 0, alu); p.box(2.34, 0.05, 1.1, x, 0.03, -0.5, alu); p.box(2.34, 0.05, 0.3, x, 0.35, 0.2, alu); }
       for (let x = -W / 2 + 3; x < W / 2 - 2; x += 3.6) p.person(x, -0.9, 0, 'security');
       const subs = f.subs || 0, span = Math.min(st.width, W - 4);
-      for (let i = 0; i < subs; i++) p.box(1.28, 0.64, 0.95, (i - (subs - 1) / 2) * span / subs, 0.32, st.front + 0.6 - z, speaker);
-      for (let i = 0; i < 4; i++) p.box(0.5, 0.3, 0.35, (i - 1.5) * st.width / 5, st.height + 0.15, st.front - 0.25 - z, speaker);
+      for (let i = 0; i < subs; i++) {
+        const x = (i - (subs - 1) / 2) * span / subs, front = st.front + 0.6 - z + 0.48;
+        p.box(1.28, 0.64, 0.95, x, 0.32, st.front + 0.6 - z, speaker);
+        p.plate(1.12, 0.5, x, 0.32, front, speakerGrille);
+      }
+      for (let i = 0; i < 4; i++) {
+        const x = (i - 1.5) * st.width / 5, front = st.front - 0.25 - z + 0.176;
+        p.box(0.5, 0.3, 0.35, x, st.height + 0.15, st.front - 0.25 - z, speaker);
+        p.plate(0.42, 0.22, x, st.height + 0.15, front, speakerGrille);
+      }
       p.free(-W / 2, W / 2, st.front - z - 1, 0.45);
     },
     // beside the stage: drapes that close off the wings, with flight cases, dimmer racks and crew behind them
@@ -288,7 +302,16 @@ export function buildFacilities(L, ctx) {
     },
     // speakers hung further down the hall, so the back hears the top end as clearly as the front
     delays(f) {
-      for (const z of f.z) for (const s of [-1, 1]) { const p = place([s * f.x, z, 0]); for (let j = 0; j < 4; j++) p.box(1.1, 0.4, 0.7, 0, H * 0.66 - j * 0.42, 0, speaker).rotation.x = 0.05 + j * 0.07; p.box(1.2, 0.08, 0.8, 0, H * 0.66 + 0.26, 0, steel); p.box(0.03, H * 0.34 - 0.4, 0.03, 0, H * 0.83 + 0.1, 0, steel); }
+      for (const z of f.z) for (const s of [-1, 1]) {
+        const p = place([s * f.x, z, 0]);
+        for (let j = 0; j < 4; j++) {
+          const y = H * 0.66 - j * 0.42, tilt = 0.05 + j * 0.07;
+          p.box(1.1, 0.4, 0.7, 0, y, 0, speaker).rotation.x = tilt;
+          p.plate(0.94, 0.3, 0, y, 0.356, speakerGrille).rotation.x = tilt;
+          for (const x of [-0.27, 0.27]) p.disc(0.095, x, y, 0.364, speakerCone).rotation.x = tilt;
+        }
+        p.box(1.2, 0.08, 0.8, 0, H * 0.66 + 0.26, 0, steel); p.box(0.03, H * 0.34 - 0.4, 0.03, 0, H * 0.83 + 0.1, 0, steel);
+      }
     },
   };
   const fence = lit(new THREE.MeshStandardMaterial({ color: 0x9a9da3, roughness: 0.5, metalness: 0.7, transparent: true, opacity: 0.35 }), 1.3);
@@ -297,6 +320,8 @@ export function buildFacilities(L, ctx) {
   const drape = lit(new THREE.MeshStandardMaterial({ color: 0x060607, roughness: 1 }), 1);
   const ramp = lit(new THREE.MeshStandardMaterial({ color: 0x8a7a10, roughness: 0.8 }), 1.2);
   const speaker = lit(new THREE.MeshStandardMaterial({ color: 0x0b0b0d, roughness: 0.6, metalness: 0.2 }), 2);
+  const speakerGrille = new THREE.MeshBasicMaterial({ color: 0x17191e, fog: false });
+  const speakerCone = new THREE.MeshBasicMaterial({ color: 0x0b0c0f, fog: false });
 
   if (open && L.fence) {   // a fence round the field, open where the gates are
     const gates = L.facilities.filter(f => f.type === 'exit' || f.type === 'entrance');

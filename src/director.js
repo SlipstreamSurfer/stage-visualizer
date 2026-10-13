@@ -113,6 +113,36 @@ const RING_LOOKS = [
   { name: 'Arena', drops: [0.4, 2.3] },
   { name: 'Layers', drops: [1.8, 1.1] },
 ];
+// The Hangar's five transverse trusses and two side trusses cover different depth zones.
+// Keep quiet passages on the crowd; let builds and strong peaks lift a share of beams to the roof.
+const aimHangar = (f, k, beat, section, build, energy, drop) => {
+  const pos = f.livePos || f.pos;
+  const bar = Math.floor(beat / 16) % 4;
+  const depth = ((Math.floor((pos[2] + 30) / 10) + bar) % 5 + 5) % 5;
+  const floorZ = -16 + depth * 11.5;
+  // Pan on a slow show clock, not the kick phase: a 125 BPM beat made beams snap side to side.
+  const phase = k.m * 0.55 + Math.abs(f.pos[0]) * 0.07 + f.pos[2] * 0.03;
+  const sway = Math.sin(phase);
+  const roof = section === 'break' ? clamp(build * 0.5) : section === 'peak' ? clamp(0.28 + energy * 0.42 + drop * 0.45) : 0;
+  const side = Math.sign(f.xn || 1);
+  const targetX = side * (Math.abs(f.xn) * 5 + sway * 7) * (k.hangarLook === 1 ? -1 : 1);
+  const x = targetX * (1 - roof) + side * (19 + sway * 2) * roof;
+  const y = 0.35 + roof * 13.8;
+  const z = floorZ + sway * 2;
+  const dx = x - pos[0], dy = y - pos[1], dz = z - pos[2];
+  return [Math.atan2(dx, dz), Math.atan2(Math.hypot(dx, dz), -dy)];
+};
+// Address real positions, so side trusses and floor heads join the same spatial chase.
+const hangarHeadGate = (f, beat, pattern) => {
+  const x = clamp((f.pos[0] + 20) / 40), z = clamp((f.pos[2] + 36) / 54);
+  const step = Math.floor(beat / 2);
+  if (pattern === 0) return (x < 0.5 ? 0 : 1) === step % 2;
+  if (pattern === 3) return (z < 0.5 ? 0 : 1) === step % 2;
+  if (pattern === 4) return Math.min(3, Math.floor(Math.abs(x * 2 - 1) * 4)) === 3 - step % 4;
+  if (pattern === 5) return f.hangarSlot % 2 === step % 2;
+  const diagonal = pattern === 1 ? (x + z) / 2 : (1 - x + z) / 2;
+  return Math.min(3, Math.floor(diagonal * 4)) === step % 4;
+};
 export const PROGRAMS = [
   { name: 'Pillars', tier: 'calm', w: { overhead: 1, stage: 0.1, wash: 0.5, bars: 0.5, wall: 0.8, roof: 0.3, rings: 0.45 },
     overhead: (f, k) => [0, 0.05 + 0.04 * Math.sin(k.m + f.u * 4)],
@@ -162,21 +192,22 @@ export class Director {
   // groups: { role: [fixture] }, each fixture with pos, u, row, rows, xn and a channel object ch
   constructor(groups, moodKey = 'techno') {
     this.groups = groups;
+    this.hangarRig = (groups.overhead || []).some(f => f.props?.hangar);
     this.manual = { strobe: false, blinder: false, blackout: false };
     this.w = { ...BREAK_LOOK };   // start in the calm break look instead of with everything on
     Object.assign(this, {
       program: 0, scene: 0, sceneAt: 0, beat: 0, palette: 0, paletteAt: 0, colorIdx: 0, twoTone: 0,
       motion: 0, spin: 0, spinVel: 0, chase: 0, strobeClock: 0, level: 1, laser: 0, smokeAt: -100, haze: 1, visual: 0, house: 0.9, present: 1,
       col: [1, 1, 1], col2: [1, 1, 1], barLevel: [], drops: 0, kickAt: -10, punch: 0,
-      coilRun: 0, coilDropAt: -100, coilDropStrength: 0,
+      coilRun: 0, coilDropAt: -100, coilDropStrength: 0, archPattern: 0,
       ringVariant: 0, ringAt: 0, ringScene: -1, ringBreak: false, ringTargets: [...RING_LOOKS[0].drops],
     });
-    for (const list of Object.values(groups)) for (const f of list) { f.rp = Math.random() * 2 - 1; f.rt = Math.random(); }
+    for (const list of Object.values(groups)) for (const [slot, f] of list.entries()) { f.rp = Math.random() * 2 - 1; f.rt = Math.random(); f.hangarSlot = slot; }
     this.setMood(moodKey);
   }
   setMood(key) { this.mood = MOODS[key]; this.palette = 0; this.f = null; this.pick('intro'); }
   resetRingLook(t) { this.ringVariant = 0; this.ringTargets = [...RING_LOOKS[0].drops]; this.ringAt = t; this.ringScene = this.scene; this.ringBreak = false; }
-  reset(t) { this.beat = 0; this.colorIdx = 0; this.sceneAt = t; this.pick('intro'); }
+  reset(t) { this.beat = 0; this.colorIdx = 0; this.archPattern = 0; this.sceneAt = t; this.pick('intro'); }
   // the next program for this part of the track, never the one that is already up if there is a choice
   pick(section) {
     const list = PROGRAMS.map((p, i) => [p, i]).filter(([p]) => p.tier === TIER[section]).map(([, i]) => i);
@@ -187,6 +218,7 @@ export class Director {
   next(t, section) {
     if (t - this.paletteAt >= this.mood.paletteHold) { this.palette++; this.paletteAt = t; }
     this.scene++;
+    this.archPattern = (this.archPattern + 1) % 4;
     this.pick(section);
     if (this.scene % this.mood.colorEvery === 0) this.colorIdx++;
     this.sceneAt = t;
@@ -250,11 +282,19 @@ export class Director {
     if (ev.silent) { if (ev.trackEnded && t - this.paletteAt > 60) { this.palette++; this.paletteAt = t; } this.beat = 0; }
     if (ev.from) {
       // the track moved to another part while the kick kept going: a new look that fits it
-      if (ev.from !== 'break' && section !== 'break') { this.next(t, section); this.beat = 0; }
+      if (ev.from !== 'break' && section !== 'break' && !ev.drop) {
+        if (this.hangarRig) this.pendingHangarSection = { section, at: t };
+        else { this.next(t, section); this.beat = 0; }
+      }
       else if (ev.from === 'break' && PROGRAMS[this.program].tier !== TIER[section]) { this.pick(section); this.sceneAt = t; }
     }
     if (ev.lift && t - this.sceneAt >= mood.sceneMin - 4) { this.next(t, section); this.beat = 0; }
     if (mood.flow && t - this.sceneAt >= mood.sceneMin) this.next(t, section);   // with no kicks to count, a scene lasts its time
+    if (this.pendingHangarSection) {
+      const pending = this.pendingHangarSection;
+      if (ev.drop || pending.section !== section || section === 'break') this.pendingHangarSection = null;
+      else if (t - pending.at >= 3 && t - this.sceneAt >= 12) { this.next(t, section); this.beat = 0; this.pendingHangarSection = null; }
+    }
 
     // ----- the look, eased -----
     const brk = m.phase === 'break', P = PROGRAMS[this.program], ease = seconds => 1 - Math.exp(-dt / seconds);
@@ -305,18 +345,66 @@ export class Director {
     }
     this.ringBreak = brk;
     this.ringLook = RING_LOOKS[this.ringVariant].name;
-    const k = { m: this.motion, spin: this.spin, phase: sig.phase, build: m.build, t, ringVariant: brk && manualRing < 0 ? 1 : this.ringVariant };
+    const k = { m: this.motion, spin: this.spin, phase: sig.phase, build: m.build, t, hangarLook: this.scene % 3, ringVariant: brk && manualRing < 0 ? 1 : this.ringVariant };
     const aims = brk ? BREAK_AIM : P;
     this.beamPeak = 0;
     for (const role of ['overhead', 'stage']) for (const f of G[role] || []) {
-      const [pan, tilt] = aims[role](f, k);
-      f.ch.pan = pan; f.ch.tilt = tilt; f.ch.slow = !brk && P.slow;
+      const [pan, tilt] = role === 'overhead'
+        ? ((f.props?.hangar ? aimHangar(f, k, this.beat, section, m.build, sig.energy, sig.drop) : null) || aims[role](f, k))
+        : aims[role](f, k);
+      if (f.props?.hangar) {
+        // Crossfade the requested aim as well as limiting the physical motors.
+        const aim = f.hangarAim ||= [f.ch.pan, f.ch.tilt];
+        const panGap = Math.atan2(Math.sin(pan - aim[0]), Math.cos(pan - aim[0]));
+        const gap = Math.hypot(panGap, tilt - aim[1]);
+        const cue = `${this.scene}:${Math.floor(this.beat / 16)}`;
+        if (f.hangarCue !== cue) {
+          if (f.hangarCue !== undefined && gap > 0.55) f.hangarMoveAt = t;
+          f.hangarCue = cue;
+        }
+        const moving = t - (f.hangarMoveAt ?? -100) < 5 && gap > 0.2;
+        f.hangarMoveLevel = (f.hangarMoveLevel ?? 1) + ((moving ? 0.2 : 1) - (f.hangarMoveLevel ?? 1)) * ease(moving ? 0.1 : 0.7);
+        if (t - (f.hangarMoveAt ?? -100) > 0.18) {
+          aim[0] += panGap * ease(2.5);
+          aim[1] += (tilt - aim[1]) * ease(2.5);
+        }
+        f.ch.pan = aim[0]; f.ch.tilt = aim[1];
+      } else { f.ch.pan = pan; f.ch.tilt = tilt; }
+      f.ch.slow = f.props?.hangar || (!brk && P.slow);
       let I = brk ? 0.1 + sig.mid * 0.15 + m.build * 0.3 : 0.045 + sig.energy * 0.23 + sig.bass * 0.12 + sig.kick * 0.55 + sig.accent * 0.1;
       I = (I * this.w[role] * (!brk && P.gate ? P.gate(f, k) : 1) + sig.drop * 0.5) * master * (1 + this.smoke * 0.3);
+      if (f.props?.hangar) {
+        // Give the centre, sides and stage turns in the foreground; a drop opens the full rig.
+        const bank = role === 'stage' ? 2 : Math.abs(f.pos[0]) > 18 ? 1 : 0;
+        if (!brk && Math.floor((sig.beats || 0) / 2) % 3 === bank) I += sig.accent * 0.18 * master;
+        const foreground = brk ? bank === 2 : bank === this.scene % 3;
+        const level = foreground ? 1 : calm || brk ? 0.28 : 0.45;
+        f.hangarLevel = (f.hangarLevel ?? 1) + (level - (f.hangarLevel ?? 1)) * ease(1.8);
+        I *= f.hangarLevel + (1 - f.hangarLevel) * clamp(sig.drop);
+        // Hold each figure for 32 kicks. Builds progressively leave a small group near the stage.
+        const beats = sig.beats || 0, pattern = Math.floor(beats / 32) % 6;
+        const build = clamp(m.build);
+        const buildOn = Math.abs(f.xn) <= 1 - build * 0.85 && (build < 0.65 || bank === 2 || f.row % 3 === 0);
+        const on = brk ? buildOn : hangarHeadGate(f, calm ? beats / 2 : beats, pattern);
+        f.hangarGate = (f.hangarGate ?? 1) + ((on ? 1 : 0) - (f.hangarGate ?? 1)) * ease(0.08);
+        const gain = calm || brk ? 1 : [1, 2, 4].includes(pattern) ? 2.5 : 1.5;
+        I *= (f.hangarGate + (1 - f.hangarGate) * clamp(sig.drop)) * (gain + (1 - gain) * clamp(sig.drop));
+        I *= f.hangarMoveLevel + (1 - f.hangarMoveLevel) * clamp(sig.drop);
+      }
       f.ch.dim = I; this.beamPeak = Math.max(this.beamPeak, I);
       f.ch.color = brk ? mix(col, WHITE, m.build) : tint((f.row + Math.round(f.u * 9)) % 2 ? mix(col, col2, this.twoTone) : col);
+      if (f.props?.hangar) {
+        // Opposite sides exchange palette colours once per pattern, through a slow colour fade.
+        const swap = Math.floor((sig.beats || 0) / 32) % 2;
+        const side = f.pos[0] < 0 ? 0 : 1;
+        const target = tint(vivid(side === swap ? col : col2));
+        f.hangarColor = mix(f.hangarColor || f.ch.color, brk ? mix(target, WHITE, clamp(m.build) * 0.35) : target, ease(1.4));
+        f.ch.color = f.hangarColor;
+      }
       f.ch.zoom = (brk ? 1 - m.build * 0.4 : 1) * (controls?.beamWidth ?? 1);
+      if (f.props?.hangar) f.ch.zoom *= calm || brk ? 1.35 : section === 'peak' ? 0.75 : 0.9;
       f.ch.gobo = !brk && P.gobo ? 1 : 0;
+      if (f.props?.hangar) { f.ch.gobo = !brk && !calm ? 0.7 : 0; f.ch.goboMode = role === 'stage' ? 2 : Math.abs(f.pos[0]) > 18 ? 0 : 1; }
     }
 
     // ----- washes, bars, lasers, the LED wall -----
@@ -362,6 +450,20 @@ export class Director {
         continue;
       }
       const v = f.rows > 1 ? f.row / (f.rows - 1) : 0;
+      if (f.props?.hangar) {
+        // Heavy Hangar trusses move as a measured wave in a break, then lift together on the drop.
+        // Outside the build they keep a small, stable scene shape instead of making large fast jumps.
+        if (f.hangarShape === undefined || t - f.hangarShapeAt >= 90) { f.hangarShape = Math.floor(this.scene / 3) % 4; f.hangarShapeAt = t; }
+        const heldShape = f.hangarShape;
+        f.ch.drop = brk && m.hasGrooved
+          ? 1.1 + m.build * 1.2 + Math.sin(v * TAU - m.build * Math.PI) * m.build * 0.8
+          : sig.drop > 0.3 ? 0
+            : heldShape === 1 ? (1 - v) * 0.8
+              : heldShape === 2 ? Math.max(0, 0.25 + 0.3 * Math.sin(v * TAU + t * 0.08))
+                : heldShape === 3 ? 0.35 : 0;
+        f.ch.roll = 0;
+        continue;
+      }
       f.ch.drop = brk && m.hasGrooved ? 2.2 + m.build * 1.6 : sig.drop > 0.3 ? 0 : shape === 1 ? (1 - v) * 3.2 : shape === 2 ? 1.6 + 1.6 * Math.sin(v * 4 + t * 0.12) : shape === 3 ? 1 : 0;
       f.ch.roll = !brk && shape === 3 ? (f.row % 2 ? 0.16 : -0.16) : 0;
     }
@@ -387,11 +489,22 @@ export class Director {
       f.ch.flash = (sig.drop * 0.7 + flash * 0.4 + sig.lift * 0.3) * master;
     }
     for (const kind of ['firework', 'spark']) for (const f of G[kind] || []) f.ch.color = col;
-    // the arches along the hall: a pulse runs from the stage to the back on every kick
+    // The arches keep one architectural gesture for the scene, then change direction,
+    // grouping or pace at the next cue instead of repeating the same kick chase.
     for (const f of G.arch || []) {
-      Object.assign(f.ch, { color: col, color2: col2, phase: sig.phase, travel: brk ? 99 : (t - this.kickAt) * 18 - 0.5, chase: brk ? m.build : section === 'peak' ? 0.5 : 0.12 });
-      f.ch.dim = (brk ? 0.25 + m.build * 0.7 : calm ? 0.5 : 0.9) * master;
+      Object.assign(f.ch, { color: col, color2: col2, phase: sig.phase, beat: this.beat, pattern: this.archPattern,
+        kickPulse: Math.exp(-Math.max(0, t - this.kickAt) * 5),
+        travel: brk || this.archPattern === 3 ? 99 : (t - this.kickAt) * 18 - 0.5,
+        chase: brk ? m.build : section === 'peak' ? 0.5 : 0.12 });
+      f.ch.dim = (brk ? 0.25 + m.build * 0.7 : calm ? 0.5 : this.archPattern === 3 ? 0.68 : 0.9) * master;
       f.ch.flash = (sig.drop * 0.8 + flash * 0.35) * master;
+      if (f.props?.hangar) {
+        const partner = Math.floor((sig.beats || 0) / 32) % 6;
+        f.ch.pattern = partner === 0 || partner === 5 ? 2 : partner === 3 ? 1 : partner === 4 ? 0 : 3;
+        f.ch.color = col2; f.ch.color2 = col; f.ch.beat = (sig.beats || 0) + 4;
+        f.ch.travel = brk || f.ch.pattern === 3 ? 99 : (t - this.kickAt) * 18 - 0.5;
+        f.ch.dim = (brk ? 0.25 + m.build * 0.7 : calm ? 0.5 : f.ch.pattern === 3 ? 0.68 : 0.9) * master;
+      }
     }
     // LED under the spokes of a round roof. A kick sends a band of light along them, and every 32 kicks it goes
     // another way: out from the lantern along all of them, along every other one, along every fourth (stepping

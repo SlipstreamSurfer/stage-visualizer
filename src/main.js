@@ -23,7 +23,7 @@ const kept = (key, fallback) => { try { return localStorage.getItem('sv.' + key)
 // ----- the picture -----
 const params = new URLSearchParams(location.search);
 let WEBGL = params.has('webgl') || !navigator.gpu;   // ?webgl asks for the WebGL way of drawing
-const renderer = new THREE.WebGPURenderer({ antialias: false, powerPreference: 'high-performance', forceWebGL: WEBGL });
+const renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance', forceWebGL: WEBGL });
 // quality: how much the computer is asked to draw
 let qualityChoice = params.get('quality') || kept('quality', 'auto');
 if (qualityChoice !== 'auto' && !(qualityChoice in QUALITY)) qualityChoice = 'auto';
@@ -44,7 +44,7 @@ const post = new THREE.RenderPipeline(renderer), scenePass = pass(scene, camera)
 let glow, combined, configuredBloom;
 function configurePost() {
   if (configuredBloom === quality.bloom) return;
-  combined?.renderTarget.dispose(); combined?.dispose(); glow?.dispose();
+  combined?.renderTarget?.dispose(); combined?.dispose(); glow?.dispose();
   glow = quality.bloom ? bloomOf(image, 0.8, 0.7, 0.6) : null;
   combined = glow ? convertToTexture(image.add(glow)) : null;
   const lit = combined || image, off = uv().sub(0.5), r2 = dot(off, off);
@@ -141,7 +141,8 @@ function frame() {
     state.dataset.audioState = signal.state;
     const audioNote = audio.source === audio.playerNode && audio.player?.paused && !audio.player.ended
       ? 'Paused' : { receiving: 'Audio detected', silent: 'No audio detected', lost: 'Input disconnected', suspended: 'Click to resume audio' }[signal.state];
-    state.textContent = audio.message || changeMessage || `${audio.live ? 'Live: ' + audio.label + (audioNote ? ' · ' + audioNote : '') : 'Demo mode'} · ${m.bpm || '--'} BPM · ${audio.live && m.activity < 0.05 ? 'waiting for music' : director.status}`;
+    state.textContent = audio.message || changeMessage || `${audio.live ? 'Live: ' + audio.label + (audioNote ? ' · ' + audioNote : '') : 'Demo mode'} · ${Math.round(signals.stableBpm || m.bpm) || '--'} BPM · ${audio.live && m.activity < 0.05 ? 'waiting for music' : director.status}`;
+    $('miniStatus').textContent = state.textContent + (director.manual.blackout ? ' · BLACKOUT' : '') + (cameraFrozen ? ' · Camera paused' : '');
     const source = $('audioSource').value;
     $('playFile').dataset.connected = String(audio.live && signal.state !== 'lost' && signal.state !== 'suspended');
     $('playFile').textContent = audio.live && signal.state !== 'lost' && signal.state !== 'suspended'
@@ -432,9 +433,36 @@ $('updatePreset').onclick = () => {
   const preset = capturePreset(id, name);
   if (storePresets(savedPresets.map(p => p.id === id ? preset : p))) { refreshSavedPresets(id); $('presetStatus').textContent = `Updated “${preset.name}”.`; }
 };
+let deletedPreset = null;
 $('deletePreset').onclick = () => {
   const id = $('savedPreset').value;
-  if (storePresets(savedPresets.filter(p => p.id !== id))) { refreshSavedPresets(); $('presetName').value = ''; $('presetStatus').textContent = 'Preset deleted.'; }
+  const old = savedPresets.find(p => p.id === id), index = savedPresets.findIndex(p => p.id === id);
+  if (!old) return;
+  if (storePresets(savedPresets.filter(p => p.id !== id))) { deletedPreset = { preset: old, index }; $('undoDeletePreset').hidden = false; refreshSavedPresets(); $('presetName').value = ''; $('presetStatus').textContent = `Deleted “${old.name}”. You can undo this.`; }
+};
+$('undoDeletePreset').onclick = () => {
+  if (!deletedPreset || savedPresets.length >= 30) { $('presetStatus').textContent = 'Make room for a preset first.'; return; }
+  const { preset, index } = deletedPreset, next = savedPresets.filter(p => p.id !== preset.id);
+  next.splice(index, 0, preset);
+  if (storePresets(next)) { refreshSavedPresets(preset.id); $('presetName').value = preset.name; $('presetStatus').textContent = `Restored “${preset.name}”.`; deletedPreset = null; $('undoDeletePreset').hidden = true; }
+};
+$('exportPresets').onclick = () => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, presets: savedPresets }, null, 2)], { type: 'application/json' }));
+  const link = Object.assign(document.createElement('a'), { href: url, download: 'stage-visualizer-presets.json' }); link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000); $('presetStatus').textContent = `Exported ${savedPresets.length} presets.`;
+};
+$('importPresets').onclick = () => $('presetBackupFile').click();
+$('presetBackupFile').onchange = async e => {
+  const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+  try {
+    if (file.size > 1024 * 1024) throw new Error('Backup is too large (maximum 1 MB).');
+    const raw = JSON.parse(await file.text()), items = Array.isArray(raw) ? raw : raw.presets;
+    const incoming = normalizePresets(items).filter(p => Object.hasOwn(VENUES, p.venue) && Object.hasOwn(MOODS, p.mood)).map(p => ({ ...p, cam: p.cam === 'auto' || /^[0-8]$/.test(p.cam) ? p.cam : 'auto' }));
+    if (!incoming.length) throw new Error('No compatible presets found.');
+    const fresh = incoming.filter(p => !savedPresets.some(old => old.id === p.id));
+    if (savedPresets.length + fresh.length > 30) throw new Error('Not enough room: maximum 30 presets. Your existing presets were kept.');
+    if (storePresets([...savedPresets, ...fresh])) { refreshSavedPresets(fresh[0]?.id || $('savedPreset').value); $('presetStatus').textContent = `Imported ${fresh.length} presets. Existing presets kept.`; }
+  } catch (error) { $('presetStatus').textContent = 'Could not import: ' + error.message; }
 };
 $('loadPreset').onclick = async () => {
   const preset = savedPresets.find(p => p.id === $('savedPreset').value);
@@ -582,20 +610,39 @@ const fullscreen = () => document.fullscreenElement ? document.exitFullscreen() 
 $('fullscreenPanel').onclick = fullscreen;
 renderer.domElement.addEventListener('dblclick', fullscreen);
 addEventListener('keydown', e => {
-  if (e.key === 'h' && !['SELECT', 'INPUT'].includes(e.target.tagName)) { setPanelVisible($('panel').classList.contains('hidden')); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey || $('shortcutHelp').open) return;
+  const key = e.key.toLowerCase();
+  if (key === 'h' && !e.repeat && !['SELECT', 'INPUT', 'TEXTAREA'].includes(e.target.tagName) && !e.target.isContentEditable) { setPanelVisible($('panel').classList.contains('hidden')); return; }
+  if (!e.repeat && !['SELECT', 'INPUT', 'TEXTAREA', 'AUDIO', 'VIDEO'].includes(e.target.tagName) && !e.target.isContentEditable) {
+    if (key === '?') { showShortcutHelp(); return; }
+    if (key === 'p') { setCameraFrozen(!cameraFrozen); return; }
+    if (key === 'n' && !changing) { director.next(clock.elapsedTime, signals.m.section); return; }
+  }
   if (['SELECT', 'INPUT', 'BUTTON', 'SUMMARY', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
   if (['t', 'g', 'x'].includes(e.key.toLowerCase()) && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { playback.markMoment({ t: 'unrated', g: 'good', x: 'wrong' }[e.key.toLowerCase()]); return; }
   if (['AUDIO', 'VIDEO'].includes(e.target.tagName)) return;   // keep the player's native keyboard controls
   if (e.code === 'Space') { setHeld('strobe', 'key', true); e.preventDefault(); }
-  if (e.key === 'b') setHeld('blinder', 'key', true);
-  if (e.key === 'c') $('btnCo2').click();
-  if (e.key === 'v') pyro();
-  if (e.key === 'k') $('btnConfetti').click();
-  if (e.key === 'f') fullscreen();
-  if (e.key === 'm') { const m = $('mood'); m.selectedIndex = (m.selectedIndex + 1) % m.options.length; m.dispatchEvent(new Event('change')); }
+  if (key === 'b') setHeld('blinder', 'key', true);
+  if (e.repeat) return;
+  if (key === 'c') $('btnCo2').click();
+  if (key === 'v') pyro();
+  if (key === 'k') $('btnConfetti').click();
+  if (key === 'f') fullscreen();
+  if (key === 'm') { const m = $('mood'); m.selectedIndex = (m.selectedIndex + 1) % m.options.length; m.dispatchEvent(new Event('change')); }
   if (e.key >= '0' && e.key <= '9') { $('cam').value = e.key === '0' ? 'auto' : String(e.key - 1); $('cam').dispatchEvent(new Event('change')); }
 });
-addEventListener('keyup', e => { if (e.code === 'Space') setHeld('strobe', 'key', false); if (e.key === 'b') setHeld('blinder', 'key', false); });
+addEventListener('keyup', e => { if (e.code === 'Space') setHeld('strobe', 'key', false); if (e.key.toLowerCase() === 'b') setHeld('blinder', 'key', false); });
+function showShortcutHelp() {
+  releaseHeld(); const hint = $('hint').cloneNode(true); hint.removeAttribute('id');
+  $('shortcutHelpContent').replaceChildren(hint); if (!$('shortcutHelp').open) $('shortcutHelp').showModal();
+}
+$('helpButton').onclick = showShortcutHelp;
+document.addEventListener('dblclick', e => {
+  if (!e.target.matches('input[type="range"]')) return;
+  const input = e.target, defaults = { sens: 1, lookLight: 1, lookBloom: 1, lookHaze: 1, lookHall: 1, beamWidth: 1, cameraSpeed: 1 };
+  const value = defaults[input.id] ?? (input.id.startsWith('level-') ? 1 : input.id.startsWith('coilSpeed-') ? 1 : null);
+  if (value === null) return; input.value = value; input.dispatchEvent(new Event('input', { bubbles: true }));
+});
 let idle = 0;
 addEventListener('pointermove', () => { document.body.classList.remove('idle'); clearTimeout(idle); idle = setTimeout(() => document.body.classList.add('idle'), 3000); });
 // Restore the sound source of last time. A browser lets the page listen again without a click while it still has

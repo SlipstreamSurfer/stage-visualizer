@@ -24,7 +24,7 @@ export class Signals {
   reset() {   // another sound source
     this.listener.reset();
     this.now = 0; this.begin();
-    Object.assign(this, { kick: 0, accent: 0, drop: 0, lift: 0, hype: 0, energy: 0, bass: 0, mid: 0, treble: 0, beats: 0, phase: 0, rate: 2.1 });
+    Object.assign(this, { kick: 0, accent: 0, drop: 0, lift: 0, hype: 0, energy: 0, bass: 0, mid: 0, treble: 0, beats: 0, phase: 0, rate: 2.1, stableBpm: 0, tempoCandidate: 0, tempoCandidateFor: 0 });
   }
   // Live sound goes in step by step, on the sound's own clock (see ear.js), and the picture reads the result once
   // per frame: begin() at the start of a frame, hear() for every step of sound that has come in since the last one
@@ -76,7 +76,21 @@ export class Signals {
     const energy = this.bass * 0.5 + this.mid * 0.3 + this.treble * 0.2;
     this.energy += (energy - this.energy) * (1 - Math.exp(-dt / (energy > this.energy ? 0.07 : 0.35)));
     // the beat clock follows the tempo smoothly, so nothing that dances to it jumps when the estimate does
-    if (m.bpm) this.rate += (m.bpm / 60 - this.rate) * (1 - Math.exp(-dt / 2));
+    if (this.ev.trackEnded) this.stableBpm = 0;
+    if (m.bpm) {
+      if (!this.stableBpm) this.stableBpm = m.bpm;
+      const difference = Math.abs(m.bpm - this.stableBpm);
+      if (difference <= 1.5) {
+        this.stableBpm += (m.bpm - this.stableBpm) * (1 - Math.exp(-dt / 4));
+        this.tempoCandidateFor = 0;
+      } else {
+        if (Math.abs(m.bpm - this.tempoCandidate) > 1.5) { this.tempoCandidate = m.bpm; this.tempoCandidateFor = 0; }
+        const confidence = this.listener.tempo.confidence;
+        this.tempoCandidateFor += confidence >= 0.45 && m.phase !== 'break' ? dt : 0;
+        if (this.tempoCandidateFor >= 3) { this.stableBpm = m.bpm; this.tempoCandidateFor = 0; }
+      }
+      this.rate += (this.stableBpm / 60 - this.rate) * (1 - Math.exp(-dt / 2));
+    }
     this.phase += dt * this.rate * (m.activity > 0.15 ? 1 : 0.3);
   }
   // how long the break has lasted, in seconds (the listener's times are on the sound's clock, not the picture's)

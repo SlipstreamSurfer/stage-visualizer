@@ -7,6 +7,8 @@ import { bloom as bloomOf } from 'three/addons/tsl/display/BloomNode.js';
 import { VENUES, KINDS } from './venues/index.js';
 import { Signals, demo } from './signals.js';
 import { Director, MOODS, FAMILIES } from './director.js';
+import { SHOW_THEMES } from './show-themes.js';
+import { CHOREOGRAPHIES } from './light-choreography.js';
 import { buildWorld } from './world.js';
 import { buildParticles } from './particles.js';
 import { shots, CameraDirector } from './cameras.js';
@@ -66,7 +68,7 @@ let world = buildWorld(VENUES[venueKey], scene, quality);
 let moodLocked = kept('moodLock', 'false') === 'true';
 const wanted = params.get('mood') || kept('mood', ''), moodKey = wanted in MOODS && (moodLocked || params.has('mood') || world.layout.genres.includes(wanted)) ? wanted : world.layout.mood in MOODS ? world.layout.mood : 'techno';
 const signals = new Signals(event => show.heard.push(event));
-let director = new Director(world.groups, moodKey);
+let director = new Director(world.groups, moodKey, { venue: venueKey });
 // Smoke as particles that the card moves and lights: only with WebGPU, and off unless asked for, because it is heavy.
 let particleCount = WEBGL ? 0 : +(params.get('n') || kept('particles', 0));
 const makeParticles = (world, scene) => particleCount ? buildParticles({ renderer, add: o => (scene.add(o), o), count: particleCount, room: world.layout.plan, stage: world.layout.stage, lights: world.lights, solids: [[world.layout.focus[0], world.layout.stage.height + 1.3, world.layout.focus[2] - 0.5, 0.9], ...(world.layout.shell.pillars || []).flatMap(([x, z]) => [[x, 2.6, z, 0.55], [x, 1.2, z, 0.55]])] }) : null;
@@ -231,6 +233,20 @@ $('mood').onchange = e => {
 $('moodLock').checked = moodLocked;
 $('moodLock').onchange = e => { moodLocked = e.target.checked; keep('moodLock', String(moodLocked)); if (moodLocked) keep('mood', $('mood').value); };
 $('cam').onchange = e => setCam(e.target.value);
+function refreshTheme() {
+  $('showTheme').value = controls.showTheme;
+  $('lightChoreography').value = controls.lightChoreography;
+  $('choreographyHint').textContent = CHOREOGRAPHIES[controls.lightChoreography].description;
+  $('showTheme').disabled = venueKey !== 'hangar';
+  $('themeHint').textContent = venueKey !== 'hangar' ? 'Show themes are available in Hangar.'
+    : SHOW_THEMES[controls.showTheme]?.description || 'The current mood shapes the show.';
+}
+$('showTheme').onchange = () => {
+  controls.showTheme = $('showTheme').value;
+  if (controls.showTheme !== 'auto') { look.off.wall = false; keep('off', JSON.stringify(look.off)); fillSwitches(); refreshEffects(); }
+  persistControls(); refreshTheme();
+};
+$('lightChoreography').onchange = () => { controls.lightChoreography = $('lightChoreography').value; persistControls(); refreshTheme(); };
 const LOOK_SLIDERS = [['lookLight', 'light'], ['lookBloom', 'bloom'], ['lookHaze', 'haze'], ['lookHall', 'hall']];
 const LOOK_PRESETS = { standard: { light: 1, bloom: 1, haze: 1, hall: 1 }, calm: { light: 0.8, bloom: 0.6, haze: 0.65, hall: 1.15 }, cinematic: { light: 0.9, bloom: 1.15, haze: 1.3, hall: 0.65 }, energetic: { light: 1.2, bloom: 1.3, haze: 1.15, hall: 0.85 } };
 const sliderValue = id => { $(id + 'Value').value = (+$(id).value).toFixed(2) + '×'; };
@@ -306,13 +322,14 @@ function setCameraFrozen(frozen) {
   $('freezeCamera').textContent = frozen ? 'Resume camera' : 'Freeze this view';
 }
 $('freezeCamera').onclick = () => setCameraFrozen(!cameraFrozen);
-fill($('palette'), [['auto', 'Follow the mood'], ...Object.entries(PALETTES).map(([key, p]) => [key, p.name])], controls.palette);
+fill($('palette'), [['auto', 'Follow the show'], ...Object.entries(PALETTES).map(([key, p]) => [key, p.name])], controls.palette);
 fill($('ringLook'), [['auto', 'Automatic'], ...RING_NAMES.map(name => [name, name])], controls.ringLook);
 for (const id of ['palette', 'ringLook']) $(id).onchange = () => { controls[id] = $(id).value; persistControls(); };
 for (const id of ['beamWidth', 'cameraSpeed']) {
   $(id).oninput = () => { controls[id] = +$(id).value; sliderValue(id); persistControls(); };
 }
 function refreshControlPanel() {
+  refreshTheme();
   for (const id of ['palette', 'ringLook', 'beamWidth', 'cameraSpeed']) $(id).value = controls[id];
   sliderValue('beamWidth'); sliderValue('cameraSpeed');
   const coils = world.groups.coil || [], hasRings = (world.groups.truss || []).some(f => f.props.kind === 'ring');
@@ -360,7 +377,7 @@ async function replaceVenue(key, { force = false, nextQuality = qualityKey } = {
     const currentMood = $('mood').value;
     const chooseMood = selected => moodLocked || key === venueKey || nextWorld.layout.genres.includes(selected) ? selected : nextWorld.layout.mood || 'techno';
     let nextMood = chooseMood(currentMood);
-    const nextDirector = new Director(nextWorld.groups, nextMood);
+    const nextDirector = new Director(nextWorld.groups, nextMood, { venue: key });
     nextDirector.manual = { ...director.manual }; nextDirector.reset(clock.elapsedTime);
     nextDirector.update(signals, clock.elapsedTime, 0, look);
     nextWorld.env.media = world.env.media;

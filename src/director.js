@@ -9,6 +9,8 @@
 //   level, more than that is up into the roof.
 
 import { PALETTES, RING_NAMES } from './show-controls.js';
+import { SHOW_THEMES } from './show-themes.js';
+import { LightChoreography, CHOREOGRAPHIES } from './light-choreography.js';
 
 const TAU = Math.PI * 2;
 const hex = h => [(h >> 16 & 255) / 255, (h >> 8 & 255) / 255, (h & 255) / 255];
@@ -190,8 +192,10 @@ const BREAK_AIM = {
 
 export class Director {
   // groups: { role: [fixture] }, each fixture with pos, u, row, rows, xn and a channel object ch
-  constructor(groups, moodKey = 'techno') {
+  constructor(groups, moodKey = 'techno', { venue = '' } = {}) {
     this.groups = groups;
+    this.venue = venue;
+    this.choreography = new LightChoreography(groups);
     this.hangarRig = (groups.overhead || []).some(f => f.props?.hangar);
     this.manual = { strobe: false, blinder: false, blackout: false };
     this.w = { ...BREAK_LOOK };   // start in the calm break look instead of with everything on
@@ -205,9 +209,9 @@ export class Director {
     for (const list of Object.values(groups)) for (const [slot, f] of list.entries()) { f.rp = Math.random() * 2 - 1; f.rt = Math.random(); f.hangarSlot = slot; }
     this.setMood(moodKey);
   }
-  setMood(key) { this.mood = MOODS[key]; this.palette = 0; this.f = null; this.pick('intro'); }
+  setMood(key) { this.mood = MOODS[key]; this.choreography.reset(); this.palette = 0; this.f = null; this.pick('intro'); }
   resetRingLook(t) { this.ringVariant = 0; this.ringTargets = [...RING_LOOKS[0].drops]; this.ringAt = t; this.ringScene = this.scene; this.ringBreak = false; }
-  reset(t) { this.beat = 0; this.colorIdx = 0; this.archPattern = 0; this.sceneAt = t; this.pick('intro'); }
+  reset(t) { this.choreography.reset(); this.beat = 0; this.colorIdx = 0; this.archPattern = 0; this.sceneAt = t; this.pick('intro'); }
   // the next program for this part of the track, never the one that is already up if there is a choice
   pick(section) {
     const list = PROGRAMS.map((p, i) => [p, i]).filter(([p]) => p.tier === TIER[section]).map(([, i]) => i);
@@ -252,6 +256,7 @@ export class Director {
   update(sig, t, dt, look = { light: 1, haze: 1 }) {
     this.off = look.off || {};
     const mood = this.mood, G = this.groups, controls = look.controls;
+    const theme = this.venue === 'hangar' ? SHOW_THEMES[controls?.showTheme] : null;
     if (mood.flow) sig = this.flow(sig, t, dt);
     const m = sig.m, ev = sig.ev;
     const section = m.section, calm = m.phase !== 'break' && TIER[section] === 'calm';
@@ -296,6 +301,8 @@ export class Director {
       else if (t - pending.at >= 3 && t - this.sceneAt >= 12) { this.next(t, section); this.beat = 0; this.pendingHangarSection = null; }
     }
 
+    const composition = this.choreography.update(this.venue === 'hangar' ? controls?.lightChoreography : 'original', this.scene, sig.phase, section);
+
     // ----- the look, eased -----
     const brk = m.phase === 'break', P = PROGRAMS[this.program], ease = seconds => 1 - Math.exp(-dt / seconds);
     const accent = brk ? 0 : Math.min(0.55, Math.max(sig.hype * 0.55, section === 'peak' ? 0.25 : 0));
@@ -305,7 +312,7 @@ export class Director {
     }
     this.twoTone += ((P.twoTone || sig.hype > 0.4 ? 1 : 0) - this.twoTone) * ease(1.1);
     this.level += (SECTION_LEVEL[section] - this.level) * ease(1.5);
-    const manualPalette = PALETTES[controls?.palette];
+    const manualPalette = PALETTES[controls?.palette] || theme;
     const pal = manualPalette ? manualPalette.colors.map(hex) : mood.palettes[this.palette % mood.palettes.length];
     this.col = mix(this.col, pal[this.colorIdx % pal.length], ease(1.1));
     this.col2 = mix(this.col2, pal[(this.colorIdx + 1) % pal.length], ease(1.1));
@@ -349,9 +356,10 @@ export class Director {
     const aims = brk ? BREAK_AIM : P;
     this.beamPeak = 0;
     for (const role of ['overhead', 'stage']) for (const f of G[role] || []) {
-      const [pan, tilt] = role === 'overhead'
+      let [pan, tilt] = role === 'overhead'
         ? ((f.props?.hangar ? aimHangar(f, k, this.beat, section, m.build, sig.energy, sig.drop) : null) || aims[role](f, k))
         : aims[role](f, k);
+      if (composition.active) [pan, tilt] = composition.aim(f, pan, tilt);
       if (f.props?.hangar) {
         // Crossfade the requested aim as well as limiting the physical motors.
         const aim = f.hangarAim ||= [f.ch.pan, f.ch.tilt];
@@ -373,7 +381,9 @@ export class Director {
       f.ch.slow = f.props?.hangar || (!brk && P.slow);
       let I = brk ? 0.1 + sig.mid * 0.15 + m.build * 0.3 : 0.045 + sig.energy * 0.23 + sig.bass * 0.12 + sig.kick * 0.55 + sig.accent * 0.1;
       I = (I * this.w[role] * (!brk && P.gate ? P.gate(f, k) : 1) + sig.drop * 0.5) * master * (1 + this.smoke * 0.3);
-      if (f.props?.hangar) {
+      if (composition.active) {
+        I *= composition.gain(f, role, dt);
+      } else if (f.props?.hangar) {
         // Give the centre, sides and stage turns in the foreground; a drop opens the full rig.
         const bank = role === 'stage' ? 2 : Math.abs(f.pos[0]) > 18 ? 1 : 0;
         if (!brk && Math.floor((sig.beats || 0) / 2) % 3 === bank) I += sig.accent * 0.18 * master;
@@ -438,7 +448,7 @@ export class Director {
     const laserOn = mood.lasers && m.activity > 0.3 && ((!brk && section === 'peak' && t - this.sceneAt > 6) || (mood.lasers === 'both' && brk && m.build < 0.6 && sig.sinceBreak > 4));
     this.laser += ((laserOn ? 1 : 0) - this.laser) * ease(2);
     // lasers: every scene another figure (a fan of lines, sheets over the crowd, a tunnel), in the show's two colours
-    for (const f of G.laser || []) { f.ch.dim = this.laser * (0.55 + sig.kick * 0.25) * master; f.ch.color = Math.round(f.u * 9) % 2 ? col2 : col; f.ch.mode = this.scene % 3; }
+    for (const f of G.laser || []) { f.ch.dim = this.laser * (0.55 + sig.kick * 0.25) * master * (theme?.laserLevel ?? 1); f.ch.color = Math.round(f.u * 9) % 2 ? col2 : col; f.ch.mode = theme?.laser ?? this.scene % 3; }
     // the trusses on their winches: a new arrangement with every scene (level, a staircase rising to the back, a slow
     // wave, tilted against each other); in a break they sink low over the crowd, and on the drop they fly back up
     const shape = this.scene % 4;
@@ -470,6 +480,7 @@ export class Director {
     for (const role of ['wall', 'dome', 'screen']) for (const f of G[role] || []) {   // 'dome' and 'screen' are screens that are part of the place: they stay on when LED walls are switched off
       f.ch.dim = ((brk ? 0.6 : 0.9 + sig.kick * 0.4) * this.w.wall + sig.drop + sig.lift * 0.35) * master * (role === 'screen' ? 0.75 : role === 'dome' ? 1.5 : 1);
       f.ch.color = col; f.ch.color2 = col2; f.ch.mode = this.visual; f.ch.build = m.build; f.ch.kick = sig.kick; f.ch.phase = sig.phase; f.ch.off = !!this.off[role];
+      f.ch.theme = role === 'wall' ? theme?.visual ?? 0 : 0;
     }
     // light on the building itself: steady, in the show's colours, fuller when the music is
     for (const f of G.glow || []) { f.ch.dim = (brk ? 0.45 + m.build * 0.3 : 0.4 + sig.energy * 0.45 + sig.kick * 0.2 + sig.lift * 0.3) * master; f.ch.color = tint((f.row + Math.round(f.u * 9)) % 2 ? col2 : col); }
@@ -500,11 +511,15 @@ export class Director {
       f.ch.flash = (sig.drop * 0.8 + flash * 0.35) * master;
       if (f.props?.hangar) {
         const partner = Math.floor((sig.beats || 0) / 32) % 6;
-        f.ch.pattern = partner === 0 || partner === 5 ? 2 : partner === 3 ? 1 : partner === 4 ? 0 : 3;
+        f.ch.pattern = theme ? brk || calm ? 3 : theme.arch : partner === 0 || partner === 5 ? 2 : partner === 3 ? 1 : partner === 4 ? 0 : 3;
         f.ch.color = col2; f.ch.color2 = col; f.ch.beat = (sig.beats || 0) + 4;
         f.ch.travel = brk || f.ch.pattern === 3 ? 99 : (t - this.kickAt) * 18 - 0.5;
         f.ch.dim = (brk ? 0.25 + m.build * 0.7 : calm ? 0.5 : f.ch.pattern === 3 ? 0.68 : 0.9) * master;
       }
+    }
+    for (const f of G.arch || []) {
+      delete f.ch.archCentre;
+      if (composition.active) composition.arch(f.ch);
     }
     // LED under the spokes of a round roof. A kick sends a band of light along them, and every 32 kicks it goes
     // another way: out from the lantern along all of them, along every other one, along every fourth (stepping
@@ -553,6 +568,7 @@ export class Director {
     // what the viewer has switched off stays dark
     for (const role in this.off) if (this.off[role]) for (const f of G[role] || []) { f.ch.dim = 0; f.ch.flash = 0; if (role === 'truss' && f.props.kind !== 'ring') f.ch.drop = f.ch.roll = 0; if (role === 'roof') f.ch.glitter = f.ch.white = f.ch.hub = 0; }
     this.status = brk ? (m.build > 0.45 ? 'build-up' : 'break') : (mood.flow ? FLOW_NAME[section] : SECTION_NAME[section]) + ' · ' + P.name;
+    if (composition.active) this.status += ' · ' + CHOREOGRAPHIES[composition.key].name;
     return this;
   }
 }

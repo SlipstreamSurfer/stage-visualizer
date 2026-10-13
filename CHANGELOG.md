@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.26.3
+
+- Three coordinated Hangar themes: Industrial, Hypnotic and Melodic.
+- Stage openings, hall waves and held light pictures connect heads and LED arches.
+- Composed show chooses at existing scene cues and avoids immediate repetition.
+- Theme and choreography choices are saved with presets; older presets retain the original show.
+- The Mac Hangar browser check uses native WebGL by default, with an explicit software-renderer option.
+- Browser checks close their control connection before terminating the test browser.
+
 ## 0.26.2
 
 - Smoother Hangar rig movement and more coherent scene transitions.

@@ -12,6 +12,7 @@ import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { strut, pieces } from './shapes.js';
 import { reflectionHit } from './reflections.js';
+import { blendTheme } from './show-themes.js';
 import { attribute, uniform, uv, positionGeometry, positionWorld, positionViewDirection, normalView, cameraPosition, instanceIndex, instancedBufferAttribute, varying, texture, Fn, If, float, vec2, vec3, vec4, floor, fract, sin, cos, abs, pow, mix, step, smoothstep, dot, length, max, min, select, atan, exp, sqrt, hash, normalize, mx_noise_float } from 'three/tsl';
 
 const DOWN = new THREE.Vector3(0, -1, 0), v = new THREE.Vector3(), q4 = new THREE.Quaternion(), m4 = new THREE.Matrix4(), m5 = new THREE.Matrix4(), NONE = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -352,6 +353,7 @@ const FIXTURES = {
       for (let f = 0, i = 0; f <= n; f++) {
         // Scene-stable gestures: a pulse down the hall, its return, paired groups,
         // or a slow wave that moves at phrase pace.
+        const envelope = ch.archCentre === undefined ? 1 : ch.archBase + ch.archStrength * Math.exp(-Math.pow((f / n - ch.archCentre) / ch.archWidth, 2));
         const pattern = ch.pattern || 0, travel = pattern === 1 ? n - (ch.travel ?? 99) : (ch.travel ?? 99);
         let pulse = pattern === 1 ? Math.exp(-Math.pow((f - travel) * 0.9, 2)) : (pattern === 3 ? 0 : (ch.kickPulse || 0));
         if (pattern === 2 && f % 2 !== Math.floor((ch.beat || 0) / 4) % 2) pulse = 0;
@@ -363,7 +365,7 @@ const FIXTURES = {
           const level = pattern === 3
             ? ch.dim * (0.1 + along * 0.46 + (ch.chase || 0) * 0.2) + (ch.flash || 0)
             : ch.dim * (0.05 + pulse * 0.9 + along * (ch.chase || 0)) + (ch.flash || 0);
-          const col = f % 2 ? c2 : c; mesh.instanceColor.setXYZ(i, col.r * level * 2, col.g * level * 2, col.b * level * 2);
+          const col = f % 2 ? c2 : c; mesh.instanceColor.setXYZ(i, col.r * level * envelope * 2, col.g * level * envelope * 2, col.b * level * envelope * 2);
         }
       }
       mesh.instanceColor.needsUpdate = true;
@@ -586,7 +588,8 @@ const FIXTURES = {
     // places: many small screens instead of one, [[where, what it faces, how far round the room (0 to 1)], ...]. Each
     // shows the picture in small, and a swell of brightness runs round them with the beat: one band of light.
     const many = thing.props.places, swell = many ? instancedBufferAttribute(new THREE.InstancedBufferAttribute(Float32Array.from(many, (q, i) => q[2] ?? i / many.length), 1)) : null;
-    const U = { time: uniform(0), phase: uniform(0), kick: uniform(0), build: uniform(0), gain: uniform(0), mode: uniform(0), col: uniform(new THREE.Color(0)), col2: uniform(new THREE.Color(0)), mediaOn: uniform(0), media: texture(blank()) };
+    const U = { time: uniform(0), phase: uniform(0), kick: uniform(0), build: uniform(0), gain: uniform(0), mode: uniform(0), col: uniform(new THREE.Color(0)), col2: uniform(new THREE.Color(0)), mediaOn: uniform(0), media: texture(blank()), themes: uniform(new THREE.Vector3()) };
+    const themeWeights = [0, 0, 0];
     const grid = vec2(Math.round(width * dense), Math.round(height * dense)), aspect = width / height;
     const hash2 = q => fract(sin(dot(q, vec2(127.1, 311.7))).mul(43758.5453));
     const mat = new THREE.MeshBasicNodeMaterial({ fog: false, ...(see ? { ...additive, side: THREE.DoubleSide } : dome ? { side: THREE.BackSide } : {}) });
@@ -607,16 +610,32 @@ const FIXTURES = {
         .Else(() => { const q = abs(fract(p.mul(2.2).add(vec2(0, t.mul(0.12)))).sub(0.5)); lit.assign(fall(0.03, 0, abs(max(q.x, q.y).sub(0.3).sub(sin(ph.mul(3.1416)).mul(0.1))))); k.assign(step(0.5, fract(cell.y.mul(3).add(t.mul(0.1))))); });   // squares
       const bar = step(cell.y, U.build).mul(step(0.02, U.build));   // in a break a bar rises with the tension
       const own = mix(U.col, U.col2, k).mul(max(lit.mul(U.build.oneMinus()), bar).mul(0.85).add(0.06).add(U.kick.mul(0.3)));
+      // Three composed image families, on slow beat clocks. They open with a build
+      // and accent the kick lightly; changing theme blends rather than cutting.
+      const gridCell = abs(fract(cell.mul(vec2(10, 6))).sub(0.5));
+      const frame = fall(0.065, 0.025, abs(max(gridCell.x, gridCell.y).sub(0.35)));
+      const scan = fall(0.16, 0.04, abs(fract(cell.x.add(ph.div(64))).sub(0.5)));
+      const industrial = mix(U.col, U.col2, scan).mul(frame.mul(0.5).add(scan.mul(0.45)).add(U.kick.mul(0.08)).add(0.035));
+      const concentric = fall(0.2, 0.04, abs(sin(r.mul(22).sub(ph.mul(TAU / 32)))));
+      const veil = sin(a.mul(3).add(ph.mul(TAU / 64))).mul(0.5).add(0.5);
+      const hypnotic = mix(U.col, U.col2, veil).mul(concentric.mul(0.58).add(veil.mul(0.07)).add(U.kick.mul(0.035)).add(0.025));
+      const ribbon = sin(p.x.mul(2.8).add(ph.mul(TAU / 64))).mul(U.build.mul(0.12).add(0.25))
+        .add(sin(p.x.mul(7).sub(ph.mul(TAU / 32))).mul(0.09));
+      const ribbons = fall(0.13, 0.03, abs(p.y.sub(ribbon))).add(fall(0.1, 0.025, abs(p.y.add(ribbon.mul(0.6)))).mul(0.55));
+      const melodic = mix(U.col, U.col2, smoothstep(0.15, 0.85, cell.x)).mul(ribbons.mul(0.7).add(U.kick.mul(0.05)).add(0.025));
+      const themed = own.mul(float(1).sub(U.themes.x.add(U.themes.y).add(U.themes.z)))
+        .add(industrial.mul(U.themes.x)).add(hypnotic.mul(U.themes.y)).add(melodic.mul(U.themes.z));
       const shown = U.media.sample(cell).rgb.mul(U.kick.mul(0.5).add(0.75)).mul(U.build.mul(0.6).oneMinus()).add(U.col.mul(bar).mul(0.6));
       // A dome is a continuous projection, while a physical LED wall keeps its dots.
       const dots = dome ? float(1) : fall(0.5, 0.25, length(fract(projected.mul(grid)).sub(0.5)));
       const band = swell ? pow(sin(swell.mul(4).sub(U.phase.mul(0.25)).mul(6.2832)).mul(0.5).add(0.5), 2).mul(0.65).add(0.35) : 1;
-      return mix(own, shown, U.mediaOn).mul(dots).mul(U.gain).mul(band).mul(1.6);
+      return mix(themed, shown, U.mediaOn).mul(dots).mul(U.gain).mul(band).mul(1.6);
     })();
     const wall = many ? new THREE.InstancedMesh(new THREE.PlaneGeometry(width, height), mat, many.length) : new THREE.Mesh(dome ? new THREE.SphereGeometry(1, 72, 24, 0, 6.2832, 0, Math.PI / 2).scale(dome.rx, dome.rise, dome.rz) : new THREE.PlaneGeometry(width, height), mat);
     if (many) { const o = new THREE.Object3D(); many.forEach(([at, towards], i) => { o.position.set(...at); o.lookAt(...towards); o.updateMatrix(); wall.setMatrixAt(i, o.matrix); }); wall.frustumCulled = false; }
     return { object: wall, update(dt, t) {
       const ch = thing.ch;
+      U.themes.value.set(...blendTheme(themeWeights, ch.theme || 0, dt));
       wall.visible = !(many && ch.off);   // small screens that are switched off are not there, so that they do not hang in front of what is
       U.time.value = t; U.phase.value = ch.phase || 0; U.kick.value = ch.kick || 0; U.build.value = ch.build || 0;
       // a dome shows only the visuals that fill it: rings, liquid, the tunnel, a sweep (a thin line or a few stars leave it dark)

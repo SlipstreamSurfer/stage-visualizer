@@ -60,7 +60,12 @@ export async function withPage(flags, run) {
     await run({ send, evaluate, until, errors, port });
   } finally {
     for (const pending of waiting.values()) { clearTimeout(pending.timer); pending.reject(new Error('Browser closed')); }
-    ws?.close(); chrome.kill(); server.close();
+    if (ws && ws.readyState < 2) await new Promise(resolve => {
+      const timer = setTimeout(resolve, 2000);
+      ws.addEventListener('close', () => { clearTimeout(timer); resolve(); }, { once: true });
+      ws.close();
+    });
+    chrome.kill(); server.close(); server.closeAllConnections();
     await exited;
     // macOS Chrome helpers can finish profile writes just after the parent exits.
     fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

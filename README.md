@@ -7,9 +7,45 @@
   </picture>
 </p>
 
-A browser show engine: lights, cameras and a crowd that follow the music you play.
+<p align="center">
+  <strong>Turn your music into a live 3D light show.</strong><br>
+  Moving lights, LED arches, cameras and a crowd — all inside your browser.
+</p>
+
+<p align="center">
+  <a href="https://github.com/SlipstreamSurfer/stage-visualizer/releases/latest">Latest release</a> ·
+  <a href="#start">Get started</a> ·
+  <a href="#connect-music">Connect music</a> ·
+  <a href="docs/macos-audio.md">macOS audio setup</a> ·
+  <a href="LICENSE">MIT license</a>
+</p>
+
+![Hangar viewed from front of house, with blue and cyan moving lights, LED arches and a crowd](docs/screenshots/hangar-overview.jpg)
+
+<p align="center"><em>Hangar · the main stage of Stage Visualizer</em></p>
+
 **Hangar** is the single public venue and the main stage for developing SV.
-Choose from **48 moods** to shape its show. WebGPU renders the show when available; WebGL provides a fallback.
+Choose from **48 moods** to shape the show, then adjust its look and camera.
+WebGPU renders the show when available; WebGL provides a fallback.
+
+| Music | Light show | Your controls |
+| --- | --- | --- |
+| Local tracks, audio inputs and supported system-audio sharing | Moving heads, LED arches, haze and a dancing crowd | Nine camera views, look presets and quick light switches |
+| Audio processed locally in your browser | Automatic scenes shaped by the incoming music | Fine tuning, saved presets and keyboard effects |
+
+<table>
+  <tr>
+    <td width="50%"><a href="docs/screenshots/hangar-dj-booth.jpg"><img src="docs/screenshots/hangar-dj-booth.jpg" alt="Hangar from behind the DJ booth, looking across the decks and crowd" width="100%"></a></td>
+    <td width="50%"><a href="docs/screenshots/hangar-controls.jpg"><img src="docs/screenshots/hangar-controls.jpg" alt="Show controls with Hangar, mood, camera movement and Energetic look settings" width="100%"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>From the DJ booth</strong><br>Decks, crowd and the lighting rig.</td>
+    <td align="center"><strong>Shape your show</strong><br>Choose a mood, camera and look.</td>
+  </tr>
+</table>
+
+*Actual screenshots of the public 0.26.2 Hangar demo, using the Cool palette
+and Energetic look. Click the smaller images to view them at full size.*
 
 ## Start
 

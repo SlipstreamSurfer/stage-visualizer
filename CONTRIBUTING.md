@@ -20,3 +20,6 @@ Other venue experiments belong in private development.
 Use `npm test` for the short daily check, `npm run test:audio` for audio-engine changes and `npm run test:browser` for a real
 Hangar page check. Run `npm run test:extended` only when broader application
 changes require it. Do not tour unrelated venues for a Hangar change.
+
+See [Publishing a release](docs/releases.md) for versioning, required checks,
+release tags and the separate GitHub Release publication step.

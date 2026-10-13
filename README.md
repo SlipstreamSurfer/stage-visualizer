@@ -37,9 +37,9 @@ Choose a **Sound source** and use its connection button:
 - **System audio:** use the browser's supported system-audio sharing option.
   On Linux, a PipeWire input can carry system sound; see [Linux audio](linux/stage-visualizer.conf).
 
-For DJ software on macOS, a multi-output device can send music to headphones
-and BlackHole 2ch. Select BlackHole as SV's audio input. See the
-[Dutch Mac audio guide](LEES-MIJ-MAC.md). Reconnect the audio input after
+On macOS, an audio interface with loopback or a virtual audio device can carry
+sound from a music player, streaming app or DJ software into SV. See the
+[macOS audio setup guide](docs/macos-audio.md). Reconnect the audio input after
 closing or reloading the page. A connected input with no detected audio is silent.
 
 ## Control the show

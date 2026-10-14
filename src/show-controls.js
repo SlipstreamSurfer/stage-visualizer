@@ -22,7 +22,7 @@ export function normalizeControls(value) {
     const ring = object(object(input.coils)[bank]);
     coils[bank] = { mode: choice(ring.mode, ['auto', '0', '1', '2', '3', '4'], 'auto'), speed: numberIn(ring.speed, 1, 0, 3), direction: choice(ring.direction, ['auto', 'forward', 'reverse'], 'auto') };
   }
-  return { levels, coils, showTheme: normalizeTheme(input.showTheme), lightChoreography: normalizeChoreography(input.lightChoreography), ringLook: choice(input.ringLook, ['auto', ...RING_NAMES], 'auto'), palette: choice(input.palette, ['auto', ...Object.keys(PALETTES)], 'auto'), beamWidth: numberIn(input.beamWidth, 1, 0.35, 2), cameraSpeed: numberIn(input.cameraSpeed, 1, 0.15, 1) };
+  return { levels, coils, showTheme: normalizeTheme(input.showTheme), lightChoreography: normalizeChoreography(input.lightChoreography), ringLook: choice(input.ringLook, ['auto', ...RING_NAMES], 'auto'), palette: choice(input.palette, ['auto', ...Object.keys(PALETTES)], 'auto'), beamWidth: numberIn(input.beamWidth, 1, 0.35, 2), cameraSpeed: numberIn(input.cameraSpeed, 1, 0.15, 1), cameraFollowsLight: input.cameraFollowsLight !== false };
 }
 export function normalizeLook(value) {
   const input = object(value), off = { ...DEFAULT_OFF };

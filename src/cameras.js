@@ -73,6 +73,14 @@ const PLAN = {
   intro: { shots: [0, 2, 7], hold: 45 }, groove: { shots: [1, 5, 0, 6, 2, 8], hold: 30 }, peak: { shots: [0, 5, 6, 1, 3, 4], hold: 16 },
   low: { shots: [2, 7, 3], hold: 40 }, break: { shots: [4, 8, 2], hold: 60 },
 };
+// With a light composition playing (Hangar's light choreography) the camera shows it: a cut to a shot that suits it
+// when it starts, no other cuts while it develops (develop, in beats; a drop still cuts), and for a stage opening a
+// wide shot once the light reaches the hall. A break keeps its own close shots.
+export const LIGHT_SHOTS = {
+  stage: { shots: [0, 8, 1], reveal: [2, 5], revealAt: 10, develop: 20 },
+  wave: { shots: [7, 2, 6], develop: 32 },
+  hold: { shots: [0, 5, 2], develop: 6 },
+};
 export class CameraDirector {
   // list: the venue's shots; the ones after the first nine come from its facilities (the bar, front of house) and are
   // used when the track is calm
@@ -84,14 +92,21 @@ export class CameraDirector {
     if (hard) { this.cut(next, t); this.fadeIn = -10; } else { this.pending = next; this.fadeFrom = t; }
   }
   // returns the shot to draw
-  update(signals, t, hold = 1) {
+  // light: the light composition that is playing, { key, started, age } (see LIGHT_SHOTS), or null
+  update(signals, t, hold = 1, light = null) {
     const m = signals.m, ev = signals.ev, base = PLAN[m.section], plan = base.shots.length && (m.section === 'intro' || m.section === 'low') ? { hold: base.hold, shots: [...base.shots, ...this.extra] } : base;
     if (this.auto) {
       const over = factor => this.pending === null && t - this.lastCut > plan.hold * hold * factor;
+      const cue = m.phase !== 'break' && light ? LIGHT_SHOTS[light.key] : null, fresh = cue && light.started !== this.lightStarted;
+      if (fresh) { this.lightStarted = light.started; this.revealed = false; }
+      const shots = cue ? [...cue.shots, ...cue.reveal || []] : plan.shots;
       if (ev.drop) this.direct(t, [0, 5], true);
-      else if (ev.from && ev.from !== 'break' && m.section !== 'break' && this.pending === null && t - this.lastCut > 8) this.direct(t, plan.shots);
-      else if (ev.kick && signals.beats % 16 === 0 && over(1)) this.direct(t, plan.shots);
-      else if (over(1.5)) this.direct(t, plan.shots);
+      else if (fresh && this.pending === null && t - this.lastCut > 4) this.direct(t, cue.shots);
+      else if (cue?.reveal && !this.revealed && light.age >= cue.revealAt && this.pending === null) { this.revealed = true; if (!cue.reveal.includes(this.index)) this.direct(t, cue.reveal); }
+      else if (cue && light.age < cue.develop) { /* let the light develop on screen */ }
+      else if (ev.from && ev.from !== 'break' && m.section !== 'break' && this.pending === null && t - this.lastCut > 8) this.direct(t, shots);
+      else if (ev.kick && signals.beats % 16 === 0 && over(1)) this.direct(t, shots);
+      else if (over(1.5)) this.direct(t, shots);
       else if (this.pending === null && m.phase === 'break' && m.hasGrooved && signals.sinceBreak > 3 && t - this.lastCut > signals.sinceBreak) this.direct(t, PLAN.break.shots);
     }
     if (this.pending !== null && t - this.fadeFrom > 0.28) { this.cut(this.pending, t); this.fadeIn = t; }

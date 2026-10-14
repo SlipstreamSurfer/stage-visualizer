@@ -109,7 +109,7 @@ function frame() {
 
   if (!cameraFrozen) {
     cameraTime += dt * controls.cameraSpeed;
-    const shot = cams.update(signals, t, director.mood.camHold);
+    const shot = cams.update(signals, t, director.mood.camHold, controls.cameraFollowsLight ? director.lightCue : null);
     if (cameraIndex !== cams.index) { cameraAge = 0; cameraIndex = cams.index; }
     else cameraAge += dt * controls.cameraSpeed;
     const k = Math.min(40, cameraAge / director.mood.camHold), p = shot.pos(cameraTime, k);
@@ -236,6 +236,7 @@ $('cam').onchange = e => setCam(e.target.value);
 function refreshTheme() {
   $('showTheme').value = controls.showTheme;
   $('lightChoreography').value = controls.lightChoreography;
+  $('cameraFollowsLight').checked = controls.cameraFollowsLight;
   $('choreographyHint').textContent = CHOREOGRAPHIES[controls.lightChoreography].description;
   $('showTheme').disabled = venueKey !== 'hangar';
   $('themeHint').textContent = venueKey !== 'hangar' ? 'Show themes are available in Hangar.'
@@ -247,6 +248,7 @@ $('showTheme').onchange = () => {
   persistControls(); refreshTheme();
 };
 $('lightChoreography').onchange = () => { controls.lightChoreography = $('lightChoreography').value; persistControls(); refreshTheme(); };
+$('cameraFollowsLight').onchange = () => { controls.cameraFollowsLight = $('cameraFollowsLight').checked; persistControls(); };
 const LOOK_SLIDERS = [['lookLight', 'light'], ['lookBloom', 'bloom'], ['lookHaze', 'haze'], ['lookHall', 'hall']];
 const LOOK_PRESETS = { standard: { light: 1, bloom: 1, haze: 1, hall: 1 }, calm: { light: 0.8, bloom: 0.6, haze: 0.65, hall: 1.15 }, cinematic: { light: 0.9, bloom: 1.15, haze: 1.3, hall: 0.65 }, energetic: { light: 1.2, bloom: 1.3, haze: 1.15, hall: 0.85 } };
 const sliderValue = id => { $(id + 'Value').value = (+$(id).value).toFixed(2) + '×'; };

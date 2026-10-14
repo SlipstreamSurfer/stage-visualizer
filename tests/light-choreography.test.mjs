@@ -80,3 +80,44 @@ test('composition changes preserve scene clocks, truss targets, theme colours an
     assert.ok([...r.groups.overhead,...r.groups.stage].every(f=>f.ch.dim===0));
   }
 });
+
+test('the automatic camera shows each light composition and lets it develop', async () => {
+  const { CameraDirector, LIGHT_SHOTS } = await import('../src/cameras.js');
+  const list = Array.from({ length: 9 }, (_, i) => ({ name: String(i) }));
+  const run = (key, { from = 0, frames = 60 * 40, drop = -1, section = 'peak', phase = 'groove' } = {}) => {
+    const cam = new CameraDirector(list), path = [];
+    for (let f = 0; f < frames; f++) {
+      const t = f / 60, beats = Math.floor(t * 2);   // 120 BPM
+      const s = { m: { section, phase }, ev: { kick: f % 30 === 0, drop: f === drop }, beats, sinceBreak: 0 };
+      const light = t >= from ? { key, started: from * 2, age: t * 2 - from * 2 } : null;
+      cam.update(s, t, 1, light); path.push({ t, age: light?.age ?? -1, index: cam.index });
+    }
+    return path;
+  };
+  for (const key of ['stage', 'wave', 'hold']) {
+    const cue = LIGHT_SHOTS[key], path = run(key, { from: 10 });
+    const start = path.find(p => p.age >= 0.8);
+    assert.ok(cue.shots.includes(start.index), `${key}: the cut at the start shows the composition`);
+    const developing = path.filter(p => p.age >= 0.8 && p.age < cue.develop);
+    const indices = new Set(developing.map(p => p.index));
+    assert.ok(indices.size <= (cue.reveal ? 2 : 1), `${key}: no extra cuts while the light develops`);
+    if (cue.reveal) assert.ok(cue.reveal.includes(path.find(p => p.age >= cue.revealAt + 0.8).index), 'a stage opening reveals the hall in a wide shot');
+    const later = path.filter(p => p.age >= cue.develop);
+    assert.ok(later.every(p => [...cue.shots, ...cue.reveal || []].includes(p.index)), `${key}: later cuts stay on shots that show the composition`);
+  }
+  const dropped = run('wave', { from: 10, drop: 60 * 14 });
+  assert.ok([0, 5].includes(dropped.find(p => p.t > 14.05).index), 'a drop still cuts to the whole room');
+  const withLight = run('wave', { section: 'break', phase: 'break' }), without = run('wave', { from: Infinity, section: 'break', phase: 'break' });
+  assert.deepEqual(withLight.map(p => p.index), without.map(p => p.index), 'a break keeps its own camera');
+});
+
+test('the camera setting is saved, defaults on and reaches the director only as a cue', () => {
+  assert.equal(normalizeControls({}).cameraFollowsLight, true);
+  assert.equal(normalizeControls({ cameraFollowsLight: false }).cameraFollowsLight, false);
+  assert.equal(normalizePresets([{ id: 'a', name: 'a', venue: 'hangar', mood: 'techno', controls: { cameraFollowsLight: false } }])[0].controls.cameraFollowsLight, false);
+  const r = rig('wave');
+  r.director.update(signals(0), 0, 1 / 60, r.look); r.director.update(signals(3), 0.1, 1 / 60, r.look);
+  assert.equal(r.director.lightCue.key, 'wave'); assert.ok(r.director.lightCue.age >= 0);
+  const o = rig('original'); o.director.update(signals(0), 0, 1 / 60, o.look);
+  assert.equal(o.director.lightCue, null, 'the original show gives the camera nothing to follow');
+});

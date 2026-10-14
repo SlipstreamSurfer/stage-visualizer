@@ -145,6 +145,56 @@ const hangarHeadGate = (f, beat, pattern) => {
   const diagonal = pattern === 1 ? (x + z) / 2 : (1 - x + z) / 2;
   return Math.min(3, Math.floor(diagonal * 4)) === step % 4;
 };
+// Hangar's overhead heads (the five hall trusses and the two side trusses) have looks of their own, for every mood.
+// A track gets three; when the show hears a new one (a new palette) the next three take over, and within a track
+// the show moves on to another look at a scene cue once a look has had its time. A break keeps its own aim.
+//   tiers   the parts of a track a look suits (calm, mid, big)
+//   gate    how the heads take turns: 'patterns' (the figures below), 'chase' (a band along the trusses), 'all'
+//   aim     (f, k, s) => [pan, tilt]; s has the beat, section, build, energy, drop and where the stage is
+const toward = (pos, x, y, z) => { const dx = x - pos[0], dy = y - pos[1], dz = z - pos[2]; return [Math.atan2(dx, dz), Math.atan2(Math.hypot(dx, dz), -dy)]; };
+const onSide = f => Math.abs((f.livePos || f.pos)[0]) > 18;   // on a truss down the side of the hall
+export const HEAD_LOOKS = {
+  floor: { name: 'Floor scan', tiers: ['calm', 'mid', 'big'], gate: 'patterns',
+    aim: (f, k, s) => aimHangar(f, k, s.beat, s.section, s.build, s.energy, s.drop) },
+  curtains: { name: 'Curtains', tiers: ['calm', 'mid', 'big'], gate: 'all',   // each truss spreads a fan of beams across its own width
+    aim: (f, k) => {
+      const p = f.livePos || f.pos, a = (f.u * 2 - 1) * 1.4 + 0.25 * Math.sin(k.m * 0.3 + f.row * 0.8);   // from the vertical, up to 80 degrees out
+      return onSide(f) ? toward(p, p[0] - Math.sign(p[0]) * 3, 0, p[2]) : toward(p, p[0] + Math.sin(a) * 30, p[1] - Math.cos(a) * 30, p[2]);
+    } },
+  circles: { name: 'Circles', tiers: ['mid', 'big'], gate: 'patterns',   // every beam draws a slow circle on the floor, one round in four bars
+    aim: (f, k) => { const p = f.livePos || f.pos, a = k.phase * TAU / 16 + f.u * Math.PI + f.row * 0.9; return toward(p, p[0] + Math.cos(a) * 9, 0, p[2] + Math.sin(a) * 9); } },
+  fan: { name: 'Fans', tiers: ['mid', 'big'], gate: 'all',   // the hall trusses open out towards the walls and close again
+    aim: (f, k) => {
+      const p = f.livePos || f.pos, open = 0.5 + 0.5 * Math.sin(k.m * 0.35 + f.row * 0.6);
+      return onSide(f) ? toward(p, -Math.sign(p[0]) * (4 + open * 8), 0.5, p[2] + (f.u - 0.5) * 18) : toward(p, f.xn * (12 + open * 16), 0.8 + open * 3, p[2] + 5);
+    } },
+  pillars: { name: 'Pillars', tiers: ['calm', 'mid'], gate: 'chase',   // straight down, a band of light running along the trusses
+    aim: (f, k) => { const p = f.livePos || f.pos; return toward(p, p[0] + 0.8 * Math.sin(k.m * 0.4 + f.u * 6), 0, p[2] + 0.8 * Math.cos(k.m * 0.4 + f.row)); } },
+  cross: { name: 'Crossfire', tiers: ['mid', 'big'], gate: 'chase',   // left beams to the right and right beams to the left, crossing over the crowd
+    aim: (f, k) => {
+      const p = f.livePos || f.pos, sweep = Math.sin(k.m * 0.45 + f.row * 0.9);
+      return onSide(f) ? toward(p, -Math.sign(p[0]) * 14, 1, p[2] + sweep * 8) : toward(p, -f.xn * 15 + sweep * 3, 0.8, p[2] + sweep * 7);
+    } },
+  converge: { name: 'Converge', tiers: ['big'], gate: 'all',   // every beam meets over the booth
+    aim: (f, k, s) => toward(f.livePos || f.pos, Math.sin(k.m * 0.25) * 5, 3 + 2 * Math.sin(k.m * 0.4), s.stage + 2 * Math.sin(k.m * 0.3)) },
+  sky: { name: 'Sky', tiers: ['big'], gate: 'all',   // up into the roof, leaning slowly
+    aim: (f, k) => { const p = f.livePos || f.pos, lean = Math.sin(k.m * 0.3 + f.row * 0.7 + f.u * 2); return toward(p, p[0] * 1.4 + lean * 4, p[1] + 12, p[2] + lean * 10); } },
+};
+// the order in which tracks get their three: a run of eight, so four tracks in a row each look different
+const HEAD_ORDER = ['floor', 'curtains', 'circles', 'fan', 'pillars', 'cross', 'converge', 'sky'];
+// Formations of the five hall trusses: drop in metres below their top (v: 0 the front truss, 1 the back one), and
+// roll for a truss whose two hoists stop at different heights. A formation holds for minutes.
+export const TRUSS_LOOKS = [
+  { name: 'High', drop: () => 0 },
+  { name: 'Rising to the back', drop: v => (1 - v) * 3 },
+  { name: 'Valley', drop: v => 3 * (1 - Math.abs(v * 2 - 1)) },
+  { name: 'Low', drop: () => 2.4 },
+  { name: 'Tilted', drop: () => 1.4, roll: row => (row % 2 ? 1 : -1) * 0.07 },
+  { name: 'Arch', drop: v => 0.4 + 2.6 * Math.abs(v * 2 - 1) },
+  { name: 'Zigzag', drop: (v, row) => row % 2 ? 2.4 : 0.6 },
+  { name: 'Falling to the back', drop: v => v * 3 },
+];
+const HEAD_HOLD = 40, TRUSS_HOLD = 120, TRUSS_TRACK = 30;   // seconds
 export const PROGRAMS = [
   { name: 'Pillars', tier: 'calm', w: { overhead: 1, stage: 0.1, wash: 0.5, bars: 0.5, wall: 0.8, roof: 0.3, rings: 0.45 },
     overhead: (f, k) => [0, 0.05 + 0.04 * Math.sin(k.m + f.u * 4)],
@@ -197,6 +247,7 @@ export class Director {
     this.venue = venue;
     this.choreography = new LightChoreography(groups);
     this.hangarRig = (groups.overhead || []).some(f => f.props?.hangar);
+    this.hangarStage = Math.min(...(groups.overhead || []).filter(f => f.props?.hangar).map(f => f.pos[2])) - 8;   // over the booth
     this.manual = { strobe: false, blinder: false, blackout: false };
     this.w = { ...BREAK_LOOK };   // start in the calm break look instead of with everything on
     Object.assign(this, {
@@ -204,6 +255,7 @@ export class Director {
       motion: 0, spin: 0, spinVel: 0, chase: 0, strobeClock: 0, level: 1, laser: 0, smokeAt: -100, haze: 1, visual: 0, house: 0.9, present: 1,
       col: [1, 1, 1], col2: [1, 1, 1], barLevel: [], drops: 0, kickAt: -10, punch: 0,
       coilRun: 0, coilDropAt: -100, coilDropStrength: 0, archPattern: 0, vj: [1, 0, 0], vjBuild: 0, vjDropAt: -100,
+      headLook: 'floor', headSet: null, headPalette: -1, headAt: -100, headScene: 0, trussLook: 0, trussAt: 0, trussScene: 0, trussPalette: 0, trussTrack: false,
       ringVariant: 0, ringAt: 0, ringScene: -1, ringBreak: false, ringTargets: [...RING_LOOKS[0].drops],
     });
     for (const list of Object.values(groups)) for (const [slot, f] of list.entries()) { f.rp = Math.random() * 2 - 1; f.rt = Math.random(); f.hangarSlot = slot; }
@@ -226,6 +278,30 @@ export class Director {
     this.pick(section);
     if (this.scene % this.mood.colorEvery === 0) this.colorIdx++;
     this.sceneAt = t;
+  }
+  // Hangar: the heads' look and the trusses' formation (see HEAD_LOOKS and TRUSS_LOOKS). tier: the part of the track.
+  hangarLooks(t, tier, brk) {
+    const track = this.palette !== this.headPalette, cue = this.scene !== this.headScene;
+    if (track) {   // a new palette is a new track: three other looks
+      this.headPalette = this.palette;
+      const start = this.headSet ? (HEAD_ORDER.indexOf(this.headSet[0]) + 3) % HEAD_ORDER.length : 0;
+      this.headSet = [0, 1, 2].map(i => HEAD_ORDER[(start + i) % HEAD_ORDER.length]); this.headFresh = true;
+    }
+    this.headScene = this.scene;
+    const suits = key => HEAD_LOOKS[key].tiers.includes(tier);
+    if (!brk && (this.headFresh || (cue && t - this.headAt >= HEAD_HOLD) || !suits(this.headLook))) {   // a break keeps its own aim
+      const pool = this.headSet.filter(suits), choices = pool.length ? pool : HEAD_ORDER.filter(suits);
+      const next = choices[(choices.indexOf(this.headLook) + 1) % choices.length];
+      if (next !== this.headLook) { this.headLook = next; this.headAt = t; }
+      this.headFresh = false;
+    }
+    // the trusses: at a scene cue once a formation has held its minutes, sooner for a new track; not during a break
+    if (this.palette !== this.trussPalette) { this.trussPalette = this.palette; this.trussTrack = true; }
+    const trussCue = this.scene !== this.trussScene; this.trussScene = this.scene;
+    if (!brk && trussCue && t - this.trussAt >= (this.trussTrack ? TRUSS_TRACK : TRUSS_HOLD)) {
+      this.trussLook = (this.trussLook + 1 + (this.trussTrack ? 2 : 0)) % TRUSS_LOOKS.length; this.trussAt = t; this.trussTrack = false;
+    }
+    this.headName = HEAD_LOOKS[this.headLook].name; this.trussName = TRUSS_LOOKS[this.trussLook].name;
   }
   // sets off everything of one kind: co2, flame, spark, firework, confetti
   fire(what, t) { if (this.off?.[what]) return; for (const f of this.groups[what] || []) f.ch.fire = t + (what === 'firework' ? f.u * 0.5 : 0); if (what === 'co2') this.smokeAt = t; }
@@ -364,10 +440,12 @@ export class Director {
     this.ringLook = RING_LOOKS[this.ringVariant].name;
     const k = { m: this.motion, spin: this.spin, phase: sig.phase, build: m.build, t, hangarLook: this.scene % 3, ringVariant: brk && manualRing < 0 ? 1 : this.ringVariant };
     const aims = brk ? BREAK_AIM : P;
+    if (this.hangarRig) this.hangarLooks(t, TIER[section], brk);
+    const headLook = HEAD_LOOKS[this.headLook], s = { beat: this.beat, section, build: m.build, energy: sig.energy, drop: sig.drop, stage: this.hangarStage };
     this.beamPeak = 0;
     for (const role of ['overhead', 'stage']) for (const f of G[role] || []) {
       let [pan, tilt] = role === 'overhead'
-        ? ((f.props?.hangar ? aimHangar(f, k, this.beat, section, m.build, sig.energy, sig.drop) : null) || aims[role](f, k))
+        ? ((f.props?.hangar ? (brk ? HEAD_LOOKS.floor : headLook).aim(f, k, s) : null) || aims[role](f, k))
         : aims[role](f, k);
       if (composition.active) [pan, tilt] = composition.aim(f, pan, tilt);
       if (f.props?.hangar) {
@@ -405,9 +483,10 @@ export class Director {
         const beats = sig.beats || 0, pattern = Math.floor(beats / 32) % 6;
         const build = clamp(m.build);
         const buildOn = Math.abs(f.xn) <= 1 - build * 0.85 && (build < 0.65 || bank === 2 || f.row % 3 === 0);
-        const on = brk ? buildOn : hangarHeadGate(f, calm ? beats / 2 : beats, pattern);
+        const gate = role === 'overhead' ? headLook.gate : 'patterns', counted = calm ? beats / 2 : beats;
+        const on = brk ? buildOn : gate === 'all' || (gate === 'chase' ? (((f.u * 2 - counted / 8 + f.row * 0.25) % 1) + 1) % 1 < 0.5 : hangarHeadGate(f, counted, pattern));
         f.hangarGate = (f.hangarGate ?? 1) + ((on ? 1 : 0) - (f.hangarGate ?? 1)) * ease(0.08);
-        const gain = calm || brk ? 1 : [1, 2, 4].includes(pattern) ? 2.5 : 1.5;
+        const gain = calm || brk || gate === 'all' ? 1 : gate === 'chase' || ![1, 2, 4].includes(pattern) ? 1.5 : 2.5;
         I *= (f.hangarGate + (1 - f.hangarGate) * clamp(sig.drop)) * (gain + (1 - gain) * clamp(sig.drop));
         I *= f.hangarMoveLevel + (1 - f.hangarMoveLevel) * clamp(sig.drop);
       }
@@ -471,17 +550,11 @@ export class Director {
       }
       const v = f.rows > 1 ? f.row / (f.rows - 1) : 0;
       if (f.props?.hangar) {
-        // Heavy Hangar trusses move as a measured wave in a break, then lift together on the drop.
-        // Outside the build they keep a small, stable scene shape instead of making large fast jumps.
-        if (f.hangarShape === undefined || t - f.hangarShapeAt >= 90) { f.hangarShape = Math.floor(this.scene / 3) % 4; f.hangarShapeAt = t; }
-        const heldShape = f.hangarShape;
-        f.ch.drop = brk && m.hasGrooved
-          ? 1.1 + m.build * 1.2 + Math.sin(v * TAU - m.build * Math.PI) * m.build * 0.8
-          : sig.drop > 0.3 ? 0
-            : heldShape === 1 ? (1 - v) * 0.8
-              : heldShape === 2 ? Math.max(0, 0.25 + 0.3 * Math.sin(v * TAU + t * 0.08))
-                : heldShape === 3 ? 0.35 : 0;
-        f.ch.roll = 0;
+        // Heavy Hangar trusses hold a formation for minutes. In a break they sink further as the build grows, in a
+        // measured wave, and level out; the drop takes them back up to the formation.
+        const formation = TRUSS_LOOKS[this.trussLook], base = formation.drop(v, f.row);
+        f.ch.drop = brk && m.hasGrooved ? base + m.build * 1.2 + Math.max(0, Math.sin(v * TAU - m.build * Math.PI)) * m.build * 0.6 : base;
+        f.ch.roll = formation.roll && !brk ? formation.roll(f.row) : 0;
         continue;
       }
       f.ch.drop = brk && m.hasGrooved ? 2.2 + m.build * 1.6 : sig.drop > 0.3 ? 0 : shape === 1 ? (1 - v) * 3.2 : shape === 2 ? 1.6 + 1.6 * Math.sin(v * 4 + t * 0.12) : shape === 3 ? 1 : 0;
@@ -577,7 +650,7 @@ export class Director {
     this.room.level *= before > 0 ? after / before : 1;
     // what the viewer has switched off stays dark
     for (const role in this.off) if (this.off[role]) for (const f of G[role] || []) { f.ch.dim = 0; f.ch.flash = 0; if (role === 'truss' && f.props.kind !== 'ring') f.ch.drop = f.ch.roll = 0; if (role === 'roof') f.ch.glitter = f.ch.white = f.ch.hub = 0; }
-    this.status = brk ? (m.build > 0.45 ? 'build-up' : 'break') : (mood.flow ? FLOW_NAME[section] : SECTION_NAME[section]) + ' · ' + P.name;
+    this.status = brk ? (m.build > 0.45 ? 'build-up' : 'break') : (mood.flow ? FLOW_NAME[section] : SECTION_NAME[section]) + ' · ' + (this.hangarRig ? this.headName : P.name);
     if (composition.active) this.status += ' · ' + CHOREOGRAPHIES[composition.key].name;
     return this;
   }

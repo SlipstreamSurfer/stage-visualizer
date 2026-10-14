@@ -2,6 +2,13 @@
 
 ## 0.26.5
 
+- Hangar's hall heads have eight looks: Floor scan, Curtains, Circles, Fans, Pillars, Crossfire, Converge and Sky.
+  Each track gets three of them; a new track (or a long break that brings new colours) starts three others, and
+  within a track the show moves to the next look at a scene cue after about 40 seconds. This applies to every mood.
+- The five hall trusses take formations (High, Rising or Falling to the back, Valley, Arch, Low, Zigzag, Tilted) and
+  hold each for about two minutes, changing sooner for a new track. A break still lowers them with the build; the
+  drop takes them back to their formation. Tilting trusses move at the pace of their hoists.
+- The status line names the current head look.
 - The LED wall develops within each Hangar theme: quiet passages, builds and peaks each have their own treatment.
   Industrial goes from a few breathing frames to a scan that opens the wall to frame groups taking turns; Hypnotic
   from broad slow rings to rings gathering in the middle to layered rings across the wall; Melodic from one soft

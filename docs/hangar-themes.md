@@ -58,3 +58,17 @@ it: the stage and front of house for a Stage opening, the side and high views fo
 Held picture. It then holds that shot while the light develops (20, 32 and 6 beats). A Stage opening is revealed
 in a wide shot once the light reaches the hall. A drop still cuts to the whole room, a break keeps its close
 shots, and a camera you choose yourself keeps priority. Switch the option off for the previous camera rules.
+
+## Head looks and truss formations
+
+The heads on the hall trusses have eight looks: **Floor scan** (beams moving through the depth of the hall),
+**Curtains** (a fan of beams across each truss), **Circles** (every beam draws a slow circle on the floor),
+**Fans** (opening towards the walls), **Pillars** (straight down, with a band of light running along the trusses),
+**Crossfire** (left and right beams crossing over the crowd), **Converge** (all beams meet over the booth) and
+**Sky** (up into the roof). Calm parts use the calm looks, peaks the big ones. Each track gets three looks; a new
+track, or a long break that brings new colours, starts three others. Within a track the next look comes at a
+scene cue after about 40 seconds. A break keeps its own aim.
+
+The five hall trusses take a formation (High, Rising to the back, Valley, Low, Tilted, Arch, Zigzag, Falling to
+the back) and hold it for about two minutes; a new track brings a new formation sooner. A break lowers them with
+the build in a measured wave; the drop takes them back to their formation. This works the same in every mood.

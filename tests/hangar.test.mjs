@@ -4,7 +4,7 @@ import hangar from '../src/venues/hangar.js';
 import { layout, byRole } from '../src/layout.js';
 import { shots, CameraDirector } from '../src/cameras.js';
 import { Signals, demo } from '../src/signals.js';
-import { Director } from '../src/director.js';
+import { Director, MOODS } from '../src/director.js';
 
 test('Hangar has a complete rig inside its hall, a stage and crowd space', () => {
   const L = layout(hangar), groups = byRole(L.things);
@@ -51,4 +51,68 @@ test('Hangar answers a build, drop and break with finite light channels and a st
   const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
   assert.ok(dropAt>0 && strobe>0.5 && low.length && peak.length);
   assert.ok(mean(peak)>mean(low));
+});
+
+// A short set: tracks of five minutes with an intro, a groove, a break with its build, a peak and an outro, and a
+// moment of silence between them, as the listener reports it.
+function playSet(moodKey, tracks, dt = 0.1) {
+  const L = layout(hangar);
+  for (const f of L.things) f.ch = { dim: 0, color: [1, 1, 1], pan: 0, tilt: 0, zoom: 1 };
+  const groups = byRole(L.things), d = new Director(groups, moodKey, { venue: 'hangar' }), look = { light: 1, haze: 1, off: {} };
+  const frames = [], length = 300, flow = d.mood.flow;
+  let beats = 0, phase = 0, t = 0;
+  for (let track = 0; track < tracks; track++) {
+    for (let at = 0; at < length; at += dt, t += dt) {
+      const section = at < 30 ? 'intro' : at < 120 ? 'groove' : at < 150 ? 'break' : at < 270 ? 'peak' : 'low', brk = section === 'break';
+      const s = new Signals(), before = Math.floor(phase);
+      phase += dt * 128 / 60; const kick = !flow && !brk && Math.floor(phase) > before;
+      if (kick) beats++;
+      Object.assign(s.m, { section, phase: brk ? 'break' : 'groove', activity: 1, hasGrooved: true, build: brk ? (at - 120) / 30 : 0, riser: 0, bpm: 128 });
+      const energy = flow ? 0.3 + 0.25 * Math.sin(at / 40) + (section === 'peak' ? 0.3 : 0) : section === 'peak' ? 0.8 : brk ? 0.3 : 0.55;
+      Object.assign(s, { phase, beats, energy, bass: energy * 0.7, mid: 0.3, treble: 0.2, kick: kick ? 0.8 : 0, accent: 0, drop: 0, lift: 0, hype: section === 'peak' ? 0.5 : 0 });
+      const drop = !flow && Math.abs(at - 150) < dt / 2;
+      s.ev = { kick: kick || drop ? 1 : 0, drop, breakLength: drop ? 64 : 0, from: null, silent: at + dt >= length, trackEnded: at + dt >= length };
+      if (drop) s.drop = 1;
+      d.update(s, t, dt, look);
+      const truss = groups.truss.filter(f => f.props?.hangar);
+      frames.push({ track, t, brk, head: d.headLook, truss: d.trussName, drops: truss.map(f => f.ch.drop), rolls: truss.map(f => f.ch.roll),
+        aim: groups.overhead.filter(f => f.props?.hangar).map(f => [f.ch.pan, f.ch.tilt]) });
+    }
+  }
+  return frames;
+}
+
+test('Hangar heads change their look within a track and take other looks for a new track', () => {
+  const frames = playSet('techno', 3), perTrack = [0, 1, 2].map(i => frames.filter(f => f.track === i && !f.brk));
+  const looks = perTrack.map(list => [...new Set(list.map(f => f.head))]);
+  for (const [i, list] of looks.entries()) assert.ok(list.length >= 2, `track ${i + 1} shows more than one look: ${list}`);
+  for (let i = 1; i < 3; i++) assert.notDeepEqual(looks[i], looks[i - 1], 'a new track brings other looks');
+  assert.ok(new Set(looks.flat()).size >= 5, `three tracks together use most looks: ${looks.flat()}`);
+  // the looks point the beams differently, not just in other colours
+  const signature = head => { const aims = frames.filter(f => f.head === head && !f.brk).at(-1).aim; return [aims.reduce((a, [, tilt]) => a + tilt, 0) / aims.length, aims.reduce((a, [pan]) => a + Math.abs(pan), 0) / aims.length].map(n => n.toFixed(1)).join(); };
+  const shapes = new Set(looks.flat().map(signature));
+  assert.ok(shapes.size >= 4, `the looks aim the heads differently: ${[...shapes]}`);
+  for (const f of frames) assert.ok(f.aim.flat().every(Number.isFinite));
+});
+
+test('Hangar trusses hold a formation for minutes and reach a new one for a new track', () => {
+  const frames = playSet('techno', 3), changes = [];
+  for (const [i, f] of frames.entries()) if (!i || f.truss !== frames[i - 1].truss) changes.push(f);
+  assert.ok(new Set(changes.map(f => f.truss)).size >= 3, `several formations over three tracks: ${changes.map(f => f.truss)}`);
+  for (let i = 1; i < changes.length; i++) assert.ok(changes[i].t - changes[i - 1].t >= 30 - 1e-9, `a formation holds at least half a minute (${changes[i - 1].truss})`);
+  for (const f of frames) assert.ok(f.drops.every(d => d >= 0 && d <= 4.5) && f.rolls.every(r => Math.abs(r) <= 0.07));
+  // outside a break the formation stands still: the same heights from one moment to the next
+  const steady = frames.filter((f, i) => i && !f.brk && !frames[i - 1].brk && f.truss === frames[i - 1].truss);
+  assert.ok(steady.every((f, i) => f.drops.join() === frames[frames.indexOf(f) - 1].drops.join()), 'a held formation does not drift');
+  assert.ok(new Set(frames.filter(f => !f.brk).map(f => f.drops.map(d => d.toFixed(1)).join())).size >= 3, 'formations differ in height, not only in name');
+});
+
+test('every music family gets varied heads and truss formations', () => {
+  const families = new Map();
+  for (const [key, mood] of Object.entries(MOODS)) if (!families.has(mood.family)) families.set(mood.family, key);
+  for (const key of families.values()) {
+    const frames = playSet(key, 2, 0.2).filter(f => !f.brk);
+    assert.ok(new Set(frames.map(f => f.head)).size >= 3, `${key}: the heads change look`);
+    assert.ok(new Set(frames.map(f => f.truss)).size >= 2, `${key}: the trusses change formation`);
+  }
 });

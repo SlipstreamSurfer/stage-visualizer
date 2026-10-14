@@ -337,7 +337,8 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
         const step = dt * (want < mv.drop ? 1.6 : 0.5);
         mv.drop += Math.max(-step, Math.min(step, want - mv.drop));
       }
-      mv.roll += Math.max(-dt * 0.12, Math.min(dt * 0.12, (thing.ch.roll || 0) - mv.roll));
+      const rollRate = thing.props.hangar ? 0.03 : 0.12;   // the hall trusses tilt at the pace of their hoists
+      mv.roll += Math.max(-dt * rollRate, Math.min(dt * rollRate, (thing.ch.roll || 0) - mv.roll));
       // A few tonnes on chains: when the winches start or stop, the truss swings a little and takes a while to hang still.
       const vel = dt > 0 ? (mv.drop - before) / dt : 0, d = Math.min(dt, 0.05);
       mv.swingV += ((mv.vel - vel) * 0.05 - mv.swing * 2.6 - mv.swingV * 0.5) * d * 4; mv.swing += mv.swingV * d; mv.vel = vel;
@@ -375,8 +376,9 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       const top = casts.slice(0, nCast).sort((p, r) => r.I - p.I).slice(0, lights.n);
       for (let i = 0; i < lights.n; i++) { if (i < top.length) { lights.pos.array[i].copy(top[i].pos); lights.dir.array[i].copy(top[i].dir); lights.col.array[i].copy(top[i].col).multiplyScalar(2.2); lights.optics.array[i].copy(top[i].optics); } else lights.col.array[i].set(0, 0, 0); }
       if (hangarRig) movers.slice(0, 5).forEach((mv, i) => {
-        lights.shadowMin.array[i + 1].set(mv.mid[0] - 17, mv.group.position.y - 0.15, mv.mid[2] - 0.15);
-        lights.shadowMax.array[i + 1].set(mv.mid[0] + 17, mv.group.position.y + 0.15, mv.mid[2] + 0.15);
+        const tilt = 0.15 + Math.abs(Math.sin(mv.group.rotation.z)) * 17;   // a tilted truss reaches higher and lower at its ends
+        lights.shadowMin.array[i + 1].set(mv.mid[0] - 17, mv.group.position.y - tilt, mv.mid[2] - 0.15);
+        lights.shadowMax.array[i + 1].set(mv.mid[0] + 17, mv.group.position.y + tilt, mv.mid[2] + 0.15);
       });
       if (director.smokeAt !== smokeAt) { smokeAt = director.smokeAt; smoke.burst([0, st.height + 0.5, st.front - 1]); }   // CO2 or a drop: a bank of smoke off the stage
       smoke.update(dt, t, director.room.color, (0.0004 + signals.energy * 0.0011 + signals.kick * 0.0008 + director.flash * 0.012) * look.light * (director.manual.blackout ? 0 : 1), env.haze);

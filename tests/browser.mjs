@@ -7,6 +7,14 @@ import { findBrowser } from '../tools/browser.mjs';
 
 export const waitFor = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+// How a browser check renders. A Mac uses its own GPU, and Linux uses its GPU through ANGLE when it has one (a
+// render node in /dev/dri). Elsewhere, or with SV_TEST_SOFTWARE=1, SwiftShader renders in software: it works
+// everywhere but draws only a frame or so a second, so it is given more time.
+export const SOFTWARE_FLAGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
+const renderNode = () => { try { return fs.readdirSync('/dev/dri').some(name => name.startsWith('renderD')); } catch { return false; } };
+export const softwareRendering = process.env.SV_TEST_SOFTWARE === '1' || !(process.platform === 'darwin' || (process.platform === 'linux' && renderNode()));
+export const renderFlags = () => softwareRendering ? SOFTWARE_FLAGS : process.platform === 'linux' ? ['--ignore-gpu-blocklist', '--use-angle=gl'] : [];
+
 // An isolated profile, command deadlines and guaranteed cleanup. A missing browser fails visibly.
 export async function withPage(flags, run) {
   const browser = findBrowser(), server = await serve(0), port = server.address().port;
@@ -66,8 +74,13 @@ export async function withPage(flags, run) {
   } finally {
     for (const pending of waiting.values()) { clearTimeout(pending.timer); pending.reject(new Error('Browser closed')); }
     waiting.clear();
-    ws?.close(); chrome.kill(); server.close(); server.closeAllConnections();
-    const forceExit = setTimeout(() => chrome.kill('SIGKILL'), 5000);
+    if (ws && ws.readyState < 2) await new Promise(resolve => {
+      const timer = setTimeout(resolve, 2000);
+      ws.addEventListener('close', () => { clearTimeout(timer); resolve(); }, { once: true });
+      ws.close();
+    });
+    chrome.kill(); server.close(); server.closeAllConnections();
+    const forceExit = setTimeout(() => chrome.kill('SIGKILL'), 5000);   // a browser that does not stop in time
     try { await exited; } finally { clearTimeout(forceExit); }
     // macOS Chrome helpers can finish profile writes just after the parent exits.
     fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

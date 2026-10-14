@@ -12,6 +12,7 @@ import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { strut, pieces } from './shapes.js';
 import { reflectionHit } from './reflections.js';
+import { blendTheme } from './show-themes.js';
 import { attribute, uniform, uv, positionGeometry, positionWorld, positionViewDirection, normalView, cameraPosition, instanceIndex, instancedBufferAttribute, varying, texture, Fn, If, float, vec2, vec3, vec4, floor, fract, sin, cos, abs, pow, mix, step, smoothstep, dot, length, max, min, select, atan, exp, sqrt, hash, normalize, mx_noise_float } from 'three/tsl';
 
 const DOWN = new THREE.Vector3(0, -1, 0), v = new THREE.Vector3(), q4 = new THREE.Quaternion(), m4 = new THREE.Matrix4(), m5 = new THREE.Matrix4(), NONE = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -352,6 +353,7 @@ const FIXTURES = {
       for (let f = 0, i = 0; f <= n; f++) {
         // Scene-stable gestures: a pulse down the hall, its return, paired groups,
         // or a slow wave that moves at phrase pace.
+        const envelope = ch.archCentre === undefined ? 1 : ch.archBase + ch.archStrength * Math.exp(-Math.pow((f / n - ch.archCentre) / ch.archWidth, 2));
         const pattern = ch.pattern || 0, travel = pattern === 1 ? n - (ch.travel ?? 99) : (ch.travel ?? 99);
         let pulse = pattern === 1 ? Math.exp(-Math.pow((f - travel) * 0.9, 2)) : (pattern === 3 ? 0 : (ch.kickPulse || 0));
         if (pattern === 2 && f % 2 !== Math.floor((ch.beat || 0) / 4) % 2) pulse = 0;
@@ -363,7 +365,7 @@ const FIXTURES = {
           const level = pattern === 3
             ? ch.dim * (0.1 + along * 0.46 + (ch.chase || 0) * 0.2) + (ch.flash || 0)
             : ch.dim * (0.05 + pulse * 0.9 + along * (ch.chase || 0)) + (ch.flash || 0);
-          const col = f % 2 ? c2 : c; mesh.instanceColor.setXYZ(i, col.r * level * 2, col.g * level * 2, col.b * level * 2);
+          const col = f % 2 ? c2 : c; mesh.instanceColor.setXYZ(i, col.r * level * envelope * 2, col.g * level * envelope * 2, col.b * level * envelope * 2);
         }
       }
       mesh.instanceColor.needsUpdate = true;
@@ -586,7 +588,8 @@ const FIXTURES = {
     // places: many small screens instead of one, [[where, what it faces, how far round the room (0 to 1)], ...]. Each
     // shows the picture in small, and a swell of brightness runs round them with the beat: one band of light.
     const many = thing.props.places, swell = many ? instancedBufferAttribute(new THREE.InstancedBufferAttribute(Float32Array.from(many, (q, i) => q[2] ?? i / many.length), 1)) : null;
-    const U = { time: uniform(0), phase: uniform(0), kick: uniform(0), build: uniform(0), gain: uniform(0), mode: uniform(0), col: uniform(new THREE.Color(0)), col2: uniform(new THREE.Color(0)), mediaOn: uniform(0), media: texture(blank()) };
+    const U = { time: uniform(0), phase: uniform(0), kick: uniform(0), build: uniform(0), gain: uniform(0), mode: uniform(0), col: uniform(new THREE.Color(0)), col2: uniform(new THREE.Color(0)), mediaOn: uniform(0), media: texture(blank()), themes: uniform(new THREE.Vector3()), vj: uniform(new THREE.Vector3(1, 0, 0)), vjBuild: uniform(0) };
+    const themeWeights = [0, 0, 0];
     const grid = vec2(Math.round(width * dense), Math.round(height * dense)), aspect = width / height;
     const hash2 = q => fract(sin(dot(q, vec2(127.1, 311.7))).mul(43758.5453));
     const mat = new THREE.MeshBasicNodeMaterial({ fog: false, ...(see ? { ...additive, side: THREE.DoubleSide } : dome ? { side: THREE.BackSide } : {}) });
@@ -607,16 +610,64 @@ const FIXTURES = {
         .Else(() => { const q = abs(fract(p.mul(2.2).add(vec2(0, t.mul(0.12)))).sub(0.5)); lit.assign(fall(0.03, 0, abs(max(q.x, q.y).sub(0.3).sub(sin(ph.mul(3.1416)).mul(0.1))))); k.assign(step(0.5, fract(cell.y.mul(3).add(t.mul(0.1))))); });   // squares
       const bar = step(cell.y, U.build).mul(step(0.02, U.build));   // in a break a bar rises with the tension
       const own = mix(U.col, U.col2, k).mul(max(lit.mul(U.build.oneMinus()), bar).mul(0.85).add(0.06).add(U.kick.mul(0.3)));
+      // Three composed image families on slow beat clocks. Each develops within its family with the music: quiet
+      // (vj.x), building (vj.y, how far in vjBuild) and peak (vj.z). The weights ease, and so does a change of theme,
+      // so nothing cuts.
+      const vq = U.vj.x, vb = U.vj.y, vp = U.vj.z, rise = U.vjBuild;
+      const seed = hash2(floor(cell.mul(vec2(10, 6)))), gridCell = abs(fract(cell.mul(vec2(10, 6))).sub(0.5));
+      const frame = fall(0.065, 0.025, abs(max(gridCell.x, gridCell.y).sub(0.35)));
+      const scan = fall(0.16, 0.04, abs(fract(cell.x.add(ph.div(64))).sub(0.5)));
+      // Industrial. Quiet: a few frames breathing in the dark. Build: a scan opens from the middle and leaves lit
+      // frames behind it. Peak: three groups of frames take turns every four beats, with a small kick accent.
+      const sparse = frame.mul(step(seed, 0.26)).mul(sin(ph.mul(TAU / 32).add(seed.mul(40))).mul(0.4).add(0.6));
+      const side = abs(cell.x.sub(0.5)), reach = rise.mul(0.54);
+      const edge = fall(0.035, 0.008, abs(side.sub(reach))).mul(step(0.01, rise));
+      const opened = frame.mul(step(side, reach)).mul(0.55).add(edge);
+      const turn = float(1).sub(min(abs(floor(seed.mul(3)).sub(floor(fract(ph.div(12)).mul(3)))), 1));
+      const groups = frame.mul(turn.mul(float(1).sub(fract(ph.div(4)).mul(0.5))).mul(0.95).add(0.07).add(turn.mul(U.kick).mul(0.12))).add(scan.mul(0.18));
+      const industrial = mix(U.col, U.col2, scan).mul(sparse.mul(vq).mul(0.55))
+        .add(mix(U.col, U.col2, edge).mul(opened.mul(vb)))
+        .add(mix(U.col, U.col2, turn.mul(0.6)).mul(groups.mul(vp)))
+        .add(U.col.mul(0.03));
+      // Hypnotic. Quiet: broad, slow rings. Build: the rings narrow and gather towards the middle. Peak: three
+      // layers of rings spread across the wall, still slow.
+      const veil = sin(a.mul(3).add(ph.mul(TAU / 64))).mul(0.5).add(0.5);
+      const broad = fall(0.4, 0.1, abs(sin(r.mul(7).sub(ph.mul(TAU / 64)))));
+      const inner = float(0.95).sub(rise.mul(0.7));
+      const gather = fall(0.22, 0.05, abs(sin(r.mul(rise.mul(26).add(10)).add(ph.mul(TAU / 16))))).mul(fall(inner, inner.mul(0.7), r));
+      const layer = (x, shift) => fall(0.25, 0.05, abs(sin(length(p.sub(vec2(x, 0))).mul(14).sub(ph.mul(TAU / 32)).add(shift))));
+      const layered = min(layer(-aspect * 0.3, 0).mul(0.45).add(layer(0, 2.1).mul(0.55)).add(layer(aspect * 0.3, 4.2).mul(0.45)), 1);
+      const hypnotic = mix(U.col, U.col2, veil).mul(broad.mul(vq).mul(0.45).add(gather.mul(vb).mul(rise.mul(0.35).add(0.45)))
+        .add(layered.mul(vp).mul(0.6)).add(veil.mul(0.06)).add(U.kick.mul(0.03)).add(0.025));
+      // Melodic. Quiet: one soft ribbon. Build: the ribbons open and warm accents come in. Peak: a fuller set of
+      // ribbons, without fast flashes.
+      const wave = (amp, freq, beats, shift) => sin(p.x.mul(freq).add(ph.mul(TAU / beats)).add(shift)).mul(amp);
+      const soft = fall(0.2, 0.05, abs(p.y.sub(wave(0.16, 2.2, 64, 0))));
+      const swing = wave(rise.mul(0.18).add(0.16), 2.8, 64, 0).add(wave(0.08, 7, -32, 0));
+      const opening = fall(0.13, 0.03, abs(p.y.sub(swing))).add(fall(0.1, 0.025, abs(p.y.add(swing.mul(0.6)))).mul(rise));
+      const full = fall(0.1, 0.025, abs(p.y.sub(wave(0.2, 2.8, 64, 0).add(0.2))))
+        .add(fall(0.1, 0.025, abs(p.y.sub(wave(0.22, 3.4, -48, 1.7)))).mul(0.85))
+        .add(fall(0.1, 0.025, abs(p.y.sub(wave(0.2, 2.2, 32, 3.4).sub(0.2)))).mul(0.75))
+        .add(fall(0.06, 0.015, abs(p.y.sub(wave(0.34, 1.6, 96, 5)))).mul(0.45));
+      const warm = smoothstep(0.15, 0.85, cell.x);
+      const melodic = mix(U.col, U.col2, warm.mul(0.35)).mul(soft.mul(vq).mul(0.5))
+        .add(mix(U.col, U.col2, warm.mul(rise.mul(0.65).add(0.25))).mul(opening.mul(vb).mul(0.7)))
+        .add(mix(U.col, U.col2, warm).mul(min(full, 1.4).mul(vp).mul(0.6)))
+        .add(U.col.mul(U.kick.mul(0.04).add(0.025)));
+      const themed = own.mul(float(1).sub(U.themes.x.add(U.themes.y).add(U.themes.z)))
+        .add(industrial.mul(U.themes.x)).add(hypnotic.mul(U.themes.y)).add(melodic.mul(U.themes.z));
       const shown = U.media.sample(cell).rgb.mul(U.kick.mul(0.5).add(0.75)).mul(U.build.mul(0.6).oneMinus()).add(U.col.mul(bar).mul(0.6));
       // A dome is a continuous projection, while a physical LED wall keeps its dots.
       const dots = dome ? float(1) : fall(0.5, 0.25, length(fract(projected.mul(grid)).sub(0.5)));
       const band = swell ? pow(sin(swell.mul(4).sub(U.phase.mul(0.25)).mul(6.2832)).mul(0.5).add(0.5), 2).mul(0.65).add(0.35) : 1;
-      return mix(own, shown, U.mediaOn).mul(dots).mul(U.gain).mul(band).mul(1.6);
+      return mix(themed, shown, U.mediaOn).mul(dots).mul(U.gain).mul(band).mul(1.6);
     })();
     const wall = many ? new THREE.InstancedMesh(new THREE.PlaneGeometry(width, height), mat, many.length) : new THREE.Mesh(dome ? new THREE.SphereGeometry(1, 72, 24, 0, 6.2832, 0, Math.PI / 2).scale(dome.rx, dome.rise, dome.rz) : new THREE.PlaneGeometry(width, height), mat);
     if (many) { const o = new THREE.Object3D(); many.forEach(([at, towards], i) => { o.position.set(...at); o.lookAt(...towards); o.updateMatrix(); wall.setMatrixAt(i, o.matrix); }); wall.frustumCulled = false; }
     return { object: wall, update(dt, t) {
       const ch = thing.ch;
+      U.themes.value.set(...blendTheme(themeWeights, ch.theme || 0, dt));
+      U.vj.value.set(...(ch.vj || [1, 0, 0])); U.vjBuild.value = ch.vjBuild || 0;
       wall.visible = !(many && ch.off);   // small screens that are switched off are not there, so that they do not hang in front of what is
       U.time.value = t; U.phase.value = ch.phase || 0; U.kick.value = ch.kick || 0; U.build.value = ch.build || 0;
       // a dome shows only the visuals that fill it: rings, liquid, the tunnel, a sweep (a thin line or a few stars leave it dark)

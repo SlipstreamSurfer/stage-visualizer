@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.26.5
+
+- The LED wall develops within each Hangar theme: quiet passages, builds and peaks each have their own treatment.
+  Industrial goes from a few breathing frames to a scan that opens the wall to frame groups taking turns; Hypnotic
+  from broad slow rings to rings gathering in the middle to layered rings across the wall; Melodic from one soft
+  ribbon to opening ribbons with warm accents to a fuller set of ribbons.
+- These treatments blend gradually; a drop opens the wall within about a second, and the build's shape is held while it fades.
+- With a light choreography playing, the automatic camera cuts to a shot that shows the new composition, holds it
+  while the light develops and reveals the hall in a wide shot when a stage opening reaches it. Drops still cut to
+  the whole room, and breaks keep their close shots.
+- **Automatic camera follows the light choreography** (on by default) restores the previous camera rules when switched off.
+  The setting is saved with presets; manual camera choices keep priority.
+
 ## 0.26.4
 
 - Checkpoint release of the completed Hangar themes and light choreography.

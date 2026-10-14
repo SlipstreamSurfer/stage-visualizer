@@ -88,9 +88,9 @@ rendering; explicit Light, Normal and High choices are remembered.
 Look presets include Standard, Calm, Cinematic and Energetic. Adjust light,
 glow, haze and hall sliders for a custom look. Light groups, palettes, beam
 width and camera speed have their own controls. **Show theme** combines wall images, light colours and arch/laser patterns:
-Industrial, Hypnotic or Melodic. **Light choreography → Composed show** adds
-stage openings, slow hall waves and held light pictures. Select **Original
-show** to use the previous light patterns. See [Hangar themes and choreography](docs/hangar-themes.md).
+Industrial, Hypnotic or Melodic; the wall develops within the theme through quiet passages, builds and peaks.
+**Light choreography → Composed show** adds stage openings, slow hall waves and held light pictures, and the
+automatic camera shows each composition. Select **Original show** to use the previous light patterns. See [Hangar themes and choreography](docs/hangar-themes.md).
 Browser presets save your preferred settings. **Restore a balanced starting point** resets the show.
 
 Hold **Space** for strobe and **B** for blinders. **K** triggers confetti,

@@ -1,6 +1,6 @@
 # Hangar expansion plan
 
-This plan covers the public Hangar product as of 0.26.4. It distinguishes
+This plan covers the public Hangar product as of 0.26.5. It distinguishes
 released features and proposed work. Priority
 and effort below are design estimates, not measured implementation times.
 
@@ -29,9 +29,9 @@ audio file; an audio input alone does not supply reliable track identity.
 | Step | Work | Visible result | Relative effort |
 | --- | --- | --- | --- |
 | 0 | Review the three themes with music; technical release checks have passed | A tested, reviewable base for the next release | Investigation |
-| 1 | Musical VJ variants within each theme | Break, build and peak feel different while keeping the same visual identity | Medium |
+| 1 | Released in 0.26.5: musical VJ variants within each theme | Break, build and peak feel different while keeping the same visual identity | Medium |
 | 2 | Released in 0.26.3: composed light-group responses | Stage heads, hall heads and arches answer one another instead of changing together every time | Medium |
-| 3 | Proposed: camera choreography tied to the chosen light composition | A strong light picture remains readable; cuts reveal the next composition | Medium |
+| 3 | Released in 0.26.5: camera choreography tied to the chosen light composition | A strong light picture remains readable; cuts reveal the next composition | Medium |
 | 4 | Crowd zones and subtle DJ reactions | Different parts of the room respond with different enthusiasm and delays | Medium–large |
 | 5 | Clip bank and compact scene buttons | More direct creative control without repeatedly opening file dialogs or presets | Medium–large |
 
@@ -74,7 +74,7 @@ accents. Select a composition at an existing musical cue and keep it stable
 between cues. Add recent-choice memory to avoid repeating the same composition.
 The original automatic behaviour should remain selectable.
 
-Step 3 is a proposal; no new camera behaviour is included in 0.26.4.
+Step 3 was released in 0.26.5 and can be switched off with **Automatic camera follows the light choreography**.
 Reuse the existing cameras and manual freeze control. Automatic
 drop cuts and section-dependent shots already exist; the addition is to choose
 a shot that shows the selected light composition and allow a longer hold when

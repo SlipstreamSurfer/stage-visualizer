@@ -180,7 +180,7 @@ export class Director {
       program: 0, scene: 0, sceneAt: 0, beat: 0, palette: 0, paletteAt: 0, colorIdx: 0, twoTone: 0,
       motion: 0, spin: 0, spinVel: 0, chase: 0, strobeClock: 0, level: 1, laser: 0, smokeAt: -100, haze: 1, visual: 0, house: 0.9, present: 1,
       col: [1, 1, 1], col2: [1, 1, 1], barLevel: [], drops: 0, kickAt: -10, punch: 0,
-      coilRun: 0, coilDropAt: -100, coilDropStrength: 0, archPattern: 0, vj: [1, 0, 0], vjBuild: 0, vjDropAt: -100,
+      coilRun: 0, coilDropAt: -100, coilDropStrength: 0, archPattern: 0, vj: [1, 0, 0], vjBuild: 0, vjDropAt: -100, cueStrobeUntil: -1, cueBlinderUntil: -1,
       headLook: 'floor', headSet: {}, headTurn: { calm: 0, mid: 3, big: 5 }, headPalette: -1, headAt: -100, headScene: 0, trussLook: 0, trussAt: 0, trussScene: 0, trussPalette: 0, trussTrack: false,
       ringVariant: 0, ringAt: 0, ringScene: -1, ringBreak: false, ringTargets: [...RING_LOOKS[0].drops],
     });
@@ -332,7 +332,7 @@ export class Director {
     const vjEase = ease(t - this.vjDropAt < 1.5 ? 0.45 : brk ? 1.2 : 2.4);
     this.vj = this.vj.map((w, i) => w + (vjTarget[i] - w) * vjEase);
     if (brk) this.vjBuild = rising;
-    const manualPalette = PALETTES[controls?.palette] || theme;
+    const manualPalette = PALETTES[controls?.palette] || (controls?.colors?.length ? { colors: controls.colors } : null) || theme;   // colors: a prepared show's own
     const pal = manualPalette ? manualPalette.colors.map(hex) : mood.palettes[this.palette % mood.palettes.length];
     this.col = mix(this.col, pal[this.colorIdx % pal.length], ease(1.1));
     this.col2 = mix(this.col2, pal[(this.colorIdx + 1) % pal.length], ease(1.1));
@@ -353,9 +353,9 @@ export class Director {
     this.haze = mood.haze * (1 + this.smoke * 0.35) * (look.haze < 1 ? 0.15 + 0.85 * look.haze : 1 + (look.haze - 1) * 2);
 
     // ----- strobes and blinders -----
-    const strobing = man.strobe || (mood.strobes && ((brk && m.riser > mood.strobeAt) || sig.drop > 0.55));
+    const strobing = man.strobe || t < this.cueStrobeUntil || (mood.strobes && ((brk && m.riser > mood.strobeAt) || sig.drop > 0.55));
     const flash = this.flash = strobing && Math.floor(this.strobeClock) % 2 === 0 ? 1 : 0;
-    const blind = this.blind = Math.max(man.blinder ? 1 : 0, Math.pow(sig.drop, 1.5) * mood.blinder);
+    const blind = this.blind = Math.max(man.blinder || t < this.cueBlinderUntil ? 1 : 0, Math.pow(sig.drop, 1.5) * mood.blinder);
     for (const f of G.strobe || []) { f.ch.dim = flash * master; f.ch.color = WHITE; }
     for (const f of G.blinder || []) { f.ch.dim = blind * master; f.ch.color = WARM; }
 

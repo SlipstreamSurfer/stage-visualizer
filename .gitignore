@@ -10,6 +10,7 @@ dist/
 private/
 local/
 testtracks/
+shows/
 HANDOFF*.md
 .env
 .env.*

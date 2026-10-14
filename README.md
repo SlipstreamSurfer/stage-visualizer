@@ -92,6 +92,7 @@ Industrial, Hypnotic or Melodic; the wall develops within the theme through quie
 **Light choreography → Composed show** adds stage openings, slow hall waves and held light pictures, and the
 automatic camera shows each composition. The hall heads have 25 looks and change them within a track and for every new track, the hall trusses hold one of
 15 formations for minutes, in every mood; **Hall heads**, **Truss formation** and **Changes** pin them or set the pace. Select **Original show** to use the previous light patterns. See [Hangar themes and choreography](docs/hangar-themes.md).
+For a track you play from a local file you can prepare the whole show in bars: see [Prepared shows](docs/prepared-shows.md).
 Browser presets save your preferred settings. **Restore a balanced starting point** resets the show.
 
 Hold **Space** for strobe and **B** for blinders. **K** triggers confetti,

@@ -28,6 +28,12 @@
 Choose from **48 moods** to shape the show, then adjust its look and camera.
 WebGPU renders the show when available; WebGL provides a fallback.
 
+Production details give the hall its working scale: wheeled flightcases, equipment
+racks and cable reels around the stage and FOH, a modular stage with legs, braces
+and skirting, perforated crowd barriers, wall ventilators, electrical cabinets
+and cable trays. Scratched equipment panels, tape marks and subtle wheel tracks
+add signs of use. These details remain visible at Light quality.
+
 | Music | Light show | Your controls |
 | --- | --- | --- |
 | Local tracks, audio inputs and supported system-audio sharing | Moving heads, LED arches, haze and a dancing crowd | Nine camera views, look presets and quick light switches |

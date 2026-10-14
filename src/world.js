@@ -11,6 +11,7 @@ import { FIXTURES, buildPools } from './fixtures.js';
 import { buildShell } from './shell.js';
 import { buildStage } from './stage.js';
 import { buildFacilities } from './facilities.js';
+import { buildHangarDetails } from './hangar-details.js';
 import { buildWalkers } from './walkers.js';
 import { buildSmoke } from './smoke.js';
 import { surfaces } from './surfaces.js';
@@ -145,12 +146,14 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   // ----- what a venue lists besides its stage and lights: parked unless asked for, but for what is structure -----
   const details = !!quality.details;
   const fac = buildFacilities({ ...L, fence: details, facilities: L.facilities.filter(f => details || STRUCTURE.has(f.type) || (hangarRig && ['barrier', 'foh', 'delays'].includes(f.type))) }, { add, lit, black, steel });
+  const production = L.name === 'Hangar' ? buildHangarDetails(L, ctx) : null;
   // aisles: a venue with people walking keeps a lane free down both sides and across the back
   const lane = (details || hangarRig) && L.walkers && !L.walkPath ? { x: W / 2 - 6.6, z0: st.front + 5, z1: D / 2 - 7.2 } : null;
   // where people walk: the venue's own route, or the aisles; the crowd keeps a strip free along every stretch of it
   const route = details && L.walkers ? L.walkPath || (lane && [[-lane.x, lane.z0], [-lane.x, lane.z1], [lane.x, lane.z1], [lane.x, lane.z0]]) : null;
   const rect = (x0, x1, z0, z1) => (x, z) => x > x0 && x < x1 && z > z0 && z < z1;
   for (const r of fac.keepOut) keepOut.push(rect(r.x0, r.x1, r.z0, r.z1));
+  for (const r of production?.keepOut || []) keepOut.push(rect(r.x0, r.x1, r.z0, r.z1));
   if (route && L.walkPath) for (let i = 0; i + 1 < route.length; i++) { const [ax, az] = route[i], [bx, bz] = route[i + 1]; keepOut.push(rect(Math.min(ax, bx) - 1.1, Math.max(ax, bx) + 1.1, Math.min(az, bz) - 1.1, Math.max(az, bz) + 1.1)); }
   if (lane) {
     keepOut.push(rect(-lane.x - 1.2, -lane.x + 1.2, lane.z0 - 1, lane.z1 + 1.2), rect(lane.x - 1.2, lane.x + 1.2, lane.z0 - 1, lane.z1 + 1.2), rect(-lane.x - 1.2, lane.x + 1.2, lane.z1 - 1.2, lane.z1 + 1.2));

@@ -22,7 +22,9 @@ const TAU = Math.PI * 2;
 export function buildStage(L, ctx) {
   const { add, put, surface, plain, black } = ctx, st = L.stage, { W, H } = L.plan, open = !!L.shell.open;
   const deck = st.floor ? surface(st.floor, { gain: 2 }) : plain(0x1d1d20, { roughness: 0.55, metalness: 0.1, gain: 2.2 });   // a stage floor is dark, not a hole
-  if (st.height > 0.02) put(deck, st.round ? post(st.width / 2, st.height, 0, st.z, 0, 48) : box(Math.min(W - 0.2, st.width), st.height, st.depth, 0, st.height / 2, st.z));
+  // Hangar's modular deck rests on legs and braces built in hangar-details.js; leave its underside open.
+  const deckDepth = L.name === 'Hangar' ? Math.min(0.16, st.height) : st.height;
+  if (st.height > 0.02) put(deck, st.round ? post(st.width / 2, st.height, 0, st.z, 0, 48) : box(Math.min(W - 0.2, st.width), deckDepth, st.depth, 0, st.height - deckDepth / 2, st.z));
   const pa = st.pa ?? (st.kind === 'centre' ? 'none' : H > 8 || open ? 'arrays' : 'stacks');
   for (const s of [-1, 1]) {   // the PA: flown line arrays in large rooms, compact stacks in small ones
     const x = s * Math.min(W / 2 - 1.2, st.width / 2 + 1.6);

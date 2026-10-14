@@ -203,7 +203,7 @@ export class Director {
       program: 0, scene: 0, sceneAt: 0, beat: 0, palette: 0, paletteAt: 0, colorIdx: 0, twoTone: 0,
       motion: 0, spin: 0, spinVel: 0, chase: 0, strobeClock: 0, level: 1, laser: 0, smokeAt: -100, haze: 1, visual: 0, house: 0.9, present: 1,
       col: [1, 1, 1], col2: [1, 1, 1], barLevel: [], drops: 0, kickAt: -10, punch: 0,
-      coilRun: 0, coilDropAt: -100, coilDropStrength: 0, archPattern: 0,
+      coilRun: 0, coilDropAt: -100, coilDropStrength: 0, archPattern: 0, vj: [1, 0, 0], vjBuild: 0, vjDropAt: -100,
       ringVariant: 0, ringAt: 0, ringScene: -1, ringBreak: false, ringTargets: [...RING_LOOKS[0].drops],
     });
     for (const list of Object.values(groups)) for (const [slot, f] of list.entries()) { f.rp = Math.random() * 2 - 1; f.rt = Math.random(); f.hangarSlot = slot; }
@@ -302,6 +302,8 @@ export class Director {
     }
 
     const composition = this.choreography.update(this.venue === 'hangar' ? controls?.lightChoreography : 'original', this.scene, sig.phase, section);
+    // for the camera: which composition is playing, when it started and how many beats it has had
+    this.lightCue = composition.active ? { key: composition.key, started: composition.started, age: composition.age } : null;
 
     // ----- the look, eased -----
     const brk = m.phase === 'break', P = PROGRAMS[this.program], ease = seconds => 1 - Math.exp(-dt / seconds);
@@ -312,6 +314,14 @@ export class Director {
     }
     this.twoTone += ((P.twoTone || sig.hype > 0.4 ? 1 : 0) - this.twoTone) * ease(1.1);
     this.level += (SECTION_LEVEL[section] - this.level) * ease(1.5);
+    // The themed wall develops within its image family: quiet, building or at a peak. The weights ease, so a drop
+    // opens the wall within about a second and nothing cuts; the build's shape is held while it fades out.
+    const rising = brk ? Math.min(1, Math.max(0, m.build)) : 0, swell = rising * rising * (3 - 2 * rising);
+    const vjTarget = brk ? [1 - swell, swell, 0] : section === 'peak' ? [0, 0, 1] : calm ? [1, 0, 0] : [0.45, 0, 0.55];
+    if (ev.drop) this.vjDropAt = t;
+    const vjEase = ease(t - this.vjDropAt < 1.5 ? 0.45 : brk ? 1.2 : 2.4);
+    this.vj = this.vj.map((w, i) => w + (vjTarget[i] - w) * vjEase);
+    if (brk) this.vjBuild = rising;
     const manualPalette = PALETTES[controls?.palette] || theme;
     const pal = manualPalette ? manualPalette.colors.map(hex) : mood.palettes[this.palette % mood.palettes.length];
     this.col = mix(this.col, pal[this.colorIdx % pal.length], ease(1.1));
@@ -480,7 +490,7 @@ export class Director {
     for (const role of ['wall', 'dome', 'screen']) for (const f of G[role] || []) {   // 'dome' and 'screen' are screens that are part of the place: they stay on when LED walls are switched off
       f.ch.dim = ((brk ? 0.6 : 0.9 + sig.kick * 0.4) * this.w.wall + sig.drop + sig.lift * 0.35) * master * (role === 'screen' ? 0.75 : role === 'dome' ? 1.5 : 1);
       f.ch.color = col; f.ch.color2 = col2; f.ch.mode = this.visual; f.ch.build = m.build; f.ch.kick = sig.kick; f.ch.phase = sig.phase; f.ch.off = !!this.off[role];
-      f.ch.theme = role === 'wall' ? theme?.visual ?? 0 : 0;
+      f.ch.theme = role === 'wall' ? theme?.visual ?? 0 : 0; f.ch.vj = this.vj; f.ch.vjBuild = this.vjBuild;
     }
     // light on the building itself: steady, in the show's colours, fuller when the music is
     for (const f of G.glow || []) { f.ch.dim = (brk ? 0.45 + m.build * 0.3 : 0.4 + sig.energy * 0.45 + sig.kick * 0.2 + sig.lift * 0.3) * master; f.ch.color = tint((f.row + Math.round(f.u * 9)) % 2 ? col2 : col); }

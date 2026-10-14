@@ -92,3 +92,21 @@ test('wall-theme transitions remain bounded and continuous through rapid switche
   for (let frame = 0; frame < 900; frame++) blendTheme(weights, 0, 1 / 60);
   assert.ok(weights.every(w => w < 0.0001), 'clearing the theme restores the original visuals');
 });
+
+test('the themed wall develops from quiet through the build to the peak without cutting', () => {
+  for (const key of Object.keys(SHOW_THEMES)) {
+    const r = rig(key), seen = [];
+    for (let frame = 0; frame < 420; frame++) { advance(r, signal(frame), frame); seen.push({ vj: [...r.groups.wall[0].ch.vj], build: r.groups.wall[0].ch.vjBuild }); }
+    for (const [i, s] of seen.entries()) {
+      assert.ok(Math.abs(s.vj.reduce((a, b) => a + b) - 1) < 1e-9, 'quiet, build and peak share the wall');
+      if (i) assert.ok(s.vj.every((w, j) => Math.abs(w - seen[i - 1].vj[j]) < 0.05), `${key}: frame ${i} changes treatment gradually`);
+    }
+    assert.ok(seen[20].vj[0] > 0.8, `${key}: the start of a break is quiet`);
+    assert.ok(seen[119].vj[1] > 0.5 && seen[119].build > 0.95, `${key}: the end of the build shows the build treatment`);
+    assert.ok(seen[122].build > 0.95, `${key}: the build shape is held while it fades after the drop`);
+    assert.ok(seen[120 + 90].vj[2] > 0.9, `${key}: within one and a half seconds of the drop the wall is at its peak`);
+  }
+  const calm = rig('melodic');
+  for (let frame = 0; frame < 600; frame++) { const sig = signal(300); sig.m.section = 'intro'; sig.ev = {}; sig.drop = 0; advance(calm, sig, frame); }
+  assert.ok(calm.groups.wall[0].ch.vj[0] > 0.99, 'a calm intro settles on the quiet treatment');
+});

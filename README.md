@@ -91,6 +91,12 @@ Settings tabs contain finer controls. Venue and quality changes preserve the
 active audio stream. Automatic quality reduces detail after sustained slow
 rendering; explicit Light, Normal and High choices are remembered.
 
+Use **Show → Maintenance mode** to inspect Hangar between gigs: an empty hall,
+white work lights, a parked rig and no show effects or haze. The booth and production
+equipment stay in place. Switching back restores gig lighting and the audience;
+music playback and audio inputs keep running throughout. The mode is remembered
+separately from show presets.
+
 Look presets include Standard, Calm, Cinematic and Energetic. Adjust light,
 glow, haze and hall sliders for a custom look. Light groups, palettes, beam
 width and camera speed have their own controls. **Show theme** combines wall images, light colours and arch/laser patterns:

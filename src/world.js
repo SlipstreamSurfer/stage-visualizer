@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Fn, Loop, If, uniform, uniformArray, materialColor, positionWorld, normalWorld, texture, vec2, vec3, abs, mix, smoothstep, dot, length, normalize, select, cross, sin, cos, atan, min, max, sqrt } from 'three/tsl';
 import { layout, byRole } from './layout.js';
 import { moveRig } from './rig-motion.js';
+import { parkRig } from './venue-mode.js';
 import { FIXTURES, buildPools } from './fixtures.js';
 import { buildShell } from './shell.js';
 import { buildStage } from './stage.js';
@@ -205,6 +206,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   U.stage.value.set(0, st.height + 5, centre ? st.z : st.back + 1);
   const o = new THREE.Object3D(), c = new THREE.Color();
   const crowd = people(peopleMaterial({ light: lights.light, U }), n); add(crowd.mesh);
+  crowd.mesh.name = 'Venue audience';
   const phones = add(new THREE.InstancedMesh(new THREE.PlaneGeometry(0.08, 0.15), new THREE.MeshBasicMaterial({ color: 0, fog: false, side: THREE.DoubleSide }), Math.max(1, PHONES))); phones.frustumCulled = false; phones.count = PHONES;
   const blobs = add(new THREE.InstancedMesh(new THREE.PlaneGeometry(1.1, 0.8).rotateX(-Math.PI / 2), shadowMaterial(), Math.max(1, n))); blobs.renderOrder = -1; blobs.frustumCulled = false; blobs.count = n;
   const guards = spots.filter(q => q[4] === 'security');
@@ -236,7 +238,8 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
     crowd.dense(i, spots[i][6] ? 0.3 : Math.min(1, (near - 1) / 8));
   }
 
-  const updateWalkers = route && buildWalkers({ add, light: lights.light, U, path: route, pois: fac.pois, count: Math.round(L.walkers * quality.crowd) });
+  const walkers = add(new THREE.Group()); walkers.name = 'Venue walkers';
+  const updateWalkers = route && buildWalkers({ add: o => (walkers.add(o), o), light: lights.light, U, path: route, pois: fac.pois, count: Math.round(L.walkers * quality.crowd) });
   let hands = 0, filming = 0, cheer = 0;
 
   // ----- light that is not a fixture: what the place has of its own, and what the show throws on it -----
@@ -244,6 +247,17 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   const house = add(new THREE.HemisphereLight(sky ? sky.light[0] : 0x39404f, sky ? sky.light[1] : 0x14100c, daylight));
   const hall = add(new THREE.PointLight(0xffffff, 0, 0, 1)); hall.position.set(0, H * 0.75, centre ? st.z : (F.z0 + F.z1) / 2 - (F.z1 - F.z0) * 0.15);
   const stageLight = add(new THREE.PointLight(0xffffff, 0, 0, 1)); stageLight.position.set(0, st.height + 4.5, centre ? st.z : st.back + 2.5);   // the LED wall, as the lamp it is for the stage and the front rows
+  // White service strips belong to the building, separately from the concert rig.
+  const workLights = add(new THREE.Group()); workLights.name = 'Venue work lights'; workLights.visible = false;
+  if (hangarRig) {
+    const lamps = [], housings = [];
+    for (const x of [-W * 0.22, W * 0.22]) for (const z of [-D * 0.38, -D * 0.13, D * 0.13, D * 0.38]) {
+      housings.push(box(3.1, 0.14, 0.56, x, H - 1.02, z));
+      lamps.push(box(2.9, 0.025, 0.4, x, H - 1.105, z));
+    }
+    put(steel, housings);
+    workLights.add(new THREE.Mesh(mergeGeometries(lamps), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.5, 2.6, 2.7) })));
+  }
   scene.fog = new THREE.FogExp2(0x000000, 0.015);
 
   // haze and smoke that move through the room (smoke.js), from the hazers; without a hazer, from the back of the stage
@@ -370,8 +384,14 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
     layout: L, groups: byRole(L.things), env, shots: fac.shots, lights,
     // director: the Director after its update; signals: Signals; look: the viewer's sliders
     update(dt, t, director, signals, look) {
-      updateWalkers?.(dt); shell.update(dt, t);
-      env.haze = env.hazeOut; env.roomColor = director.room.color;
+      const maintenance = !!look.maintenance;
+      env.maintenance = maintenance;
+      crowd.mesh.visible = blobs.visible = vests.visible = walkers.visible = !maintenance;
+      workLights.visible = maintenance;
+      if (!maintenance) updateWalkers?.(dt);
+      shell.update(dt, t);
+      if (maintenance) parkRig(L.things);
+      env.haze = maintenance ? 0 : env.hazeOut; env.roomColor = director.room.color;
       nCast = 0; flashI = 0; lights.flashCol.value.set(0, 0, 0); env.uTime.value = t;
       for (const fx of live) fx.update(dt, t);
       flush();
@@ -383,7 +403,8 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
         lights.shadowMin.array[i + 1].set(mv.mid[0] - 17, mv.group.position.y - tilt, mv.mid[2] - 0.15);
         lights.shadowMax.array[i + 1].set(mv.mid[0] + 17, mv.group.position.y + tilt, mv.mid[2] + 0.15);
       });
-      if (director.smokeAt !== smokeAt) { smokeAt = director.smokeAt; smoke.burst([0, st.height + 0.5, st.front - 1]); }   // CO2 or a drop: a bank of smoke off the stage
+      smoke.object.visible = !maintenance;
+      if (director.smokeAt !== smokeAt) { smokeAt = director.smokeAt; if (!maintenance) smoke.burst([0, st.height + 0.5, st.front - 1]); }   // CO2 or a drop: a bank of smoke off the stage
       smoke.update(dt, t, director.room.color, (0.0004 + signals.energy * 0.0011 + signals.kick * 0.0008 + director.flash * 0.012) * look.light * (director.manual.blackout ? 0 : 1), env.haze);
       // the crowd: hands rise with the energy and the build-up, a cheer when the kick drops out, jumping and filming
       // when the room goes off
@@ -396,7 +417,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       U.time.value = t; U.dance.value = signals.phase; U.hands.value = hands; U.film.value = filming; U.hype.value = signals.hype * (brk ? 0 : 1);
       U.front.value.copy(env.wallColor).multiplyScalar(2.2).add(tone.setRGB(...director.room.color).multiplyScalar(director.room.level * (hangarRig ? 0.007 : 0.012))).multiplyScalar(look.light * (director.manual.blackout ? 0 : 1));
       U.rim.value.copy(stageLight.color).lerp(WHITE, 0.5).multiplyScalar((0.1 + signals.kick * 0.35 + signals.drop + director.blind) * look.light * (director.manual.blackout ? 0 : 1));
-      phones.visible = filming > 0.05; phones.material.color.setRGB(0.6, 0.75, 1).multiplyScalar(filming * 1.5);
+      phones.visible = !maintenance && filming > 0.05; phones.material.color.setRGB(0.6, 0.75, 1).multiplyScalar(filming * 1.5);
       const room = director.room, spill = look.hall < 1 ? look.hall : 1 + (look.hall - 1) * 1.5;
       hall.color.setRGB(...room.color); hall.intensity = (spill * room.level * (hangarRig ? 0.26 : 0.42) + 0.4 * Math.pow(look.hall, 3)) * size;
       stageLight.color.copy(env.wallColor).lerp(hall.color, 0.3); stageLight.intensity = (1.5 + env.wallColor.r + env.wallColor.g + env.wallColor.b) * 4 * spill * size * (director.manual.blackout ? 0 : 1);
@@ -404,6 +425,14 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       scene.fog.density = 0.015 * (hangarRig ? Math.min(1.5, env.haze) : env.haze) / size * (open ? 0.45 : 1);
       scene.fog.color.setRGB(...room.color).multiplyScalar((0.006 + signals.kick * 0.02 + director.flash * 0.08) * (1 + Math.max(0, look.haze - 1) * 5) * (director.manual.blackout ? 0 : 1));
       scene.fog.color.r += fogOf[0]; scene.fog.color.g += fogOf[1]; scene.fog.color.b += fogOf[2];   // and what distance fades to under this sky
+      house.color.setHex(maintenance ? 0xf1f3f5 : sky ? sky.light[0] : 0x39404f);
+      house.groundColor.setHex(maintenance ? 0xa7afb8 : sky ? sky.light[1] : 0x14100c);
+      if (maintenance) {
+        house.intensity = 2.8;
+        hall.color.setHex(0xf1f3f5); hall.intensity = 110 * size;
+        stageLight.color.setHex(0xf1f3f5); stageLight.intensity = 30 * size;
+        scene.fog.density = 0;
+      }
       const amp = signals.m.activity < 0.15 ? 0.1 : signals.m.phase === 'break' ? 0.4 + signals.m.build * 0.4 : Math.min(1, 0.7 + signals.energy * 0.3 + signals.hype * 0.3);
       U.groove.value += (amp - U.groove.value) * (1 - Math.exp(-dt / 1.5));
       stage.update(t, dt, signals, director, look, !!director.mood.flow);

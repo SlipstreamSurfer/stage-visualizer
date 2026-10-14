@@ -52,5 +52,5 @@ const smoke = add(new THREE.Sprite(smokeMat)); smoke.count = count; smoke.frustu
   solids.slice(0, NS).forEach((b, i) => blockers.array[i].set(...b));
   const ready = renderer.computeAsync(scatter);
   // colour: what the room is lit in; level: how bright the room is; haze: how much the hazers put out
-  return { ready, dispose() { scatter.dispose(); step.dispose(); }, update(t, colour, level, haze) { uTime.value = t; ambient.value.set(...colour).multiplyScalar(0.0012 + Math.min(1, level / 40) * 0.006); thick.value = Math.min(2, haze); renderer.compute(step); } };
+  return { ready, setVisible(visible) { smoke.visible = visible; }, dispose() { scatter.dispose(); step.dispose(); }, update(t, colour, level, haze) { uTime.value = t; ambient.value.set(...colour).multiplyScalar(0.0012 + Math.min(1, level / 40) * 0.006); thick.value = Math.min(2, haze); renderer.compute(step); } };
 }

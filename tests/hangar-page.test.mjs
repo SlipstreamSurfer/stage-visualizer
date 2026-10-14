@@ -46,6 +46,24 @@ test('Hangar renders, keeps its camera and audio through a quality change, and r
       window.__hangarProbe={stream:a.stream,source:a.source,ear:a.ear,ctx:a.ctx};
     })()`);
     await until('window.__show.audio.live && window.__show.audio.signal().level>0','Generated audio did not arrive');
+    await evaluate(`window.__modeWorld = window.__show.world; window.__modeLook = JSON.stringify({ ...window.__show.look, maintenance: false }); document.getElementById('btnCo2').click(); dispatchEvent(new KeyboardEvent('keydown',{key:' ',code:'Space'})); document.getElementById('venueMode').click();`);
+    await until('window.__show.world.env.maintenance','Maintenance mode did not reach the world');
+    assert.equal(await evaluate(`(() => {
+      const s=window.__show, scene=s.world.env.scene;
+      return s.venueMode==='maintenance' && s.world===window.__modeWorld &&
+        !scene.getObjectByName('Venue audience').visible && !scene.getObjectByName('Stage performer').visible &&
+        scene.getObjectByName('Venue work lights').visible && scene.fog.density===0 &&
+        s.world.layout.things.every(f=>f.ch.dim===0 && f.ch.flash===0 && f.ch.fire===-100) &&
+        document.getElementById('venueMode').getAttribute('aria-pressed')==='true' &&
+        document.getElementById('btnStrobe').disabled && !s.director.manual.strobe &&
+        window.__hangarProbe.stream===s.audio.stream && window.__hangarProbe.source===s.audio.source &&
+        window.__hangarProbe.ear===s.audio.ear && window.__hangarProbe.ctx===s.audio.ctx && s.audio.signal().level>0;
+    })()`),true,'Maintenance parks the rig, empties the hall and preserves the live input without rebuilding');
+    await evaluate(`dispatchEvent(new KeyboardEvent('keydown',{key:' ',code:'Space'}));`);
+    assert.equal(await evaluate('window.__show.director.manual.strobe'),false,'Held effects stay disabled in maintenance');
+    await evaluate(`document.getElementById('venueMode').click(); dispatchEvent(new KeyboardEvent('keyup',{key:' ',code:'Space'}));`);
+    await until('!window.__show.world.env.maintenance','Gig mode did not resume');
+    assert.equal(await evaluate(`JSON.stringify({ ...window.__show.look, maintenance: false })===window.__modeLook && window.__show.world===window.__modeWorld && window.__show.world.env.scene.getObjectByName('Venue audience').visible && window.__show.world.env.scene.getObjectByName('Stage performer').visible && window.__hangarProbe.stream===window.__show.audio.stream`),true,'Gig mode restores the audience and the existing show look');
     fs.mkdirSync('rec/look',{recursive:true});
     for (const [key,visual] of [['industrial',1],['hypnotic',2],['melodic',3]]) {
       await evaluate(`document.getElementById('showTheme').value='${key}'; document.getElementById('showTheme').dispatchEvent(new Event('change'));`);
@@ -69,10 +87,15 @@ test('Hangar renders, keeps its camera and audio through a quality change, and r
       return maps.length;
     })()`);
     assert.ok(ownedMaps > 0, 'Production details have their own surface maps');
+    await evaluate(`document.getElementById('venueMode').click();`);
+    await until('window.__show.world.env.maintenance','Maintenance mode did not start before the quality change');
     await evaluate(`document.getElementById('quality').value='normal'; document.getElementById('quality').dispatchEvent(new Event('change'));`);
     await until(`!window.__show.changing && window.__show.quality==='normal'`,'Quality change did not finish');
     await checkProduction();
     assert.equal(await evaluate('window.__productionDisposed'), ownedMaps, 'Quality changes release each production surface map once');
+    assert.equal(await evaluate(`window.__show.world.env.maintenance && window.__show.world.env.scene.getObjectByName('Venue work lights').visible && !window.__show.world.env.scene.getObjectByName('Venue audience').visible`),true,'Maintenance survives a quality change');
+    await evaluate(`document.getElementById('venueMode').click();`);
+    await until('!window.__show.world.env.maintenance','Gig mode did not resume after a quality change');
     assert.equal(await evaluate(`window.__show.world.layout.name==='Hangar' && document.getElementById('cam').value==='2' && window.__hangarProbe.stream===window.__show.audio.stream && window.__hangarProbe.source===window.__show.audio.source && window.__hangarProbe.ear===window.__show.audio.ear && window.__hangarProbe.ctx===window.__show.audio.ctx && window.__show.audio.stream.getAudioTracks()[0].readyState==='live'`),true);
     await evaluate(`dispatchEvent(new KeyboardEvent('keydown',{key:' ',code:'Space'}));`);
     assert.equal(await evaluate('window.__show.director.manual.strobe'),true);

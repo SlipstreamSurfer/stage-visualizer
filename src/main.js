@@ -43,7 +43,7 @@ let scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 1600);   // far enough to see the sky
 // the scene, a glow round what is bright, and the finish of a camera: colour that splits slightly towards the edge
 // of the lens, darker corners and a little grain
-const post = new THREE.RenderPipeline(renderer), scenePass = pass(scene, camera), image = scenePass.getTextureNode(), grainAt = uniform(0);
+const post = new THREE.RenderPipeline(renderer), scenePass = pass(scene, camera), image = scenePass.getTextureNode(), grainAt = uniform(0), finish = uniform(1);
 let glow, combined, configuredBloom;
 function configurePost() {
   if (configuredBloom === quality.bloom) return;
@@ -51,9 +51,9 @@ function configurePost() {
   glow = quality.bloom ? bloomOf(image, 0.8, 0.7, 0.6) : null;
   combined = glow ? convertToTexture(image.add(glow)) : null;
   const lit = combined || image, off = uv().sub(0.5), r2 = dot(off, off);
-  const split = vec3(lit.sample(uv().sub(off.mul(r2).mul(0.004))).r, lit.sample(uv()).g, lit.sample(uv().add(off.mul(r2).mul(0.004))).b);
-  const shaded = max(split, vec3(0)).mul(r2.mul(-0.9).add(1));
-  post.outputNode = shaded.add(fract(sin(dot(uv().mul(grainAt.add(1)), vec3(12.9898, 78.233, 0).xy)).mul(43758.5453)).sub(0.5).mul(0.03).mul(shaded.add(0.4)));
+  const split = vec3(lit.sample(uv().sub(off.mul(r2).mul(0.004).mul(finish))).r, lit.sample(uv()).g, lit.sample(uv().add(off.mul(r2).mul(0.004).mul(finish))).b);
+  const shaded = max(split, vec3(0)).mul(r2.mul(-0.9).mul(finish).add(1));
+  post.outputNode = shaded.add(fract(sin(dot(uv().mul(grainAt.add(1)), vec3(12.9898, 78.233, 0).xy)).mul(43758.5453)).sub(0.5).mul(0.03).mul(finish).mul(shaded.add(0.4)));
   post.needsUpdate = true;
   configuredBloom = quality.bloom;
 }
@@ -79,6 +79,7 @@ let cams = new CameraDirector(shots(world.layout, world.shots));
 // what is off unless the viewer switches it on: with everything at once the show is too much
 let controls = normalizeControls(parseStored(kept('controls', '{}')));
 const look = { ...normalizeLook({ light: +kept('light', 1), bloom: +kept('bloom', 1), haze: +kept('haze', 1), hall: +kept('hall', 1), off: params.has('all') ? Object.fromEntries(Object.keys(DEFAULT_OFF).map(role => [role, false])) : parseStored(kept('off', JSON.stringify(DEFAULT_OFF))) }), controls };
+look.maintenance = params.has('maintenance') || kept('venueMode', 'gig') === 'maintenance';
 let cameraFrozen = false, cameraTime = 0, cameraAge = 0, cameraIndex = -1;
 const EFFECTS = { btnStrobe: { name: 'Strobe', roles: ['strobe'], hold: 'strobe' }, btnBlinder: { name: 'Blinders', roles: ['blinder'], hold: 'blinder' }, btnCo2: { name: 'CO2', roles: ['co2'] }, btnPyro: { name: 'Pyro', roles: ['flame', 'spark', 'firework'] }, btnConfetti: { name: 'Confetti', roles: ['confetti'] } };
 const held = { strobe: { pointer: false, key: false }, blinder: { pointer: false, key: false } };
@@ -88,8 +89,9 @@ let readDemo = demo(signals, director.mood.demoBpm, director.mood.flow), statusA
 const SKIP = +(params.get('skip') || 0);   // ?skip=24: the demo track starts that many seconds in, for a picture of its peak
 // for looking in from the console; view = [x, y, z, lookAtX, lookAtY, lookAtZ] puts the camera anywhere
 let changing = false, changeMessage = '';
-const show = window.__show = { signals, director, world, cams, look, audio, renderer, camera, quality: qualityKey, changing: false, view: null, heard: [], webgl: WEBGL, fps: 0 };   // heard: what the listener found in live sound, [{ t, what }] with t on the sound's clock
+const show = window.__show = { signals, director, world, cams, look, audio, renderer, camera, venueMode: look.maintenance ? 'maintenance' : 'gig', quality: qualityKey, changing: false, view: null, heard: [], webgl: WEBGL, fps: 0 };   // heard: what the listener found in live sound, [{ t, what }] with t on the sound's clock
 const playback = mountPlayback({ audio, root: $('filePlayback'), notes: $('trackNotes'), snapshot: () => ({ venue: venueKey, mood: $('mood').value, sensitivity: +$('sens').value, section: signals.m.section, phase: signals.m.phase, bpm: signals.m.bpm, build: signals.m.build, show_status: director.status, segment_start_seconds: audio.segmentStart, listener_seconds: signals.now, sample_rate: audio.ctx?.sampleRate, audio_worklet: audio.tapped }) });
+const inspectionSignals = { m: { section: 'low', phase: 'groove', hasGrooved: false }, ev: {}, beats: 0, sinceBreak: 0 };
 
 function frame() {
   requestAnimationFrame(frame);
@@ -106,24 +108,26 @@ function frame() {
   logShow.dt = raw; logShow(t);
   world.env.uPointScale.value = renderer.domElement.height * 0.5 / Math.tan(camera.fov * Math.PI / 360); world.env.cam.copy(camera.position);
   world.update(dt, t, director, signals, look);
-  particles?.update(t, director.room.color, director.manual.blackout ? 0 : director.room.level * look.light, world.env.haze * look.haze);
+  particles?.setVisible(!look.maintenance);
+  if (!look.maintenance) particles?.update(t, director.room.color, director.manual.blackout ? 0 : director.room.level * look.light, world.env.haze * look.haze);
 
   if (!cameraFrozen) {
     cameraTime += dt * controls.cameraSpeed;
-    const shot = cams.update(signals, t, director.mood.camHold, controls.cameraFollowsLight ? director.lightCue : null);
+    const shot = cams.update(look.maintenance ? inspectionSignals : signals, t, look.maintenance ? 1 : director.mood.camHold, !look.maintenance && controls.cameraFollowsLight ? director.lightCue : null);
     if (cameraIndex !== cams.index) { cameraAge = 0; cameraIndex = cams.index; }
     else cameraAge += dt * controls.cameraSpeed;
     const k = Math.min(40, cameraAge / director.mood.camHold), p = shot.pos(cameraTime, k);
     camera.position.set(...p); camera.lookAt(...shot.look);
     if (show.view) { camera.position.set(...show.view.slice(0, 3)); camera.lookAt(...show.view.slice(3, 6)); }
-    camera.rotateX(Math.sin(cameraTime * 1.7) * 0.002); camera.rotateZ(Math.sin(cameraTime * 0.5) * 0.004);
-    camera.fov = shot.fov - signals.drop * 3 - signals.m.build * 4; camera.updateProjectionMatrix();
+    if (!look.maintenance) { camera.rotateX(Math.sin(cameraTime * 1.7) * 0.002); camera.rotateZ(Math.sin(cameraTime * 0.5) * 0.004); }
+    camera.fov = shot.fov - (look.maintenance ? 0 : signals.drop * 3 + signals.m.build * 4); camera.updateProjectionMatrix();
   }
   $('fade').style.opacity = cameraFrozen ? 0 : 1 - Math.max(0, Math.min(1, cams.fade));
-  if (glow) glow.strength.value = (0.7 + signals.kick * 0.35 + signals.accent * 0.08) * look.bloom;
+  if (glow) glow.strength.value = look.maintenance ? 0 : (0.7 + signals.kick * 0.35 + signals.accent * 0.08) * look.bloom;
+  finish.value = look.maintenance ? 0.1 : 1;
   // the camera's exposure follows the light as an eye or a camera does: it closes fast when a strobe hits and opens
   // slowly in the dark, so a blackout is never just a black screen and a flash still hurts
-  const bright = director.manual.blackout ? 0 : director.room.level, wanted = Math.max(0.5, Math.min(director.mood.flow ? 1.1 : 1.8, 2.3 / (1 + bright * 0.11)));   // a concert is lit evenly: there the camera does not open up   // a dim mood is not a dim picture: in a dark room the camera opens up
+  const bright = director.manual.blackout ? 0 : director.room.level, wanted = look.maintenance ? 1 : Math.max(0.5, Math.min(director.mood.flow ? 1.1 : 1.8, 2.3 / (1 + bright * 0.11)));   // a concert is lit evenly: there the camera does not open up   // a dim mood is not a dim picture: in a dark room the camera opens up
   exposure += (wanted - exposure) * (1 - Math.exp(-dt / (wanted < exposure ? 0.12 : 1.8)));
   renderer.toneMappingExposure = exposure;
   grainAt.value = t % 1;
@@ -144,8 +148,8 @@ function frame() {
     state.dataset.audioState = signal.state;
     const audioNote = audio.source === audio.playerNode && audio.player?.paused && !audio.player.ended
       ? 'Paused' : { receiving: 'Audio detected', silent: 'No audio detected', lost: 'Input disconnected', suspended: 'Click to resume audio' }[signal.state];
-    state.textContent = audio.message || changeMessage || `${audio.live ? 'Live: ' + audio.label + (audioNote ? ' · ' + audioNote : '') : 'Demo mode'} · ${Math.round(signals.stableBpm || m.bpm) || '--'} BPM · ${audio.live && m.activity < 0.05 ? 'waiting for music' : director.status}`;
-    $('miniStatus').textContent = state.textContent + (director.manual.blackout ? ' · BLACKOUT' : '') + (cameraFrozen ? ' · Camera paused' : '');
+    state.textContent = audio.message || changeMessage || (look.maintenance ? `Maintenance · empty hall · ${audio.live ? audio.label + (audioNote ? ' · ' + audioNote : '') : 'No audio connected'}` : `${audio.live ? 'Live: ' + audio.label + (audioNote ? ' · ' + audioNote : '') : 'Demo mode'} · ${Math.round(signals.stableBpm || m.bpm) || '--'} BPM · ${audio.live && m.activity < 0.05 ? 'waiting for music' : director.status}`);
+    $('miniStatus').textContent = state.textContent + (!look.maintenance && director.manual.blackout ? ' · BLACKOUT' : '') + (cameraFrozen ? ' · Camera paused' : '');
     const source = $('audioSource').value;
     $('playFile').dataset.connected = String(audio.live && signal.state !== 'lost' && signal.state !== 'suspended');
     $('playFile').textContent = audio.live && signal.state !== 'lost' && signal.state !== 'suspended'
@@ -591,14 +595,32 @@ function refreshEffects() {
     const present = effect.roles.filter(role => world.groups[role]?.length), enabled = present.some(role => !look.off[role]);
     const btn = $(id);
     if (effect.hold && !enabled) { held[effect.hold].pointer = held[effect.hold].key = false; director.manual[effect.hold] = false; }
-    btn.disabled = !enabled;
-    btn.dataset.state = !present.length ? 'missing' : !enabled ? 'off' : effect.hold && director.manual[effect.hold] ? 'held' : 'ready';
-    btn.title = !present.length ? `This venue has no ${effect.name.toLowerCase()}` : !enabled ? 'Enable this effect under Lights and fixtures' : effect.hold ? 'Hold to activate; release to stop' : 'Fire once';
+    btn.disabled = look.maintenance || !enabled;
+    btn.dataset.state = !present.length ? 'missing' : look.maintenance || !enabled ? 'off' : effect.hold && director.manual[effect.hold] ? 'held' : 'ready';
+    btn.title = look.maintenance ? 'Return to gig mode to use effects' : !present.length ? `This venue has no ${effect.name.toLowerCase()}` : !enabled ? 'Enable this effect under Lights and fixtures' : effect.hold ? 'Hold to activate; release to stop' : 'Fire once';
     if (effect.hold) btn.setAttribute('aria-pressed', String(director.manual[effect.hold]));
   }
   $('btnBlackout').dataset.state = director.manual.blackout ? 'on' : 'off';
   $('btnBlackout').setAttribute('aria-pressed', String(director.manual.blackout));
+  $('btnBlackout').disabled = look.maintenance;
 }
+function refreshVenueMode() {
+  $('venueMode').setAttribute('aria-pressed', String(look.maintenance));
+  $('venueModeHint').textContent = look.maintenance ? 'Empty hall · work lights on. Music stays connected.' : 'Gig mode · audience and show lighting.';
+  refreshEffects();
+}
+$('venueMode').onclick = () => {
+  look.maintenance = !look.maintenance;
+  show.venueMode = look.maintenance ? 'maintenance' : 'gig';
+  keep('venueMode', show.venueMode);
+  releaseHeld();
+  if (look.maintenance && cams.auto) cams.cut(2, clock.elapsedTime);
+  refreshVenueMode();
+  const url = new URL(location.href);
+  if (look.maintenance) url.searchParams.set('maintenance', '1'); else url.searchParams.delete('maintenance');
+  history.replaceState(null, '', url);
+};
+refreshVenueMode();
 function setHeld(key, source, on) {
   const btn = $(key === 'strobe' ? 'btnStrobe' : 'btnBlinder');
   held[key][source] = on && !btn.disabled;

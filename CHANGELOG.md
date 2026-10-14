@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.26.6
+
+- The hall heads are programmed like a lighting desk: a look combines a position, a movement, which heads are lit,
+  how the colours are spread and the beam. There are now 25 looks, among them Tunnel, Ballyhoo, Figures of eight,
+  Ripple, Snake, Scatter, Pan wave, Turning fans, On the walls and Crossfire or Converge truss by truss.
+- Every track gets two looks for its calm parts, two for the groove and two for the peaks; the next track gets others.
+- Six more light choreographies: Towards the stage, Left and right, Truss by truss, From the middle, Breathing room
+  and Call and response. Composed show takes turns through all nine; the camera knows each of them.
+- Fifteen truss formations instead of eight, among them Canopy, Twin valleys, Front low, Back low and Twisted.
+  Low formations come in calm parts, high ones in peaks. A break never lowers a truss below 7 metres.
+- **Hall heads**, **Truss formation** and **Changes** (calm, normal or lively) in the Show panel pin a look or a
+  formation and set how often they change. They are saved with presets.
+
 ## 0.26.5
 
 - Hangar's hall heads have eight looks: Floor scan, Curtains, Circles, Fans, Pillars, Crossfire, Converge and Sky.

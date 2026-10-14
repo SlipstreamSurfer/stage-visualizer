@@ -5,6 +5,8 @@ import { layout, byRole } from '../src/layout.js';
 import { shots, CameraDirector } from '../src/cameras.js';
 import { Signals, demo } from '../src/signals.js';
 import { Director, MOODS } from '../src/director.js';
+import { HEAD_LOOKS, TRUSS_LOOKS, GATES, GATE_GAIN } from '../src/hangar-looks.js';
+import { normalizeControls, normalizePresets } from '../src/show-controls.js';
 
 test('Hangar has a complete rig inside its hall, a stage and crowd space', () => {
   const L = layout(hangar), groups = byRole(L.things);
@@ -55,10 +57,12 @@ test('Hangar answers a build, drop and break with finite light channels and a st
 
 // A short set: tracks of five minutes with an intro, a groove, a break with its build, a peak and an outro, and a
 // moment of silence between them, as the listener reports it.
-function playSet(moodKey, tracks, dt = 0.1) {
+const played = new Map();   // the same set, played once for the tests that read it
+function playSet(...args) { const key = JSON.stringify(args); if (!played.has(key)) played.set(key, playSetOnce(...args)); return played.get(key); }
+function playSetOnce(moodKey, tracks, dt = 0.1, controls = {}) {
   const L = layout(hangar);
   for (const f of L.things) f.ch = { dim: 0, color: [1, 1, 1], pan: 0, tilt: 0, zoom: 1 };
-  const groups = byRole(L.things), d = new Director(groups, moodKey, { venue: 'hangar' }), look = { light: 1, haze: 1, off: {} };
+  const groups = byRole(L.things), d = new Director(groups, moodKey, { venue: 'hangar' }), look = { light: 1, haze: 1, off: {}, controls: normalizeControls(controls) };
   const frames = [], length = 300, flow = d.mood.flow;
   let beats = 0, phase = 0, t = 0;
   for (let track = 0; track < tracks; track++) {
@@ -111,8 +115,48 @@ test('every music family gets varied heads and truss formations', () => {
   const families = new Map();
   for (const [key, mood] of Object.entries(MOODS)) if (!families.has(mood.family)) families.set(mood.family, key);
   for (const key of families.values()) {
-    const frames = playSet(key, 2, 0.2).filter(f => !f.brk);
+    const frames = playSet(key, 2, 0.3).filter(f => !f.brk);
     assert.ok(new Set(frames.map(f => f.head)).size >= 3, `${key}: the heads change look`);
     assert.ok(new Set(frames.map(f => f.truss)).size >= 2, `${key}: the trusses change formation`);
   }
+});
+
+test('every head look points the beams its own way, inside the hall and lit by a sensible share of heads', () => {
+  const L = layout(hangar), heads = byRole(L.things).overhead.filter(f => f.props?.hangar), pictures = new Set();
+  heads.forEach((f, i) => { f.hangarSlot = i; f.rp = Math.sin(i * 7.3); f.rt = 0.5 + 0.5 * Math.sin(i * 3.1); });
+  for (const [key, look] of Object.entries(HEAD_LOOKS)) {
+    const L2 = layout(hangar), groups = byRole(L2.things);
+    for (const f of L2.things) f.ch = { dim: 0, color: [1, 1, 1], pan: 0, tilt: 0, zoom: 1 };
+    const d = new Director(groups, 'techno', { venue: 'hangar' }), controls = normalizeControls({ headLook: key }), s = new Signals();
+    Object.assign(s.m, { section: 'peak', phase: 'groove', activity: 1, hasGrooved: true, build: 0, bpm: 128 });
+    for (let i = 0; i < 200; i++) { Object.assign(s, { phase: i / 15, beats: Math.floor(i / 15), energy: 0.8, kick: 0.5 }); s.ev = { kick: i % 15 === 0 ? 1 : 0 }; d.update(s, i / 30, 1 / 30, { light: 1, haze: 1, off: {}, controls }); }
+    assert.equal(d.headLook, key, 'a pinned look stays');
+    const aims = groups.overhead.filter(f => f.props?.hangar).map(f => [f.ch.pan, f.ch.tilt]);
+    assert.ok(aims.flat().every(Number.isFinite), `${key}: finite aims`);
+    pictures.add(aims.map(([p, t]) => `${Math.round(p * 2)}:${Math.round(t * 2)}`).join());
+    let lit = 0, total = 0;
+    for (let beat = 0; beat < 64; beat++) for (const f of heads) { total++; if (GATES[look.gate](f, beat, Math.floor(beat / 32) % 6)) lit++; }
+    assert.ok(lit / total > 0.1 && lit / total <= 1, `${key}: ${Math.round(lit / total * 100)}% of the heads lit`);
+    assert.ok(look.gate === 'patterns' || GATE_GAIN[look.gate] >= 1);
+  }
+  assert.ok(pictures.size >= Object.keys(HEAD_LOOKS).length - 2, `the looks make different pictures (${pictures.size} of ${Object.keys(HEAD_LOOKS).length})`);
+});
+
+test('the viewer can pin a look or a formation and set the pace, and presets keep it', () => {
+  assert.deepEqual([normalizeControls({}).headLook, normalizeControls({}).trussLook, normalizeControls({}).lookPace], ['auto', 'auto', 'normal']);
+  assert.equal(normalizeControls({ headLook: 'nonsense', trussLook: 3, lookPace: 'fast' }).headLook, 'auto');
+  const saved = normalizePresets([{ id: 'a', name: 'a', venue: 'hangar', mood: 'techno', controls: { headLook: 'tunnel', trussLook: 'Canopy', lookPace: 'lively' } }])[0].controls;
+  assert.deepEqual([saved.headLook, saved.trussLook, saved.lookPace], ['tunnel', 'Canopy', 'lively']);
+  const pinned = playSet('techno', 1, 0.3, { headLook: 'sky', trussLook: 'Valley' }).filter(f => !f.brk);
+  assert.ok(pinned.every(f => f.head === 'sky' && f.truss === 'Valley'));
+  const changes = pace => { const frames = playSet('techno', 2, 0.3, { lookPace: pace }).filter(f => !f.brk); return frames.filter((f, i) => i && f.head !== frames[i - 1].head).length; };
+  assert.ok(changes('lively') > changes('normal') && changes('normal') > changes('calm'), 'the pace sets how often the looks change');
+});
+
+test('truss formations suit the part of the track and stay within the hoists', () => {
+  for (const formation of TRUSS_LOOKS) for (let row = 0; row < 5; row++) {
+    assert.ok(formation.drop(row / 4, row) >= 0 && formation.drop(row / 4, row) <= 3.5, `${formation.name}: a reachable height`);
+    assert.ok(Math.abs(formation.roll?.(row) ?? 0) <= 0.07, `${formation.name}: a tilt two hoists can make`);
+  }
+  assert.ok(TRUSS_LOOKS.length >= 15 && new Set(TRUSS_LOOKS.map(f => f.name)).size === TRUSS_LOOKS.length);
 });

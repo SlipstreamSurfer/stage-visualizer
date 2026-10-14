@@ -1,6 +1,7 @@
 // Serializable show settings. Validate stored data before it reaches the live rig.
 import { normalizeTheme } from './show-themes.js';
 import { normalizeChoreography } from './light-choreography.js';
+import { HEAD_LOOKS, TRUSS_LOOKS, PACE } from './hangar-looks.js';
 export const DEFAULT_OFF = { laser: true, flame: true, firework: true, wall: true };
 export const LIGHT_ROLES = ['overhead', 'stage', 'wash', 'coil', 'rings', 'roof', 'triangles', 'kinetic', 'bars', 'arch', 'wall', 'screen', 'dome', 'floor', 'strobe', 'blinder', 'laser', 'ball', 'glow', 'house', 'festoon', 'pool'];
 export const PALETTES = {
@@ -22,7 +23,8 @@ export function normalizeControls(value) {
     const ring = object(object(input.coils)[bank]);
     coils[bank] = { mode: choice(ring.mode, ['auto', '0', '1', '2', '3', '4'], 'auto'), speed: numberIn(ring.speed, 1, 0, 3), direction: choice(ring.direction, ['auto', 'forward', 'reverse'], 'auto') };
   }
-  return { levels, coils, showTheme: normalizeTheme(input.showTheme), lightChoreography: normalizeChoreography(input.lightChoreography), ringLook: choice(input.ringLook, ['auto', ...RING_NAMES], 'auto'), palette: choice(input.palette, ['auto', ...Object.keys(PALETTES)], 'auto'), beamWidth: numberIn(input.beamWidth, 1, 0.35, 2), cameraSpeed: numberIn(input.cameraSpeed, 1, 0.15, 1), cameraFollowsLight: input.cameraFollowsLight !== false };
+  return { levels, coils, showTheme: normalizeTheme(input.showTheme), lightChoreography: normalizeChoreography(input.lightChoreography), ringLook: choice(input.ringLook, ['auto', ...RING_NAMES], 'auto'), palette: choice(input.palette, ['auto', ...Object.keys(PALETTES)], 'auto'), beamWidth: numberIn(input.beamWidth, 1, 0.35, 2), cameraSpeed: numberIn(input.cameraSpeed, 1, 0.15, 1), cameraFollowsLight: input.cameraFollowsLight !== false,
+    headLook: choice(input.headLook, ['auto', ...Object.keys(HEAD_LOOKS)], 'auto'), trussLook: choice(input.trussLook, ['auto', ...TRUSS_LOOKS.map(f => f.name)], 'auto'), lookPace: choice(input.lookPace, Object.keys(PACE), 'normal') };
 }
 export function normalizeLook(value) {
   const input = object(value), off = { ...DEFAULT_OFF };

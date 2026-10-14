@@ -35,7 +35,7 @@ test('automatic composition choice changes only on scene cues and avoids repeate
     for (let beat = 0; beat < 16; beat++) { c.update('composed', scene, scene * 16 + beat, 'peak'); assert.equal(c.key, choices.at(-1)); }
   }
   assert.ok(choices.every((key, i) => !i || key !== choices[i - 1]));
-  assert.equal(new Set(choices).size, 3);
+  assert.equal(new Set(choices).size, Object.keys(c.counts).length, 'every composition takes its turn');
   const counts = Object.values(c.counts); assert.ok(Math.max(...counts) - Math.min(...counts) <= 1);
 });
 
@@ -64,7 +64,7 @@ test('held picture fixes requested head directions for four beats and clears on 
 });
 
 test('composition changes preserve scene clocks, truss targets, theme colours and manual darkness', () => {
-  for (const mode of ['stage','wave','hold','composed']) {
+  for (const mode of ['stage','wave','hold','sweep','pingpong','solo','centre','pulse','answer','composed']) {
     const baseline = rig('original', { showTheme:'melodic' }), r = rig(mode, { showTheme:'melodic', levels:{ stage:0 } });
     r.look.off.arch = true;
     for (let frame = 0; frame < 600; frame++) {
@@ -94,7 +94,7 @@ test('the automatic camera shows each light composition and lets it develop', as
     }
     return path;
   };
-  for (const key of ['stage', 'wave', 'hold']) {
+  for (const key of Object.keys(LIGHT_SHOTS)) {
     const cue = LIGHT_SHOTS[key], path = run(key, { from: 10 });
     const start = path.find(p => p.age >= 0.8);
     assert.ok(cue.shots.includes(start.index), `${key}: the cut at the start shows the composition`);
@@ -120,4 +120,20 @@ test('the camera setting is saved, defaults on and reaches the director only as 
   assert.equal(r.director.lightCue.key, 'wave'); assert.ok(r.director.lightCue.age >= 0);
   const o = rig('original'); o.director.update(signals(0), 0, 1 / 60, o.look);
   assert.equal(o.director.lightCue, null, 'the original show gives the camera nothing to follow');
+});
+
+test('the newer compositions shape the rig in their own way and stay within range', () => {
+  const r = rig('original'), c = r.director.choreography, heads = [...r.groups.overhead, ...r.groups.stage], pictures = new Set();
+  for (const key of ['sweep', 'pingpong', 'solo', 'centre', 'pulse', 'answer']) {
+    c.update(key, 1, 0, 'peak');
+    for (const phase of [1, 3, 5, 9, 13, 21]) {
+      c.update(key, 1, phase, 'peak');
+      let gains; for (let i = 0; i < 120; i++) gains = heads.map(f => c.gain(f, f.role || (r.groups.stage.includes(f) ? 'stage' : 'overhead'), 1 / 60));
+      assert.ok(gains.every(g => Number.isFinite(g) && g >= 0 && g <= 1.2), `${key}: gains stay between dark and a little over full`);
+      pictures.add(gains.map(g => g.toFixed(1)).join());
+      const arch = { phase, flash: 1 }; c.arch(arch);
+      assert.ok([arch.archCentre, arch.archWidth, arch.archBase, arch.archStrength].every(Number.isFinite), `${key}: the arches get a shape`);
+    }
+  }
+  assert.ok(pictures.size >= 20, 'the compositions make different pictures as they run');
 });

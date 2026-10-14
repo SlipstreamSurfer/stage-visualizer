@@ -80,6 +80,12 @@ export const LIGHT_SHOTS = {
   stage: { shots: [0, 8, 1], reveal: [2, 5], revealAt: 10, develop: 20 },
   wave: { shots: [7, 2, 6], develop: 32 },
   hold: { shots: [0, 5, 2], develop: 6 },
+  sweep: { shots: [7, 2, 6], develop: 8 },
+  pingpong: { shots: [0, 2, 5], develop: 8 },
+  solo: { shots: [7, 6, 2], develop: 40 },
+  centre: { shots: [0, 5, 2], develop: 16 },
+  pulse: { shots: [0, 5, 2], develop: 8 },
+  answer: { shots: [0, 1, 8], develop: 8 },
 };
 export class CameraDirector {
   // list: the venue's shots; the ones after the first nine come from its facilities (the bar, front of house) and are

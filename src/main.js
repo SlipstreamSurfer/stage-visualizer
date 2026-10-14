@@ -12,6 +12,7 @@ import { CHOREOGRAPHIES } from './light-choreography.js';
 import { buildWorld } from './world.js';
 import { buildParticles } from './particles.js';
 import { shots, CameraDirector } from './cameras.js';
+import { HEAD_LOOKS, TRUSS_LOOKS } from './hangar-looks.js';
 import { Audio } from './audio.js';
 import { mountPlayback } from './playback.js';
 import { QUALITY, AutoQuality } from './quality.js';
@@ -233,7 +234,11 @@ $('mood').onchange = e => {
 $('moodLock').checked = moodLocked;
 $('moodLock').onchange = e => { moodLocked = e.target.checked; keep('moodLock', String(moodLocked)); if (moodLocked) keep('mood', $('mood').value); };
 $('cam').onchange = e => setCam(e.target.value);
+for (const [key, look] of Object.entries(HEAD_LOOKS)) $('headLook').add(new Option(look.name, key));
+for (const formation of TRUSS_LOOKS) $('trussLook').add(new Option(formation.name, formation.name));
+for (const id of ['headLook', 'trussLook', 'lookPace']) $(id).onchange = () => { controls[id] = $(id).value; persistControls(); };
 function refreshTheme() {
+  for (const id of ['headLook', 'trussLook', 'lookPace']) { $(id).value = controls[id]; $(id).disabled = venueKey !== 'hangar'; }
   $('showTheme').value = controls.showTheme;
   $('lightChoreography').value = controls.lightChoreography;
   $('cameraFollowsLight').checked = controls.cameraFollowsLight;

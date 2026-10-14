@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { withPage } from './browser.mjs';
+import { withPage, renderFlags } from './browser.mjs';
 
 for (const backend of ['webgl', 'webgpu']) test(`${backend}: looks, remembered sliders, mood lock and manual effect release`, { timeout: 300000 }, async context => {
-  await withPage(backend === 'webgl' ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : [], async ({ send, evaluate, until, errors, port }) => {
+  await withPage(backend === 'webgl' ? renderFlags() : [], async ({ send, evaluate, until, errors, port }) => {
     await send('Emulation.setDeviceMetricsOverride', { width: 640, height: 480, deviceScaleFactor: 1, mobile: false });
     await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=hangar&mood=house&quality=low&${backend === 'webgl' ? 'webgl' : ''}` });
     await until('!!window.__show?.ready', 'The controls page did not start');
@@ -44,7 +44,8 @@ for (const backend of ['webgl', 'webgpu']) test(`${backend}: looks, remembered s
     await evaluate(`document.getElementById('moodLock').click()`);
     await switchTo('hangar');
     assert.equal(await evaluate(`document.getElementById('mood').value`), 'ambient', 'a locked mood survives an incompatible venue');
-    assert.equal((await states()).btnPyro, 'off', 'present flames are visibly off by default');
+    assert.equal(await evaluate(`[...document.querySelectorAll('#switches label')].find(el => el.textContent === 'Flames').querySelector('input').checked`), false, 'present flames are visibly off by default');
+    assert.equal((await states()).btnPyro, 'ready', 'sparks are on by default, so the pyro button stays ready');
     await fixture('Flames', true);
     assert.equal((await states()).btnPyro, 'ready');
     await key('keydown', 'v');

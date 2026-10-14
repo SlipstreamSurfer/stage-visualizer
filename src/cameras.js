@@ -92,6 +92,12 @@ export class CameraDirector {
   // used when the track is calm
   constructor(list, startedAt = 0) { this.extra = list.map((_, i) => i).filter(i => i >= 9); Object.assign(this, { list, index: 0, auto: true, lastCut: startedAt, pending: null, fadeFrom: 0, fadeIn: -10, turn: 0, fade: 1 }); }
   cut(i, t) { this.index = i; this.lastCut = t; this.pending = null; }
+  // a prepared show's camera cue: a hard cut or a dip through black, only while the camera is on automatic
+  cue(i, t, hard = false) {
+    if (!this.auto || i >= this.list.length) return;
+    if (hard) { this.cut(i, t); this.fadeIn = -10; } else if (i !== this.index) { this.pending = i; this.fadeFrom = t; }
+    this.cuedAt = t;   // for a moment the show's cut stands: the drop rule below does not take it over
+  }
   direct(t, shots, hard = false) {
     const choice = shots.filter(s => s !== this.index && s < this.list.length), next = choice[this.turn++ % choice.length];
     if (next === undefined) return;
@@ -101,7 +107,7 @@ export class CameraDirector {
   // light: the light composition that is playing, { key, started, age } (see LIGHT_SHOTS), or null
   update(signals, t, hold = 1, light = null) {
     const m = signals.m, ev = signals.ev, base = PLAN[m.section], plan = base.shots.length && (m.section === 'intro' || m.section === 'low') ? { hold: base.hold, shots: [...base.shots, ...this.extra] } : base;
-    if (this.auto) {
+    if (this.auto && !(t - (this.cuedAt ?? -100) < 2)) {
       const over = factor => this.pending === null && t - this.lastCut > plan.hold * hold * factor;
       const cue = m.phase !== 'break' && light ? LIGHT_SHOTS[light.key] : null, fresh = cue && light.started !== this.lightStarted;
       if (fresh) { this.lightStarted = light.started; this.revealed = false; }

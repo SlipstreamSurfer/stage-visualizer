@@ -13,6 +13,7 @@ import { buildWorld } from './world.js';
 import { buildParticles } from './particles.js';
 import { shots, CameraDirector } from './cameras.js';
 import { HEAD_LOOKS, TRUSS_LOOKS } from './hangar-looks.js';
+import { normalizeShow, PreparedShow, preparedSignals, preparedControls } from './prepared-show.js';
 import { Audio } from './audio.js';
 import { mountPlayback } from './playback.js';
 import { QUALITY, AutoQuality } from './quality.js';
@@ -91,6 +92,22 @@ let changing = false, changeMessage = '';
 const show = window.__show = { signals, director, world, cams, look, audio, renderer, camera, quality: qualityKey, changing: false, view: null, heard: [], webgl: WEBGL, fps: 0 };   // heard: what the listener found in live sound, [{ t, what }] with t on the sound's clock
 const playback = mountPlayback({ audio, root: $('filePlayback'), notes: $('trackNotes'), snapshot: () => ({ venue: venueKey, mood: $('mood').value, sensitivity: +$('sens').value, section: signals.m.section, phase: signals.m.phase, bpm: signals.m.bpm, build: signals.m.build, show_status: director.status, segment_start_seconds: audio.segmentStart, listener_seconds: signals.now, sample_rate: audio.ctx?.sampleRate, audio_worklet: audio.tapped }) });
 
+// A prepared show for the local file that plays, if there is one: shows/<file name>.json (see prepared-show.js).
+let prepared = null, preparedFor = null, preparedNote = '';
+async function loadPrepared(name) {
+  preparedFor = name; prepared = show.prepared = null; preparedNote = '';
+  if (!name) return;
+  try {
+    let response = await fetch(`/__shows/${encodeURIComponent(name)}`, { cache: 'no-store' });
+    if (response.status === 404) response = await fetch(`shows/${encodeURIComponent(name)}.json`, { cache: 'no-store' });   // a server started before prepared shows existed
+    if (!response.ok) return;
+    const data = await response.json();
+    if (data === null) return;
+    const loaded = new PreparedShow(normalizeShow(data));
+    if (preparedFor === name) prepared = show.prepared = loaded;
+  } catch (error) { if (preparedFor === name) preparedNote = `Prepared show not used: ${error.message}`; }
+}
+
 function frame() {
   requestAnimationFrame(frame);
   const raw = clock.getDelta(), dt = Math.min(raw, 0.05), t = clock.elapsedTime;
@@ -102,22 +119,32 @@ function frame() {
     if (missed) signals.skip(missed);
     signals.flow(dt);
   } else signals.update(readDemo(t + SKIP), t, dt, { live: false });
-  director.update(signals, t, dt, look);
+  const fileName = audio.source === audio.playerNode ? audio.fileInfo?.name ?? null : null;
+  if (fileName !== preparedFor) loadPrepared(fileName);
+  const cue = show.cue = prepared && audio.live && !audio.player.paused ? prepared.step(audio.player.currentTime) : null;
+  const running = !!cue?.playing, sig = running ? preparedSignals(signals, cue, prepared) : signals;
+  director.update(sig, t, dt, running ? { ...look, controls: preparedControls(controls, cue.looks) } : look);
+  if (running) for (const event of cue.events) {   // the show's one-off cues: effects, strobe and blinder hits, camera cuts
+    for (const kind of event.fire || []) director.fire(kind, t);
+    if (event.strobe) director.cueStrobeUntil = t + event.strobe * prepared.beat;
+    if (event.blinder) director.cueBlinderUntil = t + event.blinder * prepared.beat;
+    if (event.camera !== undefined && event.camera !== 'auto' && !cameraFrozen) cams.cue(event.camera, t, event.cut === 'hard');
+  }
   logShow.dt = raw; logShow(t);
   world.env.uPointScale.value = renderer.domElement.height * 0.5 / Math.tan(camera.fov * Math.PI / 360); world.env.cam.copy(camera.position);
-  world.update(dt, t, director, signals, look);
+  world.update(dt, t, director, sig, look);
   particles?.update(t, director.room.color, director.manual.blackout ? 0 : director.room.level * look.light, world.env.haze * look.haze);
 
   if (!cameraFrozen) {
     cameraTime += dt * controls.cameraSpeed;
-    const shot = cams.update(signals, t, director.mood.camHold, controls.cameraFollowsLight ? director.lightCue : null);
+    const shot = cams.update(sig, t, director.mood.camHold, controls.cameraFollowsLight ? director.lightCue : null);
     if (cameraIndex !== cams.index) { cameraAge = 0; cameraIndex = cams.index; }
     else cameraAge += dt * controls.cameraSpeed;
     const k = Math.min(40, cameraAge / director.mood.camHold), p = shot.pos(cameraTime, k);
     camera.position.set(...p); camera.lookAt(...shot.look);
     if (show.view) { camera.position.set(...show.view.slice(0, 3)); camera.lookAt(...show.view.slice(3, 6)); }
     camera.rotateX(Math.sin(cameraTime * 1.7) * 0.002); camera.rotateZ(Math.sin(cameraTime * 0.5) * 0.004);
-    camera.fov = shot.fov - signals.drop * 3 - signals.m.build * 4; camera.updateProjectionMatrix();
+    camera.fov = shot.fov - sig.drop * 3 - sig.m.build * 4; camera.updateProjectionMatrix();
   }
   $('fade').style.opacity = cameraFrozen ? 0 : 1 - Math.max(0, Math.min(1, cams.fade));
   if (glow) glow.strength.value = (0.7 + signals.kick * 0.35 + signals.accent * 0.08) * look.bloom;
@@ -144,7 +171,7 @@ function frame() {
     state.dataset.audioState = signal.state;
     const audioNote = audio.source === audio.playerNode && audio.player?.paused && !audio.player.ended
       ? 'Paused' : { receiving: 'Audio detected', silent: 'No audio detected', lost: 'Input disconnected', suspended: 'Click to resume audio' }[signal.state];
-    state.textContent = audio.message || changeMessage || `${audio.live ? 'Live: ' + audio.label + (audioNote ? ' · ' + audioNote : '') : 'Demo mode'} · ${Math.round(signals.stableBpm || m.bpm) || '--'} BPM · ${audio.live && m.activity < 0.05 ? 'waiting for music' : director.status}`;
+    state.textContent = audio.message || changeMessage || `${audio.live ? 'Live: ' + audio.label + (audioNote ? ' · ' + audioNote : '') : 'Demo mode'} · ${Math.round(show.cue?.playing ? show.prepared.bpm : signals.stableBpm || m.bpm) || '--'} BPM · ${audio.live && m.activity < 0.05 ? 'waiting for music' : director.status}${show.cue?.playing ? ` · ${prepared.name}, bar ${Math.floor(show.cue.bar)}` : ''}${preparedNote ? ' · ' + preparedNote : ''}`;
     $('miniStatus').textContent = state.textContent + (director.manual.blackout ? ' · BLACKOUT' : '') + (cameraFrozen ? ' · Camera paused' : '');
     const source = $('audioSource').value;
     $('playFile').dataset.connected = String(audio.live && signal.state !== 'lost' && signal.state !== 'suspended');

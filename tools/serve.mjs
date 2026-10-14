@@ -80,6 +80,11 @@ export function serve(port = 8765, { rekordbox = null } = {}) {
       let body = ''; req.on('data', d => { body += d; }); req.on('end', () => { fs.mkdirSync(path.join(root, 'rec'), { recursive: true }); fs.appendFile(path.join(root, 'rec', 'show.log'), body, () => {}); res.writeHead(204).end(); });
       return;
     }
+    if (name.startsWith('/__shows/')) {   // a prepared show for a local audio file (shows/<file name>.json), or null: no 404 for a file without one
+      const file = path.join(root, 'shows', path.basename(name.slice('/__shows/'.length)) + '.json');
+      fs.readFile(file, 'utf8', (err, data) => res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(err ? 'null' : data));
+      return;
+    }
     if (name === '/__track') { nowPlaying().then(now => res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(now)), () => res.writeHead(200).end('{}')); return; }
     if (name === '/__changed') { res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }).end(String(changed())); return; }
     const file = path.join(root, name.endsWith('/') ? name + 'index.html' : name);

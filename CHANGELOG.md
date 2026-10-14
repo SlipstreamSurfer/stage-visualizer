@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.26.7
+
+- Prepared shows: a cue list in bars for a track you play from a local file (`shows/<file name>.json`, kept out of
+  the repository). While that file plays, the show follows the parts, builds and drops on their exact beat, and the
+  head looks, truss formations, choreography, theme, colours, effects, strobe and blinder hits and camera cuts it
+  lists; the levels still come from listening. Seeking and pausing are followed. See docs/prepared-shows.md.
+- The local server answers `/__shows/<file name>` with the show or `null`, so files without a show cause no errors.
+
 ## 0.26.6
 
 - The hall heads are programmed like a lighting desk: a look combines a position, a movement, which heads are lit,

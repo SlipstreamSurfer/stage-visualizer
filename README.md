@@ -103,7 +103,10 @@ stream. When frames take too long the picture first draws fewer pixels and sharp
 automatic quality reduces detail only after that. Explicit Light, Normal and High choices are remembered. A newer tab
 with the show pauses the older ones.
 
-Look presets include Standard, Calm, Cinematic and Energetic; moving a fader makes a custom look. **Show theme** combines wall images, light colours and arch/laser patterns:
+Look presets include Standard, Calm, Cinematic and Energetic; moving a fader makes a custom look.
+
+**Time of day** (Settings → Show) puts the show at night, by day or at sunset, with sunlight falling through the
+skylights into the haze; the **hangar door** can open onto the airfield outside, by day and by night. **Show theme** combines wall images, light colours and arch/laser patterns:
 Industrial, Hypnotic or Melodic; the wall develops within the theme through quiet passages, builds and peaks.
 **Light choreography → Composed show** adds stage openings, slow hall waves and held light pictures, and the
 automatic camera shows each composition. The hall heads have 25 looks and change them within a track and for every new track, the hall trusses hold one of

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.32.0
+
+- Time of day, in Settings → Show: Night, Day or Sunset (`src/daylight.js`). By day the hall is lit from above and
+  shafts of sunlight fall through the skylights into the haze; at sunset the light is warm and low, and long golden
+  shafts reach towards the stage. The shafts are light in haze: each pixel works out how far the line of sight runs
+  through them, thinning to nothing at their sides. The skylights are frosted glass, a soft light rather than a view.
+  A change of time goes over in seconds, without rebuilding the venue.
+- The hangar door can open, by night and by day: its six leaves slide slowly to the ends of the opening in the back
+  wall, and outside lies the airfield, with hangars, a tower and trees against the sky, the town's glow and red roof
+  lights at night, and at sunset the low sun shining in through the door. Seen best from the DJ view and the DJ booth.
+- Time of day and the door are saved with presets. For a picture: `?time=sunset&door`.
+
 ## 0.31.0
 
 - One choice says how you play: System audio, Rekordbox, Audio file or Other input, in the controls and on the start

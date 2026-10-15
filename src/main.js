@@ -83,6 +83,7 @@ await warmScene(renderer, scene, camera);   // behind the start screen, before t
 let cams = new CameraDirector(shots(world.layout, world.shots));
 // what is off unless the viewer switches it on: with everything at once the show is too much
 let controls = normalizeControls(parseStored(kept('controls', '{}')));
+if (params.has('time') || params.has('door')) controls = normalizeControls({ ...controls, timeOfDay: params.get('time') ?? controls.timeOfDay, door: params.has('door') || controls.door });   // ?time=day&door: for a picture
 const look = { ...normalizeLook({ light: +kept('light', 1), bloom: +kept('bloom', 1), haze: +kept('haze', 1), hall: +kept('hall', 1), off: params.has('all') ? Object.fromEntries(Object.keys(DEFAULT_OFF).map(role => [role, false])) : parseStored(kept('off', JSON.stringify(DEFAULT_OFF))) }), controls };
 let cameraFrozen = false, cameraTime = 0, cameraAge = 0, cameraIndex = -1;
 const audio = new Audio(() => { signals.reset(); director.reset(clock.elapsedTime); });
@@ -179,7 +180,7 @@ function frame() {
 }
 
 // ----- the show's own controls -----
-for (const id of ['showTheme', 'lookPace', 'lookPreset']) segmented($(id));
+for (const id of ['showTheme', 'lookPace', 'lookPreset', 'timeOfDay']) segmented($(id));
 segmented($('audioSource'), $('startSource'));
 groups($('venue'), KINDS.map(kind => [kind, Object.entries(VENUES).filter(([, v]) => (v.kind || 'Halls') === kind).map(([k, v]) => [k, v.name])]), venueKey in VENUES ? venueKey : 'hangar');
 function fillVenuePanel(moodKey, cameraValue = 'auto') {
@@ -212,6 +213,8 @@ function refreshTheme() {
   $('showTheme').value = controls.showTheme;
   $('lightChoreography').value = controls.lightChoreography;
   $('cameraFollowsLight').checked = controls.cameraFollowsLight;
+  $('timeOfDay').value = controls.timeOfDay; $('hangarDoor').checked = controls.door;
+  $('hangarDoor').closest('label').hidden = !world.layout.shell.opening;   // only a place with a door that opens
   $('choreographyHint').textContent = CHOREOGRAPHIES[controls.lightChoreography].description;
   $('showTheme').disabled = venueKey !== 'hangar';
   $('themeHint').textContent = venueKey !== 'hangar' ? 'Show themes are available in Hangar.'
@@ -225,6 +228,8 @@ $('showTheme').onchange = () => {
 };
 $('lightChoreography').onchange = () => { controls.lightChoreography = $('lightChoreography').value; persistControls(); refreshTheme(); };
 $('cameraFollowsLight').onchange = () => { controls.cameraFollowsLight = $('cameraFollowsLight').checked; persistControls(); };
+$('timeOfDay').onchange = () => { controls.timeOfDay = $('timeOfDay').value; persistControls(); };
+$('hangarDoor').onchange = () => { controls.door = $('hangarDoor').checked; persistControls(); };
 const LOOK_SLIDERS = [['lookLight', 'light'], ['lookBloom', 'bloom'], ['lookHaze', 'haze'], ['lookHall', 'hall']];
 const LOOK_PRESETS = { standard: { light: 1, bloom: 1, haze: 1, hall: 1 }, calm: { light: 0.8, bloom: 0.6, haze: 0.65, hall: 1.15 }, cinematic: { light: 0.9, bloom: 1.15, haze: 1.3, hall: 0.65 }, energetic: { light: 1.2, bloom: 1.3, haze: 1.15, hall: 0.85 } };
 function refreshLookPreset() {

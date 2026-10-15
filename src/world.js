@@ -9,6 +9,7 @@ import { layout, byRole } from './layout.js';
 import { moveRig } from './rig-motion.js';
 import { FIXTURES, buildPools } from './fixtures.js';
 import { buildShell } from './shell.js';
+import { TIMES } from './daylight.js';
 import { buildStage } from './stage.js';
 import { buildFacilities } from './facilities.js';
 import { buildWalkers } from './walkers.js';
@@ -85,6 +86,7 @@ function lighting(n, shadowCount = 0) {
 
 // quality: { crowd (share of the crowd, 0 to 1), beams (how many beams light the room), details (bars, exits,
 // people who walk: everything a venue lists besides its stage and lights) }
+const DAY_SKY = new THREE.Color(0xcfe0ff), DAY_GROUND = new THREE.Color(0x7a6a58), SUNSET_SKY = new THREE.Color(0xffb07a), SUNSET_GROUND = new THREE.Color(0x5a3a2a);
 export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   const L = layout(venue), { W, D, H } = L.plan, st = L.stage, sh = L.shell, open = !!sh.open, F = L.floor;
   const hangarRig = L.things.some(f => f.props.hangar);
@@ -98,7 +100,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   const black = plain(0x0d0d0f, { roughness: 0.8, gain: 2.5 }), steel = plain(0x2c2c30, { roughness: 0.6, metalness: 0.4 });
   const casts = Array.from({ length: 200 }, () => ({ I: 0, pos: new THREE.Vector3(), dir: new THREE.Vector4(), col: new THREE.Vector3(), optics: new THREE.Vector4() }));
   let nCast = 0, flashI = 0;
-  const env = { scene, W, D, H, hangarRig, haze: 1, hazeOut: 1, roomColor: [1, 1, 1], wallColor: new THREE.Color(), uPointScale: uniform(500), uTime: uniform(0), cam: new THREE.Vector3(), put, plain, surface, black, steel,
+  const env = { scene, W, D, H, hangarRig, haze: 1, hazeOut: 1, roomColor: [1, 1, 1], wallColor: new THREE.Color(), uPointScale: uniform(500), uTime: uniform(0), uDay: uniform(0), uSunset: uniform(0), uDoor: uniform(0), uSunHaze: uniform(1), day: 0, sunset: 0, door: 0, cam: new THREE.Vector3(), put, plain, surface, black, steel,
     media: null,   // a picture or video for the LED walls, or null
     // a beam reports where it shines, so the room can be lit by it
     cast(at, dx, dy, dz, color, I, half, gobo = 0, spin = 0, mode = 0) { if (nCast >= casts.length || I < 0.02) return; const k = casts[nCast++]; k.I = I; k.pos.copy(at); k.dir.set(dx, dy, dz, Math.cos(Math.min(1.2, half * 1.5 + 0.03))); k.col.set(color.r * I, color.g * I, color.b * I); k.optics.set(gobo, spin, mode, 0); },
@@ -145,7 +147,8 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
 
   // ----- what a venue lists besides its stage and lights: parked unless asked for, but for what is structure -----
   const details = !!quality.details;
-  const fac = buildFacilities({ ...L, fence: details, facilities: L.facilities.filter(f => details || STRUCTURE.has(f.type) || (hangarRig && ['barrier', 'foh', 'delays'].includes(f.type))) }, { add, lit, black, steel });
+  const fac = buildFacilities({ ...L, fence: details, facilities: L.facilities.filter(f => details || STRUCTURE.has(f.type) || (hangarRig && ['barrier', 'foh', 'delays', 'hangarDoor'].includes(f.type))) }, { add, lit, black, steel, env });
+  const hasDoor = !!sh.opening && L.facilities.some(f => f.type === 'hangarDoor');   // a door that can open (Hangar's)
   // aisles: a venue with people walking keeps a lane free down both sides and across the back
   const lane = (details || hangarRig) && L.walkers && !L.walkPath ? { x: W / 2 - 6.6, z0: st.front + 5, z1: D / 2 - 7.2 } : null;
   // where people walk: the venue's own route, or the aisles; the crowd keeps a strip free along every stretch of it
@@ -254,6 +257,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   // ----- light that is not a fixture: what the place has of its own, and what the show throws on it -----
   const sky = shell.sky, daylight = sky ? sky.light[2] : 0.14;
   const house = add(new THREE.HemisphereLight(sky ? sky.light[0] : 0x39404f, sky ? sky.light[1] : 0x14100c, daylight));
+  const nightSky = house.color.clone(), nightGround = house.groundColor.clone();
   const hall = add(new THREE.PointLight(0xffffff, 0, 0, 1)); hall.position.set(0, H * 0.75, centre ? st.z : (F.z0 + F.z1) / 2 - (F.z1 - F.z0) * 0.15);
   const stageLight = add(new THREE.PointLight(0xffffff, 0, 0, 1)); stageLight.position.set(0, st.height + 4.5, centre ? st.z : st.back + 2.5);   // the LED wall, as the lamp it is for the stage and the front rows
   scene.fog = new THREE.FogExp2(0x000000, 0.015);
@@ -416,10 +420,20 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       const room = director.room, spill = look.hall < 1 ? look.hall : 1 + (look.hall - 1) * 1.5;
       hall.color.setRGB(...room.color); hall.intensity = (spill * room.level * (hangarRig ? 0.26 : 0.42) + 0.4 * Math.pow(look.hall, 3)) * size;
       stageLight.color.copy(env.wallColor).lerp(hall.color, 0.3); stageLight.intensity = (1.5 + env.wallColor.r + env.wallColor.g + env.wallColor.b) * 4 * spill * size * (director.manual.blackout ? 0 : 1);
-      house.intensity = daylight * Math.pow(look.hall, 4);
+      // The time of day (daylight.js) and the hangar door, eased: the light changes over seconds, the door takes its time.
+      // By day the hall is lit from above and the haze shows the sun; at sunset warm and low; the lamps count for less.
+      const time = TIMES[look.controls?.timeOfDay] || TIMES.night;
+      env.day += (time.day - env.day) * Math.min(1, dt / 4); env.sunset += (time.sunset - env.sunset) * Math.min(1, dt / 4);
+      const doorWanted = look.controls?.door && hasDoor ? 1 : 0, doorStep = dt / 14;   // a hangar door opens slowly
+      env.door = Math.max(0, Math.min(1, env.door + Math.sign(doorWanted - env.door) * Math.min(doorStep, Math.abs(doorWanted - env.door))));
+      const doorLight = env.door * (0.4 + env.day * 0.6 + env.sunset * 0.4);   // an open door lets the outside in
+      house.intensity = daylight * Math.pow(look.hall, 4) + env.day * 2.4 + env.sunset * 0.9 + doorLight * 0.5;
+      house.color.copy(nightSky).lerp(DAY_SKY, env.day).lerp(SUNSET_SKY, env.sunset); house.groundColor.copy(nightGround).lerp(DAY_GROUND, env.day).lerp(SUNSET_GROUND, env.sunset);
+      env.uDay.value = env.day; env.uSunset.value = env.sunset; env.uDoor.value = env.door; env.uSunHaze.value = Math.min(1.6, env.haze);
+      fac.update(dt);
       scene.fog.density = 0.015 * (hangarRig ? Math.min(1.5, env.haze) : env.haze) / size * (open ? 0.45 : 1);
       scene.fog.color.setRGB(...room.color).multiplyScalar((0.006 + signals.kick * 0.02 + director.flash * 0.08) * (1 + Math.max(0, look.haze - 1) * 5) * (director.manual.blackout ? 0 : 1));
-      scene.fog.color.r += fogOf[0]; scene.fog.color.g += fogOf[1]; scene.fog.color.b += fogOf[2];   // and what distance fades to under this sky
+      scene.fog.color.r += fogOf[0] + env.day * 0.05 + env.sunset * 0.05; scene.fog.color.g += fogOf[1] + env.day * 0.058 + env.sunset * 0.03; scene.fog.color.b += fogOf[2] + env.day * 0.07 + env.sunset * 0.02;   // and what distance fades to under this sky, or in daylit haze
       const amp = signals.m.activity < 0.15 ? 0.1 : signals.m.phase === 'break' ? 0.4 + signals.m.build * 0.4 : Math.min(1, 0.7 + signals.energy * 0.3 + signals.hype * 0.3);
       U.groove.value += (amp - U.groove.value) * (1 - Math.exp(-dt / 1.5));
       stage.update(t, dt, signals, director, look, !!director.mood.flow);

@@ -42,7 +42,7 @@ const facilities = [
 export default {
   name: 'Hangar', kind: 'Halls', genres: ['techno', 'mainstage', 'hard', 'trance', 'melodic'], capacity: 4200,
   plan: { width: W, depth: D, height: H },
-  shell: { walls: 'steel', floor: 'concrete', frames: 9.5, plinth: 2.9, services: true },   // a steel portal frame every 9.5 metres, a concrete base, ducts and sprinklers under the roof
+  shell: { walls: 'steel', floor: 'concrete', frames: 9.5, plinth: 2.9, services: true, opening: { wall: 'back', x0: -13.5, x1: 13.5, y0: 4.4, y1: 12.6, stack: 4.5 } },   // the hangar door's opening; its leaves stack 4.5 m deep at either end   // a steel portal frame every 9.5 metres, a concrete base, ducts and sprinklers under the roof
   stage: STAGE, rig, facilities, walkers: 80,
   crowd: { count: 2600 },
 };

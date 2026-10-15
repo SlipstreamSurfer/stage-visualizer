@@ -200,3 +200,11 @@ test('the crowd dances the way the music asks: organic house sways and does not 
   assert.ok(DANCES.sway.rock > DANCES.stomp.rock && DANCES.sway.bounce < DANCES.stomp.bounce && DANCES.sway.half > 0.5, 'swaying from foot to foot, in half time, instead of bouncing');
   for (const [key, mood] of Object.entries(MOODS)) assert.ok(DANCES[danceOf(key, mood)], `${key} has a way of dancing`);
 });
+
+test('time of day and the hangar door are show settings: kept with presets, anything else falls back to a closed night', () => {
+  const kept = normalizeControls({ timeOfDay: 'sunset', door: true });
+  assert.equal(kept.timeOfDay, 'sunset'); assert.equal(kept.door, true);
+  const odd = normalizeControls({ timeOfDay: 'noon', door: 'yes' });
+  assert.equal(odd.timeOfDay, 'night'); assert.equal(odd.door, false);
+  assert.equal(normalizePresets([{ id: 'a', name: 'Sunset set', venue: 'hangar', mood: 'organic', controls: kept }])[0].controls.timeOfDay, 'sunset');
+});

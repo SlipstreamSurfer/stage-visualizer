@@ -25,10 +25,10 @@ function sign(text, bg, fg, wide = 4) {
   return new THREE.MeshBasicMaterial({ map: tex, fog: false });
 }
 
-// L: the layout (fence: true for a fence round an open field); ctx: { add, lit, black, steel } from the world
+// L: the layout (fence: true for a fence round an open field); ctx: { add, lit, black, steel, env } from the world
 export function buildFacilities(L, ctx) {
-  const { W, D, H } = L.plan, st = L.stage, { add, lit, black, steel } = ctx, open = !!L.shell.open;
-  const keepOut = [], people = [], shots = [], lamps = [], pois = [];
+  const { W, D, H } = L.plan, st = L.stage, { add, lit, black, steel, env } = ctx, open = !!L.shell.open;
+  const keepOut = [], people = [], shots = [], lamps = [], pois = [], updates = [];
   const red = lit(new THREE.MeshStandardMaterial({ color: 0x8a0c0c, roughness: 0.5 }), 1.4);
   const grey = lit(new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.6, metalness: 0.5 }), 1.5);
   const alu = lit(new THREE.MeshStandardMaterial({ color: 0x9a9da3, roughness: 0.45, metalness: 0.7 }), 1.3);
@@ -96,12 +96,15 @@ export function buildFacilities(L, ctx) {
     },
     // the great sliding doors a hangar has: ribbed steel leaves on a rail, with the hall's number painted on them
     hangarDoor(f) {
-      const p = place(f.wall, f.at), h = f.top - f.bottom, leaves = 6, w = f.width / leaves;
+      // Six leaves on three tracks. Open, each half slides to its end of the opening, the three leaves stacked one
+      // behind the other, and the middle of the opening is free (env.door, 0 shut to 1 open; it takes its time).
+      const p = place(f.wall, f.at), h = f.top - f.bottom, leaves = 6, w = f.width / leaves, track = i => i < 3 ? 2 - i : i - 3, leafOf = [];
       for (let i = 0; i < leaves; i++) {
-        const x = (i - (leaves - 1) / 2) * w;
-        p.box(w - 0.12, h, 0.06, x, f.bottom + h / 2, 0.06 + (i % 2) * 0.07, grey);
-        for (let y = f.bottom + 0.6; y < f.topp; y += 1.15) p.box(w - 0.2, 0.09, 0.05, x, y, 0.11 + (i % 2) * 0.07, steel);
+        const x = (i - (leaves - 1) / 2) * w, z = 0.06 + track(i) * 0.09, leaf = [p.box(w - 0.12, h, 0.06, x, f.bottom + h / 2, z, grey)];
+        for (let y = f.bottom + 0.6; y < f.top; y += 1.15) leaf.push(p.box(w - 0.2, 0.09, 0.05, x, y, z + 0.05, steel));
+        leafOf.push({ leaf, shut: x, open: (i < 3 ? -1 : 1) * (f.width - w) / 2 });
       }
+      if (env) updates.push(() => { for (const { leaf, shut, open } of leafOf) for (const m of leaf) m.position.x = shut + (open - shut) * env.door; });
       p.box(f.width + 1, 0.3, 0.3, 0, f.top + 0.15, 0.15, steel); p.box(f.width + 1, 0.16, 0.3, 0, f.bottom - 0.08, 0.15, steel);
       if (f.number) p.plate(h * 0.5, h * 0.5, f.width / 2 - w, f.bottom + h * 0.55, 0.2, new THREE.MeshBasicMaterial({ map: sign(f.number, 'rgba(0,0,0,0)', '#ffffff', 1).map, transparent: true, color: new THREE.Color(0.05, 0.05, 0.05), fog: false }));
     },
@@ -364,5 +367,5 @@ export function buildFacilities(L, ctx) {
     if (!BUILD[f.type]) throw new Error(`the venue ${L.name} asks for a facility "${f.type}" that does not exist`);
     BUILD[f.type](f);
   }
-  return { keepOut, people, shots, lamps, pois };
+  return { keepOut, people, shots, lamps, pois, update: dt => { for (const f of updates) f(dt); } };
 }

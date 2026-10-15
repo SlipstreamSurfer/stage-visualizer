@@ -102,6 +102,8 @@
   .deck-tools { display: flex; flex-direction: column; gap: 5px; padding: 0 0 0 10px; border-left: 1px solid var(--line); }
   .deck-tools button { display: grid; place-items: center; width: 30px; height: 26px; padding: 0; margin: 0; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #cfd4de; font-size: 14px; cursor: pointer; }
   .deck-tools button:hover, #openSettings[aria-expanded="true"] { background: rgba(255,255,255,.08); border-color: var(--edge); }
+  #elsewhere { position: fixed; z-index: 15; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; padding: 18px 26px; border-radius: 14px; font-size: 15px; cursor: pointer; }
+  #elsewhere span { color: var(--dim); font-size: 12px; }
   #openPanel { position: fixed; z-index: 4; left: 16px; bottom: 16px; padding: 10px 14px; border-radius: 12px; font-size: 12px; cursor: pointer; }
   #miniStatus { display: none; position: fixed; left: 150px; bottom: 16px; max-width: calc(100vw - 200px); color: #ddd; background: #111c; border: 1px solid #444; border-radius: 10px; padding: 9px 12px; font-size: 12px; pointer-events: none; }
   #console.hidden ~ #miniStatus { display: block; }
@@ -185,6 +187,8 @@
     <button id="startDemo" type="button" disabled>Watch without sound</button>
   </div>
 </div>
+
+<button id="elsewhere" class="glass" type="button" hidden>The show is playing in another tab<span>Click to play it here</span></button>
 
 <div id="console" class="glass" role="region" aria-label="Show controls">
   <section class="deck deck-sound" aria-labelledby="deckSound">
@@ -295,6 +299,7 @@
     <h2>Performance</h2>
     <div class="setting"><label for="quality">Quality</label><select id="quality" class="ctl"></select></div>
     <div class="setting"><span></span><div><div id="qualityNote" class="panel-note" role="status"></div><div id="fps"></div></div></div>
+    <label class="check"><input id="steadyPicture" type="checkbox" checked>Keep the picture smooth: draw fewer pixels while frames take too long</label>
     <div class="setting"><label for="particles">Extra smoke (heavy)</label><select id="particles" class="ctl"><option value="0">Off</option><option value="300000">Light</option><option value="600000">Dense</option><option value="1200000">Very dense</option></select></div>
     <h2>Screen content</h2>
     <div class="row"><button id="wallPick" class="ctl" type="button">Picture or video</button><button id="wallClear" class="ctl" type="button">Clear</button></div>

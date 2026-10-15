@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { track } from './synth.mjs';
 import { listen } from '../tools/hear.mjs';
-import { Listener, PAUSE_BEATS } from '../src/listen.js';
+import { TempoTracker, Listener, PAUSE_BEATS } from '../src/listen.js';
 
 const of = (result, type) => result.events.filter(e => e.type === type);
 const near = (actual, expected, margin, what) => assert.ok(Math.abs(actual - expected) <= margin, `${what}: ${actual.toFixed(2)}, expected ${expected} ± ${margin}`);
@@ -197,4 +197,23 @@ test('a hard hit between the beats just before the kick returns is not the drop;
   const drops = of(listen(pcm), 'drop');
   assert.equal(drops.length, 1, 'drops');
   near(drops[0].t, starts[2], 0.1, 'the drop');
+});
+
+test('a tempo the track has kept stays through half a minute of bass hits a few percent off, even with the kick along; a tempo that stays is taken', () => {
+  const tempo = new TempoTracker(), dt = 1 / 60;
+  let t = 0, next = 0;
+  const run = (bpm, seconds) => {
+    for (const end = t + seconds; t < end; t += dt) {
+      const hit = t >= next;
+      if (hit) next += 60 / bpm;
+      tempo.update(dt, hit ? 1 : 0, t > 8 ? bpm : 0);
+    }
+  };
+  run(128, 40);
+  assert.ok(Math.abs(tempo.bpm - 128) < 1, `settled on ${tempo.bpm}`);
+  run(134, 25);   // a stretch of a rolling bass line (in the recordings 128 against 131 or 134)
+  assert.ok(Math.abs(tempo.bpm - 128) < 1, `the stretch moved the tempo to ${tempo.bpm}`);
+  run(128, 20);
+  run(134, 50);   // the next track, mixed in at its own tempo
+  assert.ok(Math.abs(tempo.bpm - 134) < 1, `the new tempo was not taken: ${tempo.bpm}`);
 });

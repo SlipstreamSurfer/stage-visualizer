@@ -99,8 +99,9 @@ speed), **Fixtures** (a switch for every light group and effect) and **Effects**
 pyro, confetti). **Settings** (the gear, or **S**) holds what you set once: choreography, hall heads and truss
 formation, look presets, colour palette and a level per light group, quality and extra smoke, screen content,
 presets, the audio input device and the keyboard shortcuts. Venue and quality changes preserve the active audio
-stream. Automatic quality reduces detail after sustained slow rendering; explicit Light, Normal and High choices are
-remembered.
+stream. When frames take too long the picture first draws fewer pixels and sharpens again when there is room;
+automatic quality reduces detail only after that. Explicit Light, Normal and High choices are remembered. A newer tab
+with the show pauses the older ones.
 
 Look presets include Standard, Calm, Cinematic and Energetic; moving a fader makes a custom look. **Show theme** combines wall images, light colours and arch/laser patterns:
 Industrial, Hypnotic or Melodic; the wall develops within the theme through quiet passages, builds and peaks.

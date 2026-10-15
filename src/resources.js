@@ -26,3 +26,18 @@ export function disposeScene(scene, retainedTextures = []) {
   for (const texture of textures) if (!texture.userData.shared && !retain.has(texture)) texture.dispose();
   scene.clear();
 }
+
+// Compile everything a venue can show before it is shown, also what is hidden until it is used (CO2, sparks and
+// flames that fire at the drop, a laser that switches on, a camera's view behind the one now). The card compiles a
+// material the first time it draws it, and the picture stops until it is done: measured, a fifth of a second, on
+// the drop. Only for a scene that is not on screen yet: for the moment of compiling everything is visible.
+export async function warmScene(renderer, scene, camera) {
+  const changed = [];
+  scene.traverse(object => {
+    changed.push([object, object.visible, object.frustumCulled, object.count]);
+    object.visible = true; object.frustumCulled = false;
+    if (object.isInstancedMesh && object.count === 0) object.count = 1;
+  });
+  try { await renderer.compileAsync(scene, camera); }
+  finally { for (const [object, visible, culled, count] of changed) { object.visible = visible; object.frustumCulled = culled; if (count !== undefined) object.count = count; } }
+}

@@ -16,7 +16,8 @@ import { HEAD_LOOKS, TRUSS_LOOKS } from './hangar-looks.js';
 import { Audio } from './audio.js';
 import { mountPlayback } from './playback.js';
 import { QUALITY, AutoQuality } from './quality.js';
-import { disposeScene } from './resources.js';
+import { SteadyResolution } from './steady.js';
+import { disposeScene, warmScene } from './resources.js';
 import { DEFAULT_OFF, LIGHT_ROLES, PALETTES, RING_NAMES, COIL_MODES, parseStored, normalizeControls, normalizeLook, normalizePresets } from './show-controls.js';
 import { $, keep, kept, started, fill, groups, sliderValue, segmented, syncSegments, mountControls, mountStart } from './ui.js';
 import { mountSound } from './sound-ui.js';
@@ -32,8 +33,10 @@ let qualityChoice = params.get('quality') || kept('quality', 'auto');
 if (qualityChoice !== 'auto' && !(qualityChoice in QUALITY)) qualityChoice = 'auto';
 let qualityKey = qualityChoice === 'auto' ? 'normal' : qualityChoice;
 let quality = { ...QUALITY[qualityKey], details: params.has('details') };
-const autoQuality = new AutoQuality();
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality.ratio));
+const autoQuality = new AutoQuality(), steady = new SteadyResolution();   // steady: fewer pixels when frames take too long (steady.js)
+let steadyOn = kept('steady', 'true') !== 'false';
+const pixelRatio = () => Math.min(window.devicePixelRatio, quality.ratio) * (steadyOn ? steady.scale : 1);
+renderer.setPixelRatio(pixelRatio());
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 document.body.prepend(renderer.domElement);
@@ -75,6 +78,7 @@ let particleCount = WEBGL ? 0 : +(params.get('n') || kept('particles', 0));
 const makeParticles = (world, scene) => particleCount ? buildParticles({ renderer, add: o => (scene.add(o), o), count: particleCount, room: world.layout.plan, stage: world.layout.stage, lights: world.lights, solids: [[world.layout.focus[0], world.layout.stage.height + 1.3, world.layout.focus[2] - 0.5, 0.9], ...(world.layout.shell.pillars || []).flatMap(([x, z]) => [[x, 2.6, z, 0.55], [x, 1.2, z, 0.55]])] }) : null;
 let particles = makeParticles(world, scene);
 await particles?.ready;
+await warmScene(renderer, scene, camera);   // behind the start screen, before the first frame: nothing stalls later
 let cams = new CameraDirector(shots(world.layout, world.shots));
 // what is off unless the viewer switches it on: with everything at once the show is too much
 let controls = normalizeControls(parseStored(kept('controls', '{}')));
@@ -86,15 +90,24 @@ let readDemo = demo(signals, director.mood.demoBpm, director.mood.flow), statusA
 const SKIP = +(params.get('skip') || 0);   // ?skip=24: the demo track starts that many seconds in, for a picture of its peak
 // for looking in from the console; view = [x, y, z, lookAtX, lookAtY, lookAtZ] puts the camera anywhere
 let changing = false, changeMessage = '';
-const show = window.__show = { signals, director, world, cams, look, audio, renderer, camera, quality: qualityKey, changing: false, view: null, heard: [], webgl: WEBGL, fps: 0 };   // heard: what the listener found in live sound, [{ t, what }] with t on the sound's clock
+const show = window.__show = { signals, director, world, cams, look, audio, renderer, camera, post, quality: qualityKey, changing: false, view: null, heard: [], webgl: WEBGL, fps: 0 };   // heard: what the listener found in live sound, [{ t, what }] with t on the sound's clock
 const effects = mountEffects({ show: () => ({ director, world, look }), now: () => clock.elapsedTime });
 const sound = mountSound(audio);
 const ui = mountControls({ release: () => effects.release() });
 const start = mountStart({ wake: sound.wake, connect: () => $('playFile').click() });
 const playback = mountPlayback({ audio, root: $('filePlayback'), notes: $('trackNotes'), snapshot: () => ({ venue: venueKey, mood: $('mood').value, sensitivity: +$('sens').value, section: signals.m.section, phase: signals.m.phase, bpm: signals.m.bpm, build: signals.m.build, show_status: director.status, segment_start_seconds: audio.segmentStart, listener_seconds: signals.now, sample_rate: audio.ctx?.sampleRate, audio_worklet: audio.tapped }) });
 
+// One show at a time. A second tab or window with the show draws on the same card and halves the pace of both, so the
+// newest one plays and the others wait, like a hidden tab, until they are clicked.
+let elsewhere = false;
+const others = 'BroadcastChannel' in window ? new BroadcastChannel('stage-visualizer') : null;
+const playHere = () => { elsewhere = false; $('elsewhere').hidden = true; others?.postMessage('playing'); };
+if (others) others.onmessage = e => { if (e.data === 'playing') { elsewhere = true; $('elsewhere').hidden = false; effects.release(); } };
+$('elsewhere').onclick = playHere;
+
 function frame() {
   requestAnimationFrame(frame);
+  if (elsewhere) return;
   const raw = clock.getDelta(), dt = Math.min(raw, 0.05), t = clock.elapsedTime;
   signals.decay = director.mood.decay;
   if (audio.live) {   // every step of sound that has come in since the last frame, then let the pulses fall away
@@ -137,7 +150,7 @@ function frame() {
     playback.update();
     show.fps = frames / (t - statusAt); frames = 0; statusAt = t;
     $('fps').textContent = `${Math.round(show.fps)} frames a second${WEBGL ? ' · WebGL' : ''}`;
-    $('qualityNote').textContent = qualityChoice === 'auto' ? `Automatic · ${QUALITY[qualityKey].name}` : QUALITY[qualityKey].name;
+    $('qualityNote').textContent = (qualityChoice === 'auto' ? `Automatic · ${QUALITY[qualityKey].name}` : QUALITY[qualityKey].name) + (steadyOn && steady.scale < 1 ? ` · ${Math.round(steady.scale * 100)}% resolution to keep the pace` : '');
     const m = signals.m;
     const signal = audio.signal();
     $('inputLevel').hidden = !audio.live;
@@ -155,7 +168,10 @@ function frame() {
     start.update(changing);
     syncSegments();
   }
-  const lower = autoQuality.sample(raw, { visible: !document.hidden, ready: !changing && !!show.ready, automatic: qualityChoice === 'auto', quality: qualityKey });
+  // first fewer pixels, a step at a time; a lighter quality (a rebuild) only when even the fewest are too many
+  if (steady.sample(raw, { visible: !document.hidden, ready: !changing && !!show.ready, enabled: steadyOn }) !== null) { renderer.setPixelRatio(pixelRatio()); resize(); }
+  show.resolution = steadyOn ? steady.scale : 1;
+  const lower = autoQuality.sample(raw, { visible: !document.hidden, ready: !changing && !!show.ready, automatic: qualityChoice === 'auto' && (!steadyOn || steady.atMin), quality: qualityKey });
   if (lower) changeQuality(lower).catch(changeFailed);
 }
 
@@ -232,6 +248,8 @@ $('quality').onchange = e => {
   qualityChoice = e.target.value; keep('quality', qualityChoice); autoQuality.reset();
   changeQuality(qualityChoice === 'auto' ? 'normal' : qualityChoice).catch(changeFailed);
 };
+$('steadyPicture').checked = steadyOn;
+$('steadyPicture').onchange = e => { steadyOn = e.target.checked; keep('steady', String(steadyOn)); steady.reset(); renderer.setPixelRatio(pixelRatio()); resize(); };
 $('particles').value = String(particleCount); $('particles').disabled = WEBGL;
 $('particles').onchange = e => {
   particleCount = +e.target.value; keep('particles', particleCount);
@@ -331,7 +349,7 @@ async function replaceVenue(key, { force = false, nextQuality = qualityKey } = {
     nextWorld.update(0, clock.elapsedTime, nextDirector, signals, look);
     nextParticles = makeParticles(nextWorld, nextScene);
     await nextParticles?.ready;
-    compileQueue = compileQueue.catch(() => {}).then(() => request === venueRequest ? renderer.compileAsync(nextScene, camera) : undefined);
+    compileQueue = compileQueue.catch(() => {}).then(() => request === venueRequest ? warmScene(renderer, nextScene, camera) : undefined);
     await compileQueue;
     if (request !== venueRequest) { nextParticles?.dispose(); disposeScene(nextScene, [world.env.media]); return; }
     // A mood or manual effect may have changed while shaders compiled.
@@ -342,9 +360,10 @@ async function replaceVenue(key, { force = false, nextQuality = qualityKey } = {
     nextWorld.env.media = world.env.media;
     scene = nextScene; world = nextWorld; director = nextDirector; particles = nextParticles;
     cams = new CameraDirector(shots(world.layout, world.shots), clock.elapsedTime);
-    venueKey = key; qualityKey = nextQuality; quality = nextSettings;
     scenePass.scene = scene;
-    renderer.setPixelRatio(Math.min(devicePixelRatio, quality.ratio)); resize(); configurePost();
+    if (nextQuality !== qualityKey) { steady.scale = 1; steady.reset(); }   // another quality: find the resolution again
+    venueKey = key; qualityKey = nextQuality; quality = nextSettings;
+    renderer.setPixelRatio(pixelRatio()); resize(); configurePost();
     readDemo = demo(signals, director.mood.demoBpm, director.mood.flow);
     Object.assign(show, { world, director, cams, view: null, quality: qualityKey });
     $('venue').value = key; keep('venue', key); keep('mood', nextMood);
@@ -455,4 +474,5 @@ if (!navigator.webdriver && (location.hostname === '127.0.0.1' || location.hostn
   let seen = null;
   setInterval(async () => { try { const now = await (await fetch('/__changed')).text(); if (seen !== null && now !== seen) location.reload(); seen = now; } catch {} }, 1500);
 }
+playHere();
 frame();

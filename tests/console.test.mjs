@@ -75,3 +75,19 @@ test('?hide shows the venue alone and keeps drawing', { timeout: 120000 }, async
     assert.deepEqual(errors, []);
   });
 });
+
+test('a newer tab with the show pauses this one until it is clicked, and then that one waits', { timeout: 120000 }, async () => {
+  await withPage(renderFlags(), async ({ send, evaluate, until, errors, port }) => {
+    await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=hangar&quality=low` });
+    await until('!!window.__show?.ready', 'The Hangar did not start');
+    await evaluate(`window.__other = new BroadcastChannel('stage-visualizer'); window.__heard = []; window.__other.onmessage = e => window.__heard.push(e.data); window.__other.postMessage('playing')`);
+    await until(`!document.getElementById('elsewhere').hidden`, 'this tab did not pause for the other one');
+    const clock = await evaluate('window.__show.signals.phase');
+    await evaluate(`new Promise(r => setTimeout(r, 1200))`);
+    assert.equal(await evaluate('window.__show.signals.phase'), clock, 'a paused tab does not run the show');
+    await evaluate(`document.getElementById('elsewhere').click()`);
+    await until(`document.getElementById('elsewhere').hidden && window.__heard.includes('playing')`, 'clicking did not take the show back');
+    assert.deepEqual(errors, []);
+  });
+});
+

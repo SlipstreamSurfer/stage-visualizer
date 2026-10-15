@@ -160,3 +160,28 @@ test('truss formations suit the part of the track and stay within the hoists', (
   }
   assert.ok(TRUSS_LOOKS.length >= 15 && new Set(TRUSS_LOOKS.map(f => f.name)).size === TRUSS_LOOKS.length);
 });
+
+test('a scene changes on the first beat of a phrase, counted from the drop, also when a kick is missed or a layer comes in', () => {
+  const L = layout(hangar);
+  for (const f of L.things) f.ch = { dim: 0, color: [1, 1, 1], pan: 0, tilt: 0, zoom: 1 };
+  const d = new Director(byRole(L.things), 'techno', { venue: 'hangar' }), look = { light: 1, haze: 1, off: {}, controls: normalizeControls({}) };
+  const changes = [], next = d.next.bind(d);
+  d.next = (t, section) => { changes.push(d.beat); return next(t, section); };
+  const beat = 60 / 128, dt = 1 / 60;
+  let t = 0, last = 0, n = 0;
+  for (; t < 150; t += dt) {
+    const now = Math.floor(t / beat), kick = now > n - 1 && now !== n - 1 && t >= n * beat;
+    const missed = n === 100 || n === 101 || n === 170;   // a kick or two not heard
+    const s = new Signals(), fire = kick && !missed, drop = kick && n === 0;
+    Object.assign(s.m, { section: 'peak', phase: 'groove', activity: 1, hasGrooved: true, build: 0, riser: 0, bpm: 128 });
+    Object.assign(s, { stableBpm: 128, energy: 0.8, kick: fire ? 0.8 : 0, drop: drop ? 1 : 0 });
+    s.ev = { kick: fire ? 1 : 0, kickGap: fire ? t - last : 0, drop, breakLength: drop ? 64 : 0, from: null, lift: Math.abs(t - 92.3) < dt / 2 };
+    if (kick) n++;
+    if (fire) last = t;
+    d.update(s, t, dt, look);
+  }
+  const after = changes.slice(1);   // the drop itself changes the scene before the count starts
+  assert.ok(after.length >= 3, `scene changes: ${changes}`);
+  for (const at of after) assert.equal((at - 1) % 8, 0, `a scene changed on beat ${at}, not on the first beat of a pair of bars (${changes})`);
+  assert.ok(after.some(at => (at - 1) % 64 === 0 && at > 64), `no change on the first beat of a phrase: ${changes}`);
+});

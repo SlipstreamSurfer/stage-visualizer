@@ -62,7 +62,7 @@ test(`${title}, the demo show runs, the pyro fires and a dropped audio file is h
     // Exercise file detection in Hangar; the short browser check covers quality/audio continuity.
     await send('Page.navigate', { url: `http://127.0.0.1:${port}/index.html?webgl&quality=low&venue=hangar` });
     await send('Emulation.setDeviceMetricsOverride', { width: 320, height: 180, deviceScaleFactor: 1, mobile: false });
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    for (let i = 0; i < 240 && !(await send('Runtime.evaluate', { returnByValue: true, expression: '!!window.__show?.ready' })).result.value; i++) await waitFor(250);   // the page takes a file once it is built
     const expected = listen(pcm).events.filter(e => ['start', 'break', 'drop'].includes(e.type)).map(e => ({ t: e.t, what: e.type === 'start' ? 'kick comes in' : e.type }));
     await send('Runtime.evaluate', { awaitPromise: true, expression: `(async () => {
       const file = new File([Uint8Array.from(atob('${wav(pcm).toString('base64')}'), c => c.charCodeAt(0))], 'test-track.wav', { type: 'audio/wav' });

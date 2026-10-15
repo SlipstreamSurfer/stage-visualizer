@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.28.0
+
+Tighter on the beat:
+- A kick counts from the moment it hit, not from when the show accepted it (up to three frames later), and the tempo
+  the kicks keep comes from a line through their times instead of one gap rounded to a frame, which at 128 BPM is a
+  step of 4 %. The beat grid that runs on through a break is laid on the same exact times.
+- A tempo the track has kept for twenty seconds holds through a stretch whose bass hits line up a few percent faster
+  or slower (a rolling bass line or a percussion loop, in the recordings 128 against 131 or 134), even when the show
+  takes those hits for kicks; only half a minute of the other tempo is believed. Over 40 recordings the tempo shown
+  is right 92 % of the time (was 91 %) and jumps 0.4 times a minute (was 0.5); in Adam Beyer's Love Within 73 % of
+  the time instead of 44 %.
+- Looks change on the first beat of a phrase. The director counts beats instead of kicks, from the drop or from where
+  the track came in, so a missed kick or a pause of up to four bars keeps the count; before, a scene changed on the
+  last beat of a phrase and the count slipped with every missed kick. A new part of the track or a layer coming in
+  changes the look on the first beat of the next pair of bars.
+- `tools/tempo.mjs` measures how well the show holds the tempo of recordings, against the tempo of each whole
+  recording.
+
+A smoother picture:
+- Everything a venue can show is compiled before it is shown, also what stays hidden until it is used (CO2, sparks,
+  flames, lasers). Measured, the picture stopped for a fifth of a second on the first drop and at the first break.
+- When frames take longer than the screen allows, the show draws fewer pixels, a step a second down to 70 %, and
+  sharpens again when there is room; a resolution that did not hold is not tried again for a minute. Automatic
+  quality only rebuilds the venue lighter when even that is not enough. It learns the screen's own pace (a 75 Hz
+  screen is kept at 75). Settings → Picture → Keep the picture smooth switches it off.
+- One show at a time: a newer tab or window with the show pauses the older ones until they are clicked, as two shows
+  drawing at once halve the pace of both.
+
 ## 0.27.2
 
 - Clearer headers: each part of the console has its own small icon and a fine line after its name; the settings

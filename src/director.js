@@ -277,38 +277,44 @@ export class Director {
     if (ev.kick) {
       if (ev.drop) {
         if (ev.breakLength >= mood.paletteBreak) { this.palette++; this.paletteAt = t; }   // a long break earns a new palette
-        this.beat = 0; this.next(t, section);
+        this.beat = 0; this.next(t, section); this.pendingChange = null;
         const fx = mood.fx; this.drops++;
         for (const kind of ['co2', 'flame', 'spark']) if (fx[kind]) this.fire(kind, t);
         for (const kind of ['firework', 'confetti']) if (fx[kind] && this.drops % fx[kind] === 0) this.fire(kind, t);
         this.smokeAt = t;
       }
-      this.beat++; this.kickAt = t; this.punch = ev.kick;
-      // hold a scene for a musical phrase; a calm part holds its look twice as long
+      // Beats, not kicks, counted from the drop or from where the track came in: a kick that was missed or held back for
+      // a bar or two moves the count on by the beats it was gone, so that the 1 of a phrase stays the 1.
+      const before = this.beat, gone = Math.round((ev.kickGap || 0) * (sig.stableBpm || m.bpm || 128) / 60);
+      this.beat += before > 0 && gone > 1 && gone <= 16 ? gone : 1;
+      this.kickAt = t; this.punch = ev.kick;
+      // the first beat of a group of n (beats 1, n + 1, 2n + 1...): where a phrase or a pair of bars starts
+      const first = n => this.beat > 1 && Math.floor((before - 1) / n) !== Math.floor((this.beat - 1) / n);
+      this.barStart = this.beat === 1 || first(8);
+      // hold a scene for a musical phrase, changing on its first beat; a calm part holds its look twice as long
       const hold = calm ? 2 : 1;
-      if (this.beat % (mood.sceneKicks * hold) === 0 && t - this.sceneAt >= mood.sceneMin * hold) this.next(t, section);
-      const bars = G.bars || [], pattern = Math.floor(this.beat / 32) % 4, mid = (bars.length - 1) / 2;
+      if (first(mood.sceneKicks * hold) && t - this.sceneAt >= mood.sceneMin * hold) this.next(t, section);
+      const bars = G.bars || [], pattern = Math.floor((this.beat - 1) / 32) % 4, mid = (bars.length - 1) / 2;
       for (let i = 0; i < bars.length; i++) {
         const on = pattern === 0 ? true : pattern === 1 ? i % 2 === this.beat % 2 : pattern === 2 ? Math.abs(i - mid) < (this.beat % 4 + 1) * bars.length / 8 : i % 4 === this.beat % 4;
         if (on) this.barLevel[i] = ev.kick;
       }
-      if (this.beat % 8 === 1) for (const role of ['overhead', 'stage']) for (const f of G[role] || []) { f.rp = Math.random() * 2 - 1; f.rt = Math.random(); }
-    }
+      if (this.barStart) for (const role of ['overhead', 'stage']) for (const f of G[role] || []) { f.rp = Math.random() * 2 - 1; f.rt = Math.random(); }
+    } else this.barStart = false;
     if (ev.silent) { if (ev.trackEnded && t - this.paletteAt > 60) { this.palette++; this.paletteAt = t; } this.beat = 0; }
     if (ev.from) {
       // the track moved to another part while the kick kept going: a new look that fits it
-      if (ev.from !== 'break' && section !== 'break' && !ev.drop) {
-        if (this.hangarRig) this.pendingHangarSection = { section, at: t };
-        else { this.next(t, section); this.beat = 0; }
-      }
+      if (ev.from !== 'break' && section !== 'break' && !ev.drop) this.pendingChange = { section, at: t };
       else if (ev.from === 'break' && PROGRAMS[this.program].tier !== TIER[section]) { this.pick(section); this.sceneAt = t; }
     }
-    if (ev.lift && t - this.sceneAt >= mood.sceneMin - 4) { this.next(t, section); this.beat = 0; }
+    if (ev.lift && t - this.sceneAt >= mood.sceneMin - 4) this.pendingChange = { section, at: t - 3, lift: true };
     if (mood.flow && t - this.sceneAt >= mood.sceneMin) this.next(t, section);   // with no kicks to count, a scene lasts its time
-    if (this.pendingHangarSection) {
-      const pending = this.pendingHangarSection;
-      if (ev.drop || pending.section !== section || section === 'break') this.pendingHangarSection = null;
-      else if (t - pending.at >= 3 && t - this.sceneAt >= 12) { this.next(t, section); this.beat = 0; this.pendingHangarSection = null; }
+    // A new part of the track, or a layer coming in, changes the look on the first beat of the next pair of bars (a
+    // new part once it has lasted three seconds); the count of the phrase goes on.
+    if (this.pendingChange) {
+      const pending = this.pendingChange;
+      if (ev.drop || (!pending.lift && pending.section !== section) || section === 'break') this.pendingChange = null;
+      else if (this.barStart && t - pending.at >= 3 && t - this.sceneAt >= 12) { this.next(t, section); this.pendingChange = null; }
     }
 
     const composition = this.choreography.update(this.venue === 'hangar' ? controls?.lightChoreography : 'original', this.scene, sig.phase, section);
@@ -387,7 +393,7 @@ export class Director {
         const aim = f.hangarAim ||= [f.ch.pan, f.ch.tilt];
         const panGap = Math.atan2(Math.sin(pan - aim[0]), Math.cos(pan - aim[0]));
         const gap = Math.hypot(panGap, tilt - aim[1]);
-        const cue = `${this.scene}:${Math.floor(this.beat / 16)}`;
+        const cue = `${this.scene}:${Math.floor((this.beat - 1) / 16)}`;
         if (f.hangarCue !== cue) {
           if (f.hangarCue !== undefined && gap > 0.55) f.hangarMoveAt = t;
           f.hangarCue = cue;
@@ -545,7 +551,7 @@ export class Director {
     // another way: out from the lantern along all of them, along every other one, along every fourth (stepping
     // round with the beat), or in from the wall. Calm music breathes through the roof, a build-up races in to the
     // lantern, a program that spins turns blades of light round the hall, and the highs glitter at the peak.
-    const way = Math.floor(this.beat / 32) % 4;
+    const way = Math.floor((this.beat - 1) / 32) % 4;
     for (const f of G.roof || []) {
       Object.assign(f.ch, { color: col, color2: mix(col, col2, this.twoTone), kickAt: this.kickAt, punch: this.punch, beat: this.beat, pick: way === 1 ? 1 : way === 2 ? 2 : 0, inward: way === 3,
         span: Math.min(0.38, 51 / (m.bpm || 128)), kick: brk ? 0 : sig.kick, swell: brk ? 0.3 * (1 - m.build) : (calm ? 0.2 : 0) + mood.breathe * (0.3 + sig.mid),

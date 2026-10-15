@@ -80,6 +80,7 @@ export class MusicResponse {
 // Counting the time between kicks goes wrong as soon as a kick is missed or a tom is taken for one. This listens to
 // the rhythm as a whole instead: it keeps the last twelve seconds of bass hits on a fixed grid and looks for the beat
 // length at which that pattern lines up with itself over several beats in a row.
+const COMB = 4, HOME = 20, AWAY = 30;   // beats the pattern is compared over; seconds before a tempo is this track's, and before a stretch away from it is believed
 export class TempoTracker {
   constructor() {
     this.rate = 100;                       // grid points per second
@@ -118,17 +119,18 @@ export class TempoTracker {
     for (let i = 0; i < n; i++) { x[i] -= mean; energy += x[i] * x[i]; }
     if (energy < 1e-4) { this.confidence = 0; return; }
     // how well the pattern matches itself shifted by every lag up to four slow beats
-    const maxLag = Math.min(n - 100, Math.ceil(4 * 60 / 100 * this.rate) + 2), ac = new Float32Array(maxLag + 1);
+    const maxLag = Math.min(n - 100, Math.ceil(COMB * 60 / 100 * this.rate) + 2), ac = new Float32Array(maxLag + 1);
     for (let lag = 1; lag <= maxLag; lag++) {
       let sum = 0;
       for (let i = lag; i < n; i++) sum += x[i] * x[i - lag];
       ac[lag] = sum / energy * n / (n - lag);
     }
     const at = lag => { const i = Math.floor(lag), f = lag - i; return i + 1 <= maxLag ? ac[i] * (1 - f) + ac[i + 1] * f : 0; };
+    const fit = beat => { let sum = 0; for (let k = 1; k <= COMB; k++) sum += at(beat * k); return sum / COMB; };
     let best = 0, bestScore = -1, total = 0, count = 0;
     for (let bpm = 100; bpm <= 180; bpm += 0.25) {
       const beat = 60 / bpm * this.rate;
-      const score = (at(beat) + at(beat * 2) + at(beat * 3) + at(beat * 4)) / 4;
+      const score = fit(beat);
       total += Math.max(0, score); count++;
       if (score > bestScore) { bestScore = score; best = bpm; }
     }
@@ -144,14 +146,18 @@ export class TempoTracker {
     // ours as three to four or the like, shortest when we had only just settled, or when it is the tempo this
     // track has had most of the time.
     if (this.hold) return;
-    const beat = 60 / this.bpm * this.rate, current = (at(beat) + at(beat * 2) + at(beat * 3) + at(beat * 4)) / 4;
+    const current = fit(60 / this.bpm * this.rate);
     if (current > bestScore * 0.85) { keep(); return; }   // ours still fits: a new one has to be clearly better or it is only a wobble
     if (this.confidence <= 0.25) return;
     const near = (p, q) => Math.abs(p - q) / q < 0.04, ratio = best / this.bpm;
     if (this.kicks && near(this.kicks, this.bpm) && !near(this.kicks, best)) { this.rivalFor = 0; return; }
     this.rivalFor = Math.abs(best - this.rival) <= 1.5 ? this.rivalFor + 1 : 1; this.rival = best;
     const simple = [1 / 2, 2 / 3, 3 / 4, 4 / 5, 5 / 4, 4 / 3, 3 / 2, 2].some(q => Math.abs(ratio / q - 1) < 0.03);
-    const patience = this.heldFor < 15 || Math.abs(best - this.home) <= 2 ? 2 : simple ? 24 : this.kicks && near(this.kicks, best) ? 5 : 12;
+    // A tempo this track has kept for a while is its tempo. A stretch whose bass hits line up a few percent faster or
+    // slower (a rolling bass line, a percussion loop over the kick; in the recordings 128 against 131 or 134) is
+    // part of the track, and it may even take the kick along for a while: only a minute of it is believed.
+    const settled = this.homeFor >= HOME && Math.abs(best - this.home) > 2;
+    const patience = settled ? AWAY : this.heldFor < 15 || Math.abs(best - this.home) <= 2 ? 2 : simple ? 24 : this.kicks && near(this.kicks, best) ? 5 : 12;
     if (this.rivalFor >= patience) { this.bpm = best; this.heldFor = 0; this.rivalFor = 0; }
   }
 }
@@ -289,12 +295,24 @@ export class Listener {
     const b = (n * skt - sk * st) / (n * skk - sk * sk), a = (st - b * sk) / n;
     if (Math.abs(b / b0 - 1) < 0.03) this.grid = { a, b };
   }
+  // the beat length of a line through the last kicks (at least eight, each about `usual` after the one before, as
+  // far back as that holds), or 0 when there are too few
+  kickBeat(usual) {
+    const T = this.recent;
+    let first = T.length - 1;
+    while (first > 0 && Math.abs((T[first] - T[first - 1]) / usual - 1) < 0.12) first--;
+    const n = T.length - first;
+    if (n < 8) return 0;
+    let sk = 0, st = 0, skk = 0, skt = 0;
+    for (let i = first; i < T.length; i++) { const k = i - first; sk += k; st += T[i]; skk += k * k; skt += k * T[i]; }
+    return (n * skt - sk * st) / (n * skk - sk * sk);
+  }
   // how far a moment is from the nearest beat of that grid, in beats (0 on the beat, 0.5 right between two)
   offGrid(t) { if (!this.grid) return 0.5; const k = (t - this.grid.a) / this.grid.b; return Math.abs(k - Math.round(k)); }
 
   heardKick(a, t) {
     const s = this.s, rise = a.bassRise;
-    if (rise === undefined) return a.kick ? 'kick' : null;   // the demo brings its own kicks
+    if (rise === undefined) { this.hitAt = t; return a.kick ? 'kick' : null; }   // the demo brings its own kicks
     if (this.measuring) {   // the last kick is still showing how hard it hits
       this.lastPeak = Math.max(this.lastPeak, rise);
       if (t - this.kickAt > 0.05) {
@@ -324,6 +342,7 @@ export class Listener {
     }
     this.weakRun = 0;
     this.measuring = true; this.kickAt = hit.at; this.lastPeak = hit.peak;
+    this.hitAt = hit.at;   // when it hit: a kick that had to prove itself is accepted a few frames later
     return weak ? 'soft' : 'kick';
   }
   // a: what hear() returned (or the demo's stand-in); dt: the frame time, capped; gap: the real time since the last
@@ -335,7 +354,7 @@ export class Listener {
     if (gap > 0.5) { s.lastKick += gap; s.breakAt += gap; s.outAt += gap; }
     // The demo's track is a short one made to show every part: there the kick gone is a break at once, as it was.
     const beatNow = s.bpm ? 60 / s.bpm : 0.5, breakAfter = live ? beatNow * PAUSE_BEATS : Math.max(1.3, beatNow * 2.6), dropAfter = live ? beatNow * DROP_BEATS : 3;
-    const since = t - s.lastKick, heard = this.heardKick(a, t);
+    const heard = this.heardKick(a, t), at = heard ? this.hitAt : t, since = at - s.lastKick;
     if (heard) {
       if (since > 0.26 && since < 1.1) {
         s.gaps.push(since);
@@ -356,13 +375,14 @@ export class Listener {
       s.out = false;
       ev.kick = a.kickStrength ?? 1; ev.kickGap = since;
       if (++this.kicks >= 4) s.hasGrooved = true;
-      s.lastKick = t;
-      this.recent.push(t); if (this.recent.length > 24) this.recent.shift();
-      if (since > 1.1) this.recent = [t];   // after a gap the count starts again
+      s.lastKick = at;
+      this.recent.push(at); if (this.recent.length > 24) this.recent.shift();
+      if (since > 1.1) this.recent = [at];   // after a gap the count starts again
     }
-    // the tempo the kicks themselves keep: the usual time between the last eight, when most of them agree on it
+    // the tempo the kicks themselves keep, when most of the last eight gaps agree on it: from a line through the
+    // times of the last kicks, as one gap is only known to a frame (at 128 BPM a step of 4 % in tempo)
     const usual = s.gaps.length >= 6 ? [...s.gaps].sort((x, y) => x - y)[s.gaps.length >> 1] : 0;
-    const steady = usual && s.gaps.filter(g => Math.abs(g / usual - 1) < 0.06).length >= s.gaps.length - 2 ? 60 / usual : 0;
+    const steady = usual && s.gaps.filter(g => Math.abs(g / usual - 1) < 0.06).length >= s.gaps.length - 2 ? 60 / (this.kickBeat(usual) || usual) : 0;
     this.tempo.update(dt, live ? a.bassOnset : a.kick ? 1 : 0, live ? steady : 0, live && (s.out || s.phase === 'break'));
     s.bpm = Math.round(this.tempo.bpm) || s.kickBpm;
     const beatLength = s.bpm ? 60 / s.bpm : 0.5;

@@ -5,7 +5,7 @@ import { layout, byRole } from '../src/layout.js';
 import { shots, CameraDirector } from '../src/cameras.js';
 import { Signals, demo } from '../src/signals.js';
 import { Director, MOODS } from '../src/director.js';
-import { HEAD_LOOKS, TRUSS_LOOKS, GATES, GATE_GAIN } from '../src/hangar-looks.js';
+import { HEAD_LOOKS, TRUSS_LOOKS, DEEPEST, GATES, GATE_GAIN } from '../src/hangar-looks.js';
 import { normalizeControls, normalizePresets } from '../src/show-controls.js';
 
 test('Hangar has a complete rig inside its hall, a stage and crowd space', () => {
@@ -104,7 +104,7 @@ test('Hangar trusses hold a formation for minutes and reach a new one for a new 
   for (const [i, f] of frames.entries()) if (!i || f.truss !== frames[i - 1].truss) changes.push(f);
   assert.ok(new Set(changes.map(f => f.truss)).size >= 3, `several formations over three tracks: ${changes.map(f => f.truss)}`);
   for (let i = 1; i < changes.length; i++) assert.ok(changes[i].t - changes[i - 1].t >= 30 - 1e-9, `a formation holds at least half a minute (${changes[i - 1].truss})`);
-  for (const f of frames) assert.ok(f.drops.every(d => d >= 0 && d <= 4.5) && f.rolls.every(r => Math.abs(r) <= 0.07));
+  for (const f of frames) assert.ok(f.drops.every(d => d >= 0 && d <= DEEPEST) && f.rolls.every(r => Math.abs(r) <= 0.07));
   // outside a break the formation stands still: the same heights from one moment to the next
   const steady = frames.filter((f, i) => i && !f.brk && !frames[i - 1].brk && f.truss === frames[i - 1].truss);
   assert.ok(steady.every((f, i) => f.drops.join() === frames[frames.indexOf(f) - 1].drops.join()), 'a held formation does not drift');
@@ -155,10 +155,13 @@ test('the viewer can pin a look or a formation and set the pace, and presets kee
 
 test('truss formations suit the part of the track and stay within the hoists', () => {
   for (const formation of TRUSS_LOOKS) for (let row = 0; row < 5; row++) {
-    assert.ok(formation.drop(row / 4, row) >= 0 && formation.drop(row / 4, row) <= 3.5, `${formation.name}: a reachable height`);
+    assert.ok(formation.drop(row / 4, row) >= 0 && formation.drop(row / 4, row) <= DEEPEST, `${formation.name}: a reachable height`);
     assert.ok(Math.abs(formation.roll?.(row) ?? 0) <= 0.07, `${formation.name}: a tilt two hoists can make`);
   }
   assert.ok(TRUSS_LOOKS.length >= 15 && new Set(TRUSS_LOOKS.map(f => f.name)).size === TRUSS_LOOKS.length);
+  // the hall trusses hang at 11.5 m and their hoists stop 5.5 m above the floor (world.js): the deepest drop fits, and
+  // brings them a little more than half way down
+  assert.ok(DEEPEST <= 11.5 - 5.5 && DEEPEST > 11.5 / 2, `deepest drop ${DEEPEST}`);
 });
 
 test('a scene changes on the first beat of a phrase, counted from the drop, also when a kick is missed or a layer comes in', () => {

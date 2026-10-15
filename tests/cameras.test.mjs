@@ -66,10 +66,10 @@ test('every venue keeps all camera moves and their targets within its walls, flo
   }
 });
 
-test('Hangar dance floor and pit cameras move smoothly across the entire shot', () => {
+test('Hangar pit camera moves smoothly across the entire shot', () => {
   for (const key of ['hangar']) {
     const L = layout(VENUES[key]);
-    for (const name of ['Dance floor', 'Pit']) {
+    for (const name of ['Pit']) {
       const shot = shots(L).find(s => s.name === name), dt = 1 / 60;
       let previous = shot.pos(150, 0);
       for (let k = dt; k <= 40; k += dt) {
@@ -94,3 +94,31 @@ test('extra facility views receive the same bounds without changing their source
   assert.deepEqual(extra.look, [40, -5, 40]);
   assert.deepEqual(extra.pos(), [50, 10, -50]);
 });
+
+test('the DJ view is the second camera: just in front of the eyes of the DJ, looking out over the gear at the crowd, and it follows the DJ', async () => {
+  const { djEye } = await import('../src/dj-eye.js');
+  const L = layout(VENUES.hangar), list = shots(L), view = list[1];
+  assert.equal(view.name, 'DJ view');
+  assert.ok(!list.some(s => s.name === 'Dance floor'));
+  djEye.seen = false;
+  const p = view.pos(0, 0);
+  assert.ok(Math.abs(p[2] - (L.focus[2] - 0.62)) < 0.05 && p[1] > L.stage.height + 1.5, `before the DJ is drawn: at ${p}`);
+  assert.ok(view.look[2] > p[2] + 8 && view.look[1] < p[1], 'looking forward and down, over the decks into the crowd');
+  Object.assign(djEye, { x: 0.3, y: p[1], z: L.focus[2] - 0.62, seen: true });
+  assert.ok(Math.abs(view.pos(1, 1)[0] - 0.3) < 1e-9, 'the camera moves when the DJ steps aside');
+  djEye.seen = false;
+});
+
+test('no Hangar camera comes near the hall trusses or their lamps, also at their lowest', async () => {
+  const { DEEPEST } = await import('../src/hangar-looks.js');
+  const L = layout(VENUES.hangar);
+  for (const shot of shots(L)) for (let t = 0; t <= 600; t += 3) for (const k of [0, 5, 15, 30, 45]) {
+    const p = shot.pos(t, k);
+    for (const [[x0, y, z], [x1]] of L.movers) {   // a truss at its lowest, from 0.4 m over it to 1 m under it where its lamps hang
+      const low = y - DEEPEST, dx = Math.max(0, Math.min(x0, x1) - p[0], p[0] - Math.max(x0, x1)), dz = Math.max(0, Math.abs(p[2] - z) - 0.8);
+      const dy = p[1] > low + 0.4 ? p[1] - low - 0.4 : p[1] < low - 1 ? low - 1 - p[1] : 0;
+      assert.ok(Math.hypot(dx, dz, dy) >= 1, `${shot.name} at ${p.map(v => v.toFixed(1))} is in the truss at z ${z}`);
+    }
+  }
+});
+

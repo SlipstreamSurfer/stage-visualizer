@@ -203,6 +203,8 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   const o = new THREE.Object3D(), c = new THREE.Color();
   const crowd = people(peopleMaterial({ light: lights.light, U }), n); add(crowd.mesh);
   const phones = add(new THREE.InstancedMesh(new THREE.PlaneGeometry(0.08, 0.15), new THREE.MeshBasicMaterial({ color: 0, fog: false, side: THREE.DoubleSide }), Math.max(1, PHONES))); phones.frustumCulled = false; phones.count = PHONES;
+  // the torch of every other phone: in a breakdown, seen from the stage, a field of small lights over the crowd
+  const TORCHES = Math.ceil(PHONES / 2), torches = add(new THREE.InstancedMesh(new THREE.SphereGeometry(0.025, 6, 4), new THREE.MeshBasicMaterial({ color: 0, fog: false }), Math.max(1, TORCHES))); torches.frustumCulled = false; torches.count = TORCHES;
   const blobs = add(new THREE.InstancedMesh(new THREE.PlaneGeometry(1.1, 0.8).rotateX(-Math.PI / 2), shadowMaterial(), Math.max(1, n))); blobs.renderOrder = -1; blobs.frustumCulled = false; blobs.count = n;
   const guards = spots.filter(q => q[4] === 'security');
   const vests = add(new THREE.InstancedMesh(new THREE.LatheGeometry([[0.165, 1.02], [0.182, 1.27], [0.214, 1.37], [0.184, 1.44], [0.085, 1.475]].map(q => new THREE.Vector2(q[0], q[1])), 10).scale(1, 1, 0.66), plain(0xc8b400, { roughness: 0.8, gain: 1.6 }), Math.max(1, guards.length)));
@@ -219,6 +221,11 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
     if (i < PHONES) {   // in the raised right hand, screen towards the back of the hall
       o.position.set(0.47 * s * build, 1.99 * s, -0.15 * s * build).applyAxisAngle(o.up, yaw); o.position.x += x; o.position.z += z;
       o.scale.set(1, 1, 1); o.updateMatrix(); phones.setMatrixAt(i, o.matrix);
+      if (i % 2 === 0) {   // on the back of the phone, towards the stage, near its top
+        const toward = Math.atan2(L.focus[0] - x, L.focus[2] - z);
+        o.position.x += Math.sin(toward) * 0.012; o.position.z += Math.cos(toward) * 0.012; o.position.y += 0.055;
+        o.updateMatrix(); torches.setMatrixAt(i / 2, o.matrix);
+      }
     }
     o.position.set(x, y + 0.015, z); o.rotation.set(0, 0, 0); o.scale.set(s, 1, s); o.updateMatrix(); blobs.setMatrixAt(i, o.matrix);
     crowd.seed(i, Math.random(), still ? 0.99 : Math.random(), i < PHONES ? 0.15 : still ? 0.3 : 0.4 + Math.random() * 0.6, i < PHONES ? 0 : 1);   // filming, talking or sitting keeps you still
@@ -393,7 +400,8 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       U.time.value = t; U.dance.value = signals.phase; U.hands.value = hands; U.film.value = filming; U.hype.value = signals.hype * (brk ? 0 : 1);
       U.front.value.copy(env.wallColor).multiplyScalar(2.2).add(tone.setRGB(...director.room.color).multiplyScalar(director.room.level * (hangarRig ? 0.007 : 0.012))).multiplyScalar(look.light * (director.manual.blackout ? 0 : 1));
       U.rim.value.copy(stageLight.color).lerp(WHITE, 0.5).multiplyScalar((0.1 + signals.kick * 0.35 + signals.drop + director.blind) * look.light * (director.manual.blackout ? 0 : 1));
-      phones.visible = filming > 0.05; phones.material.color.setRGB(0.6, 0.75, 1).multiplyScalar(filming * 1.5);
+      phones.visible = torches.visible = filming > 0.05; phones.material.color.setRGB(0.6, 0.75, 1).multiplyScalar(filming * 1.5);
+      torches.material.color.setRGB(3.2, 3.1, 2.9).multiplyScalar(filming * (brk ? 1 : 0.35));   // the torches mostly in the quiet
       const room = director.room, spill = look.hall < 1 ? look.hall : 1 + (look.hall - 1) * 1.5;
       hall.color.setRGB(...room.color); hall.intensity = (spill * room.level * (hangarRig ? 0.26 : 0.42) + 0.4 * Math.pow(look.hall, 3)) * size;
       stageLight.color.copy(env.wallColor).lerp(hall.color, 0.3); stageLight.intensity = (1.5 + env.wallColor.r + env.wallColor.g + env.wallColor.b) * 4 * spill * size * (director.manual.blackout ? 0 : 1);

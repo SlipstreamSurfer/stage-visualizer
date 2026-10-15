@@ -17,6 +17,7 @@ import { Audio } from './audio.js';
 import { mountPlayback } from './playback.js';
 import { QUALITY, AutoQuality } from './quality.js';
 import { SteadyResolution } from './steady.js';
+import { djEye } from './dj-eye.js';
 import { disposeScene, warmScene } from './resources.js';
 import { DEFAULT_OFF, LIGHT_ROLES, PALETTES, RING_NAMES, COIL_MODES, parseStored, normalizeControls, normalizeLook, normalizePresets } from './show-controls.js';
 import { $, keep, kept, started, fill, groups, sliderValue, segmented, syncSegments, mountControls, mountStart } from './ui.js';
@@ -134,6 +135,7 @@ function frame() {
     camera.rotateX(Math.sin(cameraTime * 1.7) * 0.002); camera.rotateZ(Math.sin(cameraTime * 0.5) * 0.004);
     camera.fov = shot.fov - signals.drop * 3 - signals.m.build * 4; camera.updateProjectionMatrix();
   }
+  djEye.inside = cams.list[cams.index]?.name === 'DJ view';
   $('fade').style.opacity = cameraFrozen ? 0 : 1 - Math.max(0, Math.min(1, cams.fade));
   if (glow) glow.strength.value = (0.7 + signals.kick * 0.35 + signals.accent * 0.08) * look.bloom;
   // the camera's exposure follows the light as an eye or a camera does: it closes fast when a strobe hits and opens

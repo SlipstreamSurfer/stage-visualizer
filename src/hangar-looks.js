@@ -129,29 +129,31 @@ export const HEAD_TIERS = Object.fromEntries(['calm', 'mid', 'big'].map(tier => 
 
 // Formations of the five hall trusses: drop in metres below their top (v: 0 the front truss, 1 the back one) and
 // roll for a truss whose two hoists stop at different heights. A formation holds for minutes; the low ones suit
-// calm parts of a track, the high ones peaks.
+// calm parts of a track, the high ones peaks. The trusses hang at 11.5 m and come down to 5.5 m, a little more than
+// half way (DEEPEST): low enough to fill the room over the crowd, with the lamps still well above raised hands.
+export const DEEPEST = 6;
 const byRow = list => (v, row) => list[row] ?? list.at(-1);
 export const TRUSS_LOOKS = [
   { name: 'High', drop: () => 0 },
-  { name: 'Rising to the back', drop: v => (1 - v) * 3 },
-  { name: 'Valley', drop: v => 3 * (1 - Math.abs(v * 2 - 1)) },
-  { name: 'Low', drop: () => 2.4 },
-  { name: 'Tilted', drop: () => 1.4, roll: row => (row % 2 ? 1 : -1) * 0.07 },
-  { name: 'Arch', drop: v => 0.4 + 2.6 * Math.abs(v * 2 - 1) },
-  { name: 'Zigzag', drop: (v, row) => row % 2 ? 2.4 : 0.6 },
-  { name: 'Falling to the back', drop: v => v * 3 },
-  { name: 'Front low', drop: byRow([3, 0.6, 0.3, 0.3, 0.3]) },
-  { name: 'Twin valleys', drop: byRow([0.2, 2.6, 0.6, 2.6, 0.2]) },
-  { name: 'Ramp, tilted', drop: v => (1 - v) * 2.4, roll: () => 0.06 },
-  { name: 'Canopy', drop: () => 3.4 },
-  { name: 'Middle low', drop: byRow([0.6, 0.6, 3, 0.6, 0.6]) },
-  { name: 'Twisted', drop: () => 1, roll: row => (row / 2 - 1) * 0.07 },
-  { name: 'Back low', drop: byRow([0.3, 0.3, 0.3, 0.6, 3]) },
+  { name: 'Rising to the back', drop: v => (1 - v) * 5.5 },
+  { name: 'Valley', drop: v => 5.5 * (1 - Math.abs(v * 2 - 1)) },
+  { name: 'Low', drop: () => 4.5 },
+  { name: 'Tilted', drop: () => 2.4, roll: row => (row % 2 ? 1 : -1) * 0.07 },
+  { name: 'Arch', drop: v => 0.5 + 5 * Math.abs(v * 2 - 1) },
+  { name: 'Zigzag', drop: (v, row) => row % 2 ? 4.8 : 1 },
+  { name: 'Falling to the back', drop: v => v * 5.5 },
+  { name: 'Front low', drop: byRow([5.5, 1.6, 0.6, 0.4, 0.4]) },
+  { name: 'Twin valleys', drop: byRow([0.4, 5, 1.2, 5, 0.4]) },
+  { name: 'Ramp, tilted', drop: v => (1 - v) * 4.5, roll: () => 0.06 },
+  { name: 'Canopy', drop: () => DEEPEST },
+  { name: 'Middle low', drop: byRow([1, 1.4, 5.5, 1.4, 1]) },
+  { name: 'Twisted', drop: () => 1.8, roll: row => (row / 2 - 1) * 0.07 },
+  { name: 'Back low', drop: byRow([0.4, 0.4, 0.6, 1.6, 5.5]) },
 ];
 // which parts of a track a formation suits, from how low it hangs on average
 for (const formation of TRUSS_LOOKS) {
   const mean = [0, 1, 2, 3, 4].reduce((a, row) => a + formation.drop(row / 4, row), 0) / 5;
-  formation.tiers = mean >= 1.8 ? ['calm', 'mid'] : mean <= 0.9 ? ['mid', 'big'] : ['calm', 'mid', 'big'];
+  formation.tiers = mean >= 3.2 ? ['calm', 'mid'] : mean <= 1.6 ? ['mid', 'big'] : ['calm', 'mid', 'big'];
 }
 // How often the show changes look and formation (seconds): looks at a scene cue once held, formations likewise,
 // or sooner for a new track.

@@ -2,6 +2,7 @@
 // jog wheels and the headphones, and the arms follow them (shoulder, elbow, hand). Built facing +z, the crowd.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { djEye } from './dj-eye.js';
 
 const UPPER = 0.3, FORE = 0.33, TAU = Math.PI * 2, UP = new THREE.Vector3(0, 1, 0);
 const target = new THREE.Vector3(), pole = new THREE.Vector3(), dir = new THREE.Vector3(), elbow = new THREE.Vector3(), tmp = new THREE.Vector3();
@@ -82,8 +83,10 @@ export function buildDJ({ add, lit, black, at, top, gearZ }) {
     now.tilt += ((plan.tilt || 0) - now.tilt) * ease(3);
     now.turn += ((plan.turn || 0) - now.turn) * ease(2.5);
     dj.position.set(at[0] + now.step, at[1], at[2]);
+    Object.assign(djEye, { x: at[0] + now.step, y: at[1] + 1.64, z: at[2] + 0.1, seen: true });   // for the DJ view (dj-eye.js)
     dj.rotation.set(0.07 + now.down * 0.1, now.turn * 0.4, 0);   // leaning over the table, more so when looking down
-    head.rotation.set(now.down + Math.sin(signals.phase * TAU) * 0.035, now.turn * 0.6, now.tilt);   // the small nod of someone counting along
+    head.rotation.set(now.down + Math.sin(signals.phase * TAU) * 0.035, now.turn * 0.6, now.tilt);
+    head.visible = !djEye.inside;   // seen from the DJ's own eyes (the DJ view), the head is not in the picture   // the small nod of someone counting along
     dj.updateMatrixWorld();
     for (let i = 0; i < 2; i++) {
       const arm = arms[i], [where, move] = plan.hands[arm.side > 0 ? 1 : 0];

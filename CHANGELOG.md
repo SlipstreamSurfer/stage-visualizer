@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.29.0
+
+- DJ view, the second camera (key 2), in place of Dance floor: through the eyes of whoever plays, with the hands on
+  the gear at the bottom of the picture and the crowd beyond. It moves when the DJ steps aside, and the DJ's own head
+  is not in the picture. The automatic camera uses it in peaks and in a few light choreographies.
+- The DJ booth: the work lamp over the gear is a soft glow instead of a spotlight. The DJ's monitors stand beside the
+  booth instead of on it, a bass cabinet on the floor with the mid/high box on a pole at ear height, turned to the
+  DJ. Two bottles of water, a towel and a phone lie on the table.
+- Front of house is set up like at a real show: a sound desk with two rows of faders, knobs, meters and three
+  screens; a lighting desk with its screens, two monitors on a bar and a wing; a video desk with a laptop; two racks
+  full of status lights; a measurement microphone towards the stage; small lamps on goosenecks; four crew.
+- The skylights show the night: small stars and a thin veil of cloud, seen from wherever the camera is.
+- The hall trusses come down to 5.5 m, a little more than half way, in the low formations (Canopy, Valley, Low,
+  Front low, Back low, Twin valleys and more) and as a break builds. The Front of house camera flies lower, under
+  them, and a test keeps every camera clear of the trusses and their lamps at their lowest.
+- In a breakdown the phones in the air have their torches on: from the stage a field of small lights.
+
 ## 0.28.0
 
 Tighter on the beat:

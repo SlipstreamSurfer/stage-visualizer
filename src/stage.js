@@ -86,7 +86,7 @@ const PERFORMERS = {
     // The work light: a spot straight down on the decks and whoever plays, from as high as an arm's length above a raised
     // hand (or as high as the room allows). A lamp right over the head lit a raised hand twelve times as brightly as
     // the hands on the decks; this one falls off slowly and leaves the rest of the stage dark.
-    const lampY = Math.min(base + 2.9, H - 0.2), lampPower = 7;
+    const lampY = Math.min(base + 2.9, H - 0.2), lampPower = 1.8;   // a glow on the gear, not a spotlight on the DJ
     const boothLight = own(new THREE.SpotLight(0xffe2c0, lampPower, 7, Math.atan(1.5 / (lampY - table)), 0.5, 1)); boothLight.position.set(0, lampY, boothZ - 0.5);
     boothLight.target.position.set(0, table, boothZ - 0.5); own(boothLight.target);
     // And a spot from the front, from over the first rows, on the face and chest of whoever plays, so that from the
@@ -102,19 +102,28 @@ const PERFORMERS = {
     const strip = mesh(box(width - 0.1, 0.03, 0.03, 0, table - 0.07, boothZ + 0.615), new THREE.MeshBasicMaterial({ color: 0, fog: false }));
     mesh(mergeGeometries([-1, 1].flatMap(s => [box(0.012, 0.3, 0.012, s * 0.235, table + 0.15, boothZ + 0.02), box(0.012, 0.012, 0.16, s * 0.235, table + 0.3, boothZ - 0.055)])), black);
     mesh(mergeGeometries([-1, 1].map(s => box(0.05, 0.012, 0.022, s * 0.235, table + 0.292, boothZ - 0.125))), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.42, 0.33), fog: false }));
+    // what lies on a DJ's table besides the gear: two bottles of water on the corners, a towel over the front edge and
+    // a phone face down
+    const edge = width / 2 - 0.22, front = boothZ + 0.6;
+    mesh(mergeGeometries([-1, 1].flatMap(s => [post(0.033, 0.2, s * edge, boothZ + 0.28 - (s > 0 ? 0.12 : 0), table, 12), post(0.018, 0.035, s * edge, boothZ + 0.28 - (s > 0 ? 0.12 : 0), table + 0.2, 8)])), plain(0x7aa0c8, { roughness: 0.15, metalness: 0.1, gain: 1.6 }));
+    mesh(mergeGeometries([box(0.34, 0.012, 0.26, edge - 0.32, table + 0.006, front - 0.13), box(0.34, 0.24, 0.012, edge - 0.32, table - 0.12, front + 0.006)]), plain(0xd9d6cf, { roughness: 0.95, gain: 1.3 }));
+    mesh(box(0.075, 0.009, 0.155, -edge + 0.25, table + 0.005, boothZ + 0.32, 0.4), black);
     const updateDJ = buildDJ({ add: own, lit, black, at: [0, base, boothZ - 0.72], top: table + 0.1, gearZ: boothZ - 0.2 });
     const monitorFaces = [], monitorDrivers = [], monitorRings = [];
     const monitorFace = plain(0x292c31, { roughness: 0.82, metalness: 0.15, gain: 0.85 });
     const monitorCone = plain(0x101216, { roughness: 0.75, metalness: 0.12, gain: 0.75 });
-    for (const s of [-1, 1]) {   // the DJ's own monitors: a bass cabinet with a mid/high cabinet on top at ear height, turned to the DJ
-      const mx = s * 1.9, mz = boothZ - 1.0, turn = Math.atan2(-mx, 0.3), sn = Math.sin(turn), cs = Math.cos(turn);
+    for (const s of [-1, 1]) {
+      // The DJ's own monitors stand beside the booth, not on it: a bass cabinet on the floor and, on a pole, the
+      // mid/high box at ear height, both turned to the DJ's head (as on a festival or club stage).
+      const mx = s * (width / 2 + 0.6), mz = boothZ - 0.45, dz = boothZ - 0.72 - mz, turn = Math.atan2(-mx, dz), sn = Math.sin(turn), cs = Math.cos(turn), ear = base + 1.62;
       const panel = (w, h, d, y) => new THREE.PlaneGeometry(w, h).rotateY(turn).translate(mx + sn * (d / 2 + 0.006), y, mz + cs * (d / 2 + 0.006));
       const driver = (r, d, y) => new THREE.CircleGeometry(r, 16).rotateY(turn).translate(mx + sn * (d / 2 + 0.012), y, mz + cs * (d / 2 + 0.012));
-      mesh(box(0.62, 0.74, 0.7, 0, 0, 0, turn).translate(mx, base + 0.37, mz), black);
-      mesh(box(0.5, 0.8, 0.5, 0, 0, 0, turn).translate(mx, base + 1.16, mz), black);
-      monitorFaces.push(panel(0.5, 0.62, 0.7, base + 0.37), panel(0.4, 0.66, 0.5, base + 1.16));
-      monitorRings.push(driver(0.19, 0.7, base + 0.37), driver(0.14, 0.5, base + 1.16));
-      monitorDrivers.push(driver(0.145, 0.7, base + 0.37), driver(0.1, 0.5, base + 1.16));
+      mesh(box(0.62, 0.72, 0.72, 0, 0, 0, turn).translate(mx, base + 0.36, mz), black);                 // the bass cabinet
+      mesh(post(0.022, ear - 0.33 - (base + 0.72), mx, mz, base + 0.72, 8), black);                       // the pole
+      mesh(box(0.42, 0.66, 0.42, 0, 0, 0, turn).translate(mx, ear, mz), black);                            // the mid/high box
+      monitorFaces.push(panel(0.52, 0.6, 0.72, base + 0.36), panel(0.36, 0.6, 0.42, ear));
+      monitorRings.push(driver(0.2, 0.72, base + 0.36), driver(0.13, 0.42, ear - 0.12));
+      monitorDrivers.push(driver(0.155, 0.72, base + 0.36), driver(0.095, 0.42, ear - 0.12), new THREE.PlaneGeometry(0.22, 0.09).rotateY(turn).translate(mx + sn * 0.225, ear + 0.17, mz + cs * 0.225));   // woofer and horn
     }
     mesh(mergeGeometries(monitorFaces), monitorFace); mesh(mergeGeometries(monitorRings), monitorFace); mesh(mergeGeometries(monitorDrivers), monitorCone);
     return { update(t, dt, signals, director, look) {

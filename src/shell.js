@@ -17,6 +17,23 @@ import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { box, post, strut, patch, sweep, inMetres } from './shapes.js';
 import { buildOutdoors, palm } from './outdoors.js';
+import { positionWorld, cameraPosition, vec2, vec3, normalize, floor, fract, length, smoothstep, mix, max, mx_noise_float } from 'three/tsl';
+
+// The night outside a skylight: seen through the glass, so where you look from decides which part of the sky you see.
+// Small stars, a few brighter, and a thin veil of cloud lit faintly by the town, which dims the stars behind it.
+// Still, as a sky is to the eye in a few minutes.
+function nightThroughGlass() {
+  const mat = new THREE.MeshBasicNodeMaterial({ fog: false });
+  const d = normalize(positionWorld.sub(cameraPosition)), up = max(d.y, 0.05);
+  const rnd = v => { const q = fract(v.mul(0.3183099).add(0.1)).mul(17); return fract(q.x.mul(q.y).mul(q.z).mul(q.x.add(q.y).add(q.z))); };
+  const star = scale => { const c = d.mul(scale), cell = floor(c), r = rnd(cell); return smoothstep(0.32, 0.02, length(fract(c).sub(0.5))).mul(smoothstep(0.985, 0.998, r)).mul(rnd(cell.add(5)).mul(0.8).add(0.2)); };
+  const stars = star(420).mul(0.9).add(star(170).mul(1.6));
+  const sheet = vec2(d.x, d.z).div(up).mul(0.6);   // the cloud as a layer high above, seen at a slant
+  const veil = smoothstep(0.05, 0.75, mx_noise_float(vec3(sheet.x, sheet.y, 1.7)).mul(0.65).add(mx_noise_float(vec3(sheet.x.mul(3.1), sheet.y.mul(3.1), 4.2)).mul(0.35)).add(0.2)).mul(0.85);
+  const sky = vec3(0.004, 0.007, 0.018), cloud = vec3(0.016, 0.014, 0.018);
+  mat.colorNode = mix(sky.add(vec3(0.75, 0.8, 1.0).mul(stars)), cloud, veil);
+  return mat;
+}
 
 const TAU = Math.PI * 2;
 const range = (from, to, step) => { const list = []; for (let v = from; v < to - 1e-6; v += step) list.push(v); return list; };
@@ -209,7 +226,7 @@ function structure(c) {
     put(plain(0x6a6d72, { roughness: 0.45, metalness: 0.8, gain: 1.4 }), ducts); put(plain(0x6a1010, { roughness: 0.6, metalness: 0.3, gain: 1.4 }), pipes);
     const lights = [];
     if (sh.frames) for (let n = Math.round(D / sh.frames), i = 0; i < n; i++) for (const k of [-0.25, 0.25]) lights.push(new THREE.PlaneGeometry(W * 0.12, sh.frames - 2.2).rotateX(Math.PI / 2).translate(W * k, H - 0.02, -D / 2 + (i + 0.5) * D / n));
-    if (lights.length) add(new THREE.Mesh(mergeGeometries(lights), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.006, 0.009, 0.02), fog: false })));
+    if (lights.length) add(new THREE.Mesh(mergeGeometries(lights), nightThroughGlass()));
   }
   if (sh.frames) {
     const frame = [], n = Math.round(D / sh.frames);

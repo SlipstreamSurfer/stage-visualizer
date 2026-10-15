@@ -52,6 +52,8 @@ export function buildFacilities(L, ctx) {
       free(x0, x1, z0, z1) { const c = [toWorld(x0, z0), toWorld(x1, z0), toWorld(x0, z1), toWorld(x1, z1)]; keepOut.push({ x0: Math.min(...c.map(p => p[0])), x1: Math.max(...c.map(p => p[0])), z0: Math.min(...c.map(p => p[1])), z1: Math.max(...c.map(p => p[1])) }); },
       // somewhere people walk to, and stand facing the wall
       poi(x, z) { const [wx, wz] = toWorld(x, z); pois.push({ x: wx, z: wz, ry: f.ry + Math.PI }); },
+      // many small parts of one material as one mesh: a desk full of faders is one draw, not hundreds
+      parts(mat) { const list = []; return { box: (w, h, d, x, y, z, rx = 0) => list.push(new THREE.BoxGeometry(w, h, d).rotateX(rx).translate(x, y, z)), cyl: (r, h, x, y, z, rx = 0) => list.push(new THREE.CylinderGeometry(r, r, h, 8).rotateX(rx).translate(x, y, z)), done() { if (list.length) g.add(new THREE.Mesh(mergeGeometries(list.map(q => q.toNonIndexed())), mat)); } }; },
       toWorld,
     };
   }
@@ -224,20 +226,48 @@ export function buildFacilities(L, ctx) {
     // front of house: where sound, light and video are run from. A riser in the crowd on the centre line, desks and
     // screens, operators looking at the stage, a barrier round it, and the cable run to the stage along the floor.
     foh(f) {
-      const p = place([0, f.z, 0]), w = 6.5, d = 4;
-      p.box(w, 0.45, d, 0, 0.225, 0);
-      for (const [x, wide] of [[-2, 2], [0.2, 1.8], [2.2, 1.6]]) {
-        p.box(wide, 0.06, 0.9, x, 1.35, -1.2, grey); for (const s of [-1, 1]) p.box(0.05, 0.9, 0.8, x + s * (wide / 2 - 0.05), 0.9, -1.2, steel);
-        p.box(wide * 0.85, 0.12, 0.6, x, 1.45, -1.15, black);
-        for (let k = 0; k < 2; k++) {
-          const sx = x - 0.32 + k * 0.64;
-          p.plate(0.55, 0.34, sx, 1.82, -1.52, glow(0.035 + k * 0.012, 0.06, 0.11)).rotation.x = -0.2;   // quiet blue screens, turned to the operator
-          p.plate(0.34, 0.018, sx - 0.04, 1.78, -1.505, glow(0.1, 0.19, 0.36)).rotation.x = -0.2;   // a dim level trace
-          p.plate(0.13, 0.014, sx + 0.16, 1.735, -1.49, glow(0.18, 0.12, 0.035)).rotation.x = -0.2;   // status indicator
-        }
-        p.box(wide * 0.8, 0.012, 0.02, x, 1.52, -0.86, glow(0.5, 0.2, 0.9));   // the desk's own little lights
-        p.person(x, -0.25, Math.PI, 'crew');
+      const p = place([0, f.z, 0]), w = 7, d = 4.6, top = 0.45, desk = top + 0.9;   // the riser; desks at a standing height
+      p.box(w, top, d, 0, top / 2, 0);
+      const metal = p.parts(grey), dark = p.parts(black), caps = p.parts(glow(0.16, 0.16, 0.18)), leds = p.parts(glow(0.06, 0.45, 0.15)), amber = p.parts(glow(0.5, 0.27, 0.06)), blue = p.parts(glow(0.08, 0.2, 0.5));
+      const screen = (w2, h2, x, y, z, tilt, r = 0.012, g2 = 0.026, b = 0.05) => { p.plate(w2, h2, x, y, z, glow(r, g2, b)).rotation.x = -tilt; dark.box(w2 + 0.04, h2 + 0.04, 0.03, x, y, z - 0.02, -tilt); };
+      // the long table the desks stand on, from one end of the riser to the other, on black legs
+      dark.box(6.6, 0.05, 1.05, 0, desk - 0.025, -1.3);
+      for (const x of [-3.2, -1.1, 1.1, 3.2]) for (const z of [-1.75, -0.85]) metal.box(0.05, desk - top, 0.05, x, (desk + top) / 2, z);
+      // sound: a wide digital desk, sloping towards the engineer, with two rows of faders, rows of knobs and three screens
+      const sx = -1.95, sw = 2.3;
+      dark.box(sw, 0.16, 0.85, sx, desk + 0.08, -1.3, 0.12);
+      for (let i = 0; i < 24; i++) for (const [z, y] of [[-0.98, desk + 0.17], [-1.2, desk + 0.19]]) { const x = sx - sw / 2 + 0.1 + i * (sw - 0.2) / 23; caps.box(0.022, 0.02, 0.035, x, y, z); dark.box(0.008, 0.002, 0.12, x, y - 0.012, z); }
+      for (let i = 0; i < 24; i++) for (let k = 0; k < 3; k++) caps.cyl(0.011, 0.025, sx - sw / 2 + 0.1 + i * (sw - 0.2) / 23, desk + 0.22 + k * 0.025, -1.38 - k * 0.07);
+      for (const k of [-1, 0, 1]) screen(0.56, 0.34, sx + k * 0.66, desk + 0.48, -1.68, 0.35, 0.015, 0.03, 0.06);
+      for (let i = 0; i < 24; i++) (i % 5 === 3 ? amber : leds).box(0.012, 0.03, 0.006, sx - sw / 2 + 0.1 + i * (sw - 0.2) / 23, desk + 0.26, -1.6);   // meters above every channel
+      // light: a lighting desk with two built-in screens, two more on a bar above it, and a wing beside it
+      const lx = 0.55;
+      dark.box(1.55, 0.13, 0.75, lx, desk + 0.065, -1.3, 0.1);
+      for (const k of [-1, 1]) screen(0.5, 0.3, lx + k * 0.38, desk + 0.36, -1.6, 0.55, 0.02, 0.02, 0.035);
+      metal.box(0.04, 0.42, 0.04, lx, desk + 0.21, -1.86); metal.box(1.3, 0.04, 0.04, lx, desk + 0.42, -1.86);
+      for (const k of [-1, 1]) screen(0.6, 0.36, lx + k * 0.33, desk + 0.62, -1.86, 0.12, 0.022, 0.016, 0.04);
+      for (let i = 0; i < 10; i++) caps.box(0.03, 0.02, 0.04, lx - 0.6 + i * 0.075, desk + 0.15, -1.0);   // the executor faders
+      for (let i = 0; i < 6; i++) for (let k = 0; k < 4; k++) (k === 0 && i % 2 ? blue : caps).box(0.04, 0.012, 0.04, lx + 0.15 + i * 0.07, desk + 0.16, -1.08 - k * 0.07);   // the keypad
+      dark.box(0.5, 0.1, 0.55, lx + 1.05, desk + 0.05, -1.25, 0.1); screen(0.42, 0.26, lx + 1.05, desk + 0.28, -1.48, 0.55, 0.02, 0.02, 0.035);
+      // video: a laptop, a monitor and a small controller
+      const vx = 2.75;
+      dark.box(0.36, 0.015, 0.25, vx - 0.25, desk + 0.008, -1.15); screen(0.34, 0.22, vx - 0.25, desk + 0.12, -1.28, 0.25, 0.04, 0.03, 0.06);
+      metal.box(0.03, 0.3, 0.03, vx + 0.25, desk + 0.15, -1.6); screen(0.56, 0.33, vx + 0.25, desk + 0.46, -1.6, 0.05, 0.035, 0.02, 0.045);
+      dark.box(0.32, 0.04, 0.2, vx + 0.25, desk + 0.02, -1.05); for (let i = 0; i < 8; i++) (i % 3 ? caps : amber).box(0.025, 0.015, 0.025, vx + 0.13 + (i % 4) * 0.08, desk + 0.05, -1.1 + Math.floor(i / 4) * 0.08);
+      // small lamps on goosenecks, warm, low over each desk: all the light FOH allows itself
+      for (const x of [sx - 0.9, sx + 0.9, lx - 0.4, vx]) { metal.cyl(0.006, 0.32, x, desk + 0.26, -1.72, -0.5); amber.box(0.05, 0.015, 0.03, x, desk + 0.4, -1.6); }
+      // behind the operators: two racks in flight cases, their front panels full of status lights, and a case to sit on
+      for (const x of [-2.6, -1.9]) {
+        dark.box(0.6, 1.25, 0.62, x, top + 0.625, 1.75); metal.box(0.62, 0.04, 0.64, x, top + 1.27, 1.75);
+        for (let k = 0; k < 8; k++) for (let i = 0; i < 5; i++) ((i + k + Math.round(x)) % 4 ? leds : (k % 3 ? amber : blue)).box(0.012, 0.012, 0.004, x - 0.2 + i * 0.03, top + 0.2 + k * 0.13, 1.437);
       }
+      dark.box(1.2, 0.55, 0.6, 2.2, top + 0.275, 1.75); metal.box(1.22, 0.03, 0.62, 2.2, top + 0.56, 1.75);
+      // the measurement microphone on a tall stand at the front edge, pointing at the stage
+      metal.cyl(0.012, 1.65, 0, top + 0.83, -d / 2 + 0.25); for (const a of [0, 2.1, 4.2]) metal.box(0.02, 0.02, 0.4, Math.sin(a) * 0.15, top + 0.02, -d / 2 + 0.25 + Math.cos(a) * 0.15);
+      dark.cyl(0.011, 0.22, 0, top + 1.66, -d / 2 + 0.15, Math.PI / 2);
+      for (const part of [metal, dark, caps, leds, amber, blue]) part.done();
+      for (const x of [sx - 0.3, lx, vx]) p.person(x, -0.4, Math.PI, 'crew');
+      p.person(1.8, 1.0, Math.PI * 0.75, 'crew');   // someone standing back, watching the stage over their shoulders
       for (const [bw, bd, x, z] of [[w + 0.8, 0.06, 0, d / 2 + 0.4], [w + 0.8, 0.06, 0, -d / 2 - 0.4], [0.06, d + 0.8, -w / 2 - 0.4, 0], [0.06, d + 0.8, w / 2 + 0.4, 0]]) { p.box(bw, 0.06, bd, x, 1.12, z, alu); p.box(bw, 0.9, bd, x, 0.5, z, alu).material = fence; }
       p.box(0.7, 0.07, f.z - st.front - 6, 0, 0.035, -(f.z - st.front - 6) / 2 - d / 2 - 0.4, ramp);   // the cable ramp to the stage
       if (open) { for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) p.box(0.12, 4.4, 0.12, x * (w / 2 + 0.2), 2.2, z * (d / 2 + 0.2), steel); p.box(w + 1, 0.12, d + 1, 0, 4.45, 0, tent); }   // out of the rain

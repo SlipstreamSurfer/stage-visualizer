@@ -10,7 +10,7 @@
 
 import { PALETTES, RING_NAMES } from './show-controls.js';
 import { SHOW_THEMES } from './show-themes.js';
-import { HEAD_LOOKS, HEAD_TIERS, TRUSS_LOOKS, PACE, POSITIONS, MOVES, GATES, GATE_GAIN, COLOURS, BEAMS, floorTarget } from './hangar-looks.js';
+import { HEAD_LOOKS, HEAD_TIERS, TRUSS_LOOKS, DEEPEST, PACE, POSITIONS, MOVES, GATES, GATE_GAIN, COLOURS, BEAMS, floorTarget } from './hangar-looks.js';
 import { LightChoreography, CHOREOGRAPHIES } from './light-choreography.js';
 
 const TAU = Math.PI * 2;
@@ -496,7 +496,7 @@ export class Director {
         // Heavy Hangar trusses hold a formation for minutes. In a break they sink further as the build grows, in a
         // measured wave, and level out; the drop takes them back up to the formation.
         const formation = TRUSS_LOOKS[this.trussLook], base = formation.drop(v, f.row);
-        f.ch.drop = brk && m.hasGrooved ? Math.min(4.5, base + m.build * 1.2 + Math.max(0, Math.sin(v * TAU - m.build * Math.PI)) * m.build * 0.6) : base;   // never lower than 7 m
+        f.ch.drop = brk && m.hasGrooved ? Math.min(DEEPEST, base + m.build * 2 + Math.max(0, Math.sin(v * TAU - m.build * Math.PI)) * m.build * 1) : base;   // never lower than 5.5 m
         f.ch.roll = formation.roll && !brk ? formation.roll(f.row) : 0;
         continue;
       }

@@ -24,7 +24,8 @@ export function normalizeControls(value) {
     coils[bank] = { mode: choice(ring.mode, ['auto', '0', '1', '2', '3', '4'], 'auto'), speed: numberIn(ring.speed, 1, 0, 3), direction: choice(ring.direction, ['auto', 'forward', 'reverse'], 'auto') };
   }
   return { levels, coils, showTheme: normalizeTheme(input.showTheme), lightChoreography: normalizeChoreography(input.lightChoreography), ringLook: choice(input.ringLook, ['auto', ...RING_NAMES], 'auto'), palette: choice(input.palette, ['auto', ...Object.keys(PALETTES)], 'auto'), beamWidth: numberIn(input.beamWidth, 1, 0.35, 2), cameraSpeed: numberIn(input.cameraSpeed, 1, 0.15, 1), cameraFollowsLight: input.cameraFollowsLight !== false,
-    headLook: choice(input.headLook, ['auto', ...Object.keys(HEAD_LOOKS)], 'auto'), trussLook: choice(input.trussLook, ['auto', ...TRUSS_LOOKS.map(f => f.name)], 'auto'), lookPace: choice(input.lookPace, Object.keys(PACE), 'normal') };
+    headLook: choice(input.headLook, ['auto', ...Object.keys(HEAD_LOOKS)], 'auto'), trussLook: choice(input.trussLook, ['auto', ...TRUSS_LOOKS.map(f => f.name)], 'auto'), lookPace: choice(input.lookPace, Object.keys(PACE), 'normal'),
+    timeOfDay: choice(input.timeOfDay, ['night', 'day', 'sunset'], 'night'), door: input.door === true };
 }
 export function normalizeLook(value) {
   const input = object(value), off = { ...DEFAULT_OFF };

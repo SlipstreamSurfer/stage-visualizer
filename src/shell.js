@@ -17,23 +17,8 @@ import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { box, post, strut, patch, sweep, inMetres } from './shapes.js';
 import { buildOutdoors, palm } from './outdoors.js';
-import { positionWorld, cameraPosition, vec2, vec3, normalize, floor, fract, length, smoothstep, mix, max, mx_noise_float } from 'three/tsl';
+import { skylightGlass, shafts, outside, SUN } from './daylight.js';
 
-// The night outside a skylight: seen through the glass, so where you look from decides which part of the sky you see.
-// Small stars, a few brighter, and a thin veil of cloud lit faintly by the town, which dims the stars behind it.
-// Still, as a sky is to the eye in a few minutes.
-function nightThroughGlass() {
-  const mat = new THREE.MeshBasicNodeMaterial({ fog: false });
-  const d = normalize(positionWorld.sub(cameraPosition)), up = max(d.y, 0.05);
-  const rnd = v => { const q = fract(v.mul(0.3183099).add(0.1)).mul(17); return fract(q.x.mul(q.y).mul(q.z).mul(q.x.add(q.y).add(q.z))); };
-  const star = scale => { const c = d.mul(scale), cell = floor(c), r = rnd(cell); return smoothstep(0.32, 0.02, length(fract(c).sub(0.5))).mul(smoothstep(0.985, 0.998, r)).mul(rnd(cell.add(5)).mul(0.8).add(0.2)); };
-  const stars = star(420).mul(0.9).add(star(170).mul(1.6));
-  const sheet = vec2(d.x, d.z).div(up).mul(0.6);   // the cloud as a layer high above, seen at a slant
-  const veil = smoothstep(0.05, 0.75, mx_noise_float(vec3(sheet.x, sheet.y, 1.7)).mul(0.65).add(mx_noise_float(vec3(sheet.x.mul(3.1), sheet.y.mul(3.1), 4.2)).mul(0.35)).add(0.2)).mul(0.85);
-  const sky = vec3(0.004, 0.007, 0.018), cloud = vec3(0.016, 0.014, 0.018);
-  mat.colorNode = mix(sky.add(vec3(0.75, 0.8, 1.0).mul(stars)), cloud, veil);
-  return mat;
-}
 
 const TAU = Math.PI * 2;
 const range = (from, to, step) => { const list = []; for (let v = from; v < to - 1e-6; v += step) list.push(v); return list; };
@@ -135,7 +120,10 @@ function walls(c) {
       put(surface('brick'), new THREE.PlaneGeometry(w, 0.9).translate(0, 0, 0.04).rotateY(ry).translate(x, 0.45, z));
       continue;
     }
-    put(surface(kind, { tint: sh.tint }), (sh.rough ? rough(w + 6, h + 4, sh.rough, side.length) : new THREE.PlaneGeometry(w, h)).rotateY(ry).translate(x, h / 2, z));
+    const o = sh.opening?.wall === side ? sh.opening : null;   // a door that opens: the wall round its opening
+    const plane = sh.rough ? rough(w + 6, h + 4, sh.rough, side.length).translate(0, h / 2, 0) : o ? mergeGeometries([[-w / 2, o.x0, 0, h], [o.x1, w / 2, 0, h], [o.x0, o.x1, 0, o.y0], [o.x0, o.x1, o.y1, h]]
+      .map(([x0, x1, y0, y1]) => new THREE.PlaneGeometry(x1 - x0, y1 - y0).translate((x0 + x1) / 2, (y0 + y1) / 2, 0))) : new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0);
+    put(surface(kind, { tint: sh.tint }), plane.rotateY(ry).translate(x, 0, z));
     if (sh.plinth) put(surface('concrete'), new THREE.PlaneGeometry(w, sh.plinth).translate(0, 0, 0.03).rotateY(ry).translate(x, sh.plinth / 2, z));   // a concrete base under the steel
   }
 }
@@ -210,6 +198,29 @@ function roof(c) {
   }
 }
 
+// The sun through the skylights (by day and at sunset) and through the open hangar door, and what lies outside it.
+function daylight(c, bays) {
+  const { W, D, H, sh, env, out } = c, { uDay, uSunset, uDoor } = env;
+  // as far as a shaft gets inside: to the floor, or to a wall before that
+  const reach = (p, s) => Math.min((p.y - 0.02) / -s.y, s.z < 0 ? (p.z + D / 2 - 0.3) / -s.z : (D / 2 - 0.3 - p.z) / s.z, (W / 2 - 0.3 - Math.sign(s.x) * p.x) / Math.abs(s.x || 1e-6));
+  const panes = Array.from({ length: bays }, (_, i) => [-0.25, 0.25].map(k => new THREE.Vector3(W * k, H - 0.05, -D / 2 + (i + 0.5) * D / bays))).flat();
+  const u = new THREE.Vector3(W * 0.06, 0, 0), v = new THREE.Vector3(0, 0, (sh.frames - 2.2) / 2), warm = [1, 0.93, 0.8], gold = [1, 0.62, 0.32];
+  // each set of shafts only drawn while it shows: by day, at sunset, through the open door
+  const shown = [];
+  shown.push([shafts(c, panes.map(p => [p.x, p.y, p.z, reach(p, SUN.day)]), u, v, SUN.day, uDay.mul(uSunset.oneMinus()), warm, 0.05), () => env.day * (1 - env.sunset)]);
+  shown.push([shafts(c, panes.map(p => [p.x, p.y, p.z, reach(p, SUN.sunset)]), u, v, SUN.sunset, uSunset, gold, 0.06), () => env.sunset]);
+  const o = sh.opening;
+  if (o) {
+    // the door's opening, as far as the leaves leave it open when they are pushed to its ends
+    const middle = new THREE.Vector3((o.x0 + o.x1) / 2, (o.y0 + o.y1) / 2, D / 2 - 0.15), du = new THREE.Vector3((o.x1 - o.x0) / 2 - (o.stack || 0), 0, 0), dv = new THREE.Vector3(0, (o.y1 - o.y0) / 2, 0);
+    shown.push([shafts(c, [[middle.x, middle.y, middle.z, reach(middle, SUN.day)]], du, dv, SUN.day, uDoor.mul(uDay).mul(uSunset.oneMinus()), warm, 0.03), () => env.door * env.day * (1 - env.sunset)]);
+    shown.push([shafts(c, [[middle.x, middle.y, middle.z, reach(middle, SUN.sunset)]], du, dv, SUN.sunset, uDoor.mul(uSunset), gold, 0.03), () => env.door * env.sunset]);
+    const view = outside(c, [middle.x, D / 2]);
+    shown.push([view, () => env.door]);
+  }
+  out.updates.push(() => { for (const [mesh, weight] of shown) if (mesh) mesh.visible = weight() > 0.005; });
+}
+
 // what a working building has: steel frames, ducts and sprinkler pipes, posts
 function structure(c) {
   const { W, D, H, sh, open, put, add, steel, plain, out } = c;
@@ -226,7 +237,8 @@ function structure(c) {
     put(plain(0x6a6d72, { roughness: 0.45, metalness: 0.8, gain: 1.4 }), ducts); put(plain(0x6a1010, { roughness: 0.6, metalness: 0.3, gain: 1.4 }), pipes);
     const lights = [];
     if (sh.frames) for (let n = Math.round(D / sh.frames), i = 0; i < n; i++) for (const k of [-0.25, 0.25]) lights.push(new THREE.PlaneGeometry(W * 0.12, sh.frames - 2.2).rotateX(Math.PI / 2).translate(W * k, H - 0.02, -D / 2 + (i + 0.5) * D / n));
-    if (lights.length) add(new THREE.Mesh(mergeGeometries(lights), nightThroughGlass()));
+    if (lights.length) add(new THREE.Mesh(mergeGeometries(lights), c.env ? skylightGlass(c.env) : new THREE.MeshBasicMaterial({ color: new THREE.Color(0.006, 0.009, 0.02), fog: false })));
+    if (lights.length && c.env && sh.frames) daylight(c, Math.round(D / sh.frames));
   }
   if (sh.frames) {
     const frame = [], n = Math.round(D / sh.frames);

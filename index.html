@@ -46,6 +46,7 @@
   #panel input[type="text"], #panel select, #panel button { padding: 7px 8px; background: rgba(10,12,17,.62); color: #eee; border: 1px solid rgba(255,255,255,.16); border-radius: 8px; font-size: 13px; }
   #panel button { cursor: pointer; margin-top: 6px; }
   #panel button:hover { background: #2a2a30; }
+  #panel #venueMode[aria-pressed="true"] { background: #263d3c; border-color: #789d98; color: #fff; }
   #panel button:focus-visible, #panel select:focus-visible, #panel input:focus-visible, #panel summary:focus-visible, #openPanel:focus-visible { outline: 2px solid #b1bac8; outline-offset: 2px; }
   #panel button:disabled { opacity: .45; cursor: default; }
   #panel button[data-state]::after { display: block; margin-top: 3px; font-size: 10px; font-weight: 400; color: #aaa; }
@@ -176,6 +177,8 @@
   <div class="panel-pages">
   <section id="pageShow" class="panel-page" role="tabpanel" aria-labelledby="tabShow">
   <h2>Venue and music</h2>
+  <button id="venueMode" type="button" aria-pressed="false" aria-describedby="venueModeHint">Maintenance mode</button>
+  <p id="venueModeHint" class="panel-note">Gig mode · audience and show lighting.</p>
   <details id="trackNotes" hidden>
     <summary>Track notes · <span id="markCount">0 marked moments</span></summary>
     <p class="panel-note">Press Good or Wrong while listening. Choose a reason later if useful; a written explanation is optional.</p>

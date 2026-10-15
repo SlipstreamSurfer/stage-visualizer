@@ -36,6 +36,7 @@ export function buildSmoke({ add, room: { W, D, H }, sources, count, wind: blow 
   let next = 0;
 
   return {
+    object: mesh,
     // a bank of smoke rolling off the stage, as with CO2 or on a drop
     burst(from, n = 14) { for (let i = 0; i < n; i++) { spawn(puffs[next], true, from); next = (next + 1) % count; } },
     // colour: what the room is lit in, [r, g, b]; level: how bright; haze: how much the hazers put out (1 is normal)

@@ -28,6 +28,12 @@
 Choose from **48 moods** to shape the show, then adjust its look and camera.
 WebGPU renders the show when available; WebGL provides a fallback.
 
+Production details give the hall its working scale: wheeled flightcases, equipment
+racks and cable reels around the stage and FOH, a modular stage with legs, braces
+and skirting, perforated crowd barriers, wall ventilators, electrical cabinets
+and cable trays. Scratched equipment panels, tape marks and subtle wheel tracks
+add signs of use. These details remain visible at Light quality.
+
 | Music | Light show | Your controls |
 | --- | --- | --- |
 | Local tracks, audio inputs and supported system-audio sharing | Moving heads, LED arches, haze and a dancing crowd | Nine camera views, look presets and quick light switches |
@@ -84,6 +90,12 @@ Venue, mood, look and camera are the main controls. Show, Lights, Effects and
 Settings tabs contain finer controls. Venue and quality changes preserve the
 active audio stream. Automatic quality reduces detail after sustained slow
 rendering; explicit Light, Normal and High choices are remembered.
+
+Use **Show → Maintenance mode** to inspect Hangar between gigs: an empty hall,
+white work lights, a parked rig and no show effects or haze. The booth and production
+equipment stay in place. Switching back restores gig lighting and the audience;
+music playback and audio inputs keep running throughout. The mode is remembered
+separately from show presets.
 
 Look presets include Standard, Calm, Cinematic and Energetic. Adjust light,
 glow, haze and hall sliders for a custom look. Light groups, palettes, beam

@@ -258,7 +258,8 @@ export function buildFacilities(L, ctx) {
     // of the stage for the front rows, who stand under the main arrays
     barrier(f) {
       const z = st.front + (f.pit || 2.6), p = place([0, z, 0]), n = Math.floor((W - 1) / 2.4);
-      for (let i = 0; i < n; i++) { const x = (i - (n - 1) / 2) * 2.4; p.box(2.34, 1.15, 0.06, x, 0.6, 0, alu); p.box(2.34, 0.05, 1.1, x, 0.03, -0.5, alu); p.box(2.34, 0.05, 0.3, x, 0.35, 0.2, alu); }
+      // Hangar's perforated, braced panels are batched in hangar-details.js; retain the pit, crew and speakers here.
+      if (L.name !== 'Hangar') for (let i = 0; i < n; i++) { const x = (i - (n - 1) / 2) * 2.4; p.box(2.34, 1.15, 0.06, x, 0.6, 0, alu); p.box(2.34, 0.05, 1.1, x, 0.03, -0.5, alu); p.box(2.34, 0.05, 0.3, x, 0.35, 0.2, alu); }
       for (let x = -W / 2 + 3; x < W / 2 - 2; x += 3.6) p.person(x, -0.9, 0, 'security');
       const subs = f.subs || 0, span = Math.min(st.width, W - 4);
       for (let i = 0; i < subs; i++) {

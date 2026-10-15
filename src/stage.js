@@ -22,7 +22,9 @@ const TAU = Math.PI * 2;
 export function buildStage(L, ctx) {
   const { add, put, surface, plain, black } = ctx, st = L.stage, { W, H } = L.plan, open = !!L.shell.open;
   const deck = st.floor ? surface(st.floor, { gain: 2 }) : plain(0x1d1d20, { roughness: 0.55, metalness: 0.1, gain: 2.2 });   // a stage floor is dark, not a hole
-  if (st.height > 0.02) put(deck, st.round ? post(st.width / 2, st.height, 0, st.z, 0, 48) : box(Math.min(W - 0.2, st.width), st.height, st.depth, 0, st.height / 2, st.z));
+  // Hangar's modular deck rests on legs and braces built in hangar-details.js; leave its underside open.
+  const deckDepth = L.name === 'Hangar' ? Math.min(0.16, st.height) : st.height;
+  if (st.height > 0.02) put(deck, st.round ? post(st.width / 2, st.height, 0, st.z, 0, 48) : box(Math.min(W - 0.2, st.width), deckDepth, st.depth, 0, st.height - deckDepth / 2, st.z));
   const pa = st.pa ?? (st.kind === 'centre' ? 'none' : H > 8 || open ? 'arrays' : 'stacks');
   for (const s of [-1, 1]) {   // the PA: flown line arrays in large rooms, compact stacks in small ones
     const x = s * Math.min(W / 2 - 1.2, st.width / 2 + 1.6);
@@ -102,7 +104,8 @@ const PERFORMERS = {
     const strip = mesh(box(width - 0.1, 0.03, 0.03, 0, table - 0.07, boothZ + 0.615), new THREE.MeshBasicMaterial({ color: 0, fog: false }));
     mesh(mergeGeometries([-1, 1].flatMap(s => [box(0.012, 0.3, 0.012, s * 0.235, table + 0.15, boothZ + 0.02), box(0.012, 0.012, 0.16, s * 0.235, table + 0.3, boothZ - 0.055)])), black);
     mesh(mergeGeometries([-1, 1].map(s => box(0.05, 0.012, 0.022, s * 0.235, table + 0.292, boothZ - 0.125))), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.42, 0.33), fog: false }));
-    const updateDJ = buildDJ({ add: own, lit, black, at: [0, base, boothZ - 0.72], top: table + 0.1, gearZ: boothZ - 0.2 });
+    const artist = own(new THREE.Group()); artist.name = 'Stage performer';
+    const updateDJ = buildDJ({ add: o => (artist.add(o), o), lit, black, at: [0, base, boothZ - 0.72], top: table + 0.1, gearZ: boothZ - 0.2 });
     const monitorFaces = [], monitorDrivers = [], monitorRings = [];
     const monitorFace = plain(0x292c31, { roughness: 0.82, metalness: 0.15, gain: 0.85 });
     const monitorCone = plain(0x101216, { roughness: 0.75, metalness: 0.12, gain: 0.75 });
@@ -118,10 +121,11 @@ const PERFORMERS = {
     }
     mesh(mergeGeometries(monitorFaces), monitorFace); mesh(mergeGeometries(monitorRings), monitorFace); mesh(mergeGeometries(monitorDrivers), monitorCone);
     return { update(t, dt, signals, director, look) {
-      boothLight.intensity = director.manual.blackout ? 0 : lampPower * look.light; frontLight.intensity = director.manual.blackout ? 0 : frontPower * look.light;
+      artist.visible = !look.maintenance;
+      boothLight.intensity = look.maintenance ? lampPower * 0.5 : director.manual.blackout ? 0 : lampPower * look.light; frontLight.intensity = look.maintenance || director.manual.blackout ? 0 : frontPower * look.light;
       decks.update(t, dt, signals);
-      strip.material.color.setRGB(...director.col2).multiplyScalar((0.08 + signals.mid * 0.3 + signals.kick * 0.9) * (director.manual.blackout ? 0 : look.light));
-      updateDJ(t, dt, signals);
+      strip.material.color.setRGB(...director.col2).multiplyScalar(look.maintenance ? 0 : (0.08 + signals.mid * 0.3 + signals.kick * 0.9) * (director.manual.blackout ? 0 : look.light));
+      if (!look.maintenance) updateDJ(t, dt, signals);
     } };
   },
 

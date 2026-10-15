@@ -135,6 +135,11 @@
   #panel details { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 4px; }
   #panel summary { cursor: pointer; color: #ccd; margin-top: 8px; font-size: 12px; }
   #panel input[type="text"] { width: 100%; cursor: text; }
+  .steps { margin: 4px 0 12px; padding-left: 20px; color: #ccd; font-size: 12px; line-height: 1.55; }
+  .steps li { margin: 7px 0; }
+  .steps .state { display: inline-block; margin-left: 6px; padding: 0 7px; border: 1px solid var(--line); border-radius: 9px; color: var(--dim); font-size: 10px; white-space: nowrap; }
+  .steps .state[data-ok="true"] { color: #b9e6c0; border-color: #47634a; }
+  .steps .state[data-ok="warn"] { color: #f0cf8a; border-color: #7a6431; }
   #fixtureLevels { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; }
   .level { display: grid; grid-template-columns: 82px minmax(0, 1fr) 38px; align-items: center; gap: 6px; font-size: 11px; color: #b8bdc8; }
   .level input { width: 100%; margin: 0; }
@@ -194,7 +199,7 @@
   <section class="deck deck-sound" aria-labelledby="deckSound">
     <h2 id="deckSound"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>Sound</h2>
     <div class="sound-line">
-      <select id="audioSource" class="ctl" aria-label="Sound source"><option value="file">Audio file</option><option value="system">System audio</option><option value="input">Audio input</option></select>
+      <select id="audioSource" class="ctl" aria-label="Sound source"><option value="system">System audio</option><option value="rekordbox">Rekordbox</option><option value="file">Audio file</option><option value="input">Other input</option></select>
     </div>
     <div class="sound-line"><div class="bpm"><output id="bpm" aria-label="Tempo">--</output><span>BPM</span></div><meter id="inputLevel" min="0" max="1" value="0" aria-label="Incoming audio level" hidden></meter></div>
     <div id="status" role="status">Demo mode</div>
@@ -320,13 +325,16 @@
     <div id="presetStatus" class="panel-note" role="status"></div>
   </section>
   <section id="pageSound" class="panel-page" role="tabpanel" aria-labelledby="tabSound" hidden>
-    <h2>Input</h2>
+    <h2>Setup</h2>
+    <div class="setting"><span id="platformLabel">This computer</span><select id="platform" class="segmented" aria-label="This computer"><option value="macos">macOS</option><option value="windows">Windows</option><option value="linux">Linux</option></select></div>
+    <p class="panel-note">How to connect <strong id="setupSource">System audio</strong>, the way of playing chosen under Sound in the controls:</p>
+    <ol id="setupSteps" class="steps"></ol>
     <div id="inputControls" hidden>
       <div class="setting"><label for="audioInput">Input device</label><select id="audioInput" class="ctl" aria-describedby="inputHint"><option value="">System default</option></select></div>
       <button id="refreshInputs" class="ctl wide" type="button">Refresh devices</button>
-      <div id="inputHint" class="panel-note" role="status">Connect once to reveal device names. For rekordbox, choose BlackHole 2ch.</div>
+      <div id="inputHint" class="panel-note" role="status">Connect once to reveal device names.</div>
     </div>
-    <p class="panel-note">Choose the sound source in the Sound section of the controls. <a href="rekordbox.html" target="_blank" rel="noopener">Rekordbox connection</a></p>
+    <p class="panel-note"><a href="rekordbox.html" target="_blank" rel="noopener">Rekordbox data in detail</a></p>
     <h2>What the show hears</h2>
     <div class="meters"><span>Bass</span><div class="meter"><div id="mBass"></div></div><span>Mid</span><div class="meter"><div id="mMid"></div></div><span>High</span><div class="meter"><div id="mHigh"></div></div></div>
     <details id="trackNotes" hidden>

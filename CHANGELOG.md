@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.31.0
+
+- One choice says how you play: System audio, Rekordbox, Audio file or Other input, in the controls and on the start
+  screen. System audio is the first choice.
+- Settings → Sound shows the setup for that choice on this computer, recognised as macOS, Windows or Linux and
+  changeable, in the names those systems use: BlackHole 2ch with a Multi-Output (or, for rekordbox with a controller,
+  an Aggregate) Device on a Mac; screen sharing with system audio or VB-Cable on Windows; the PipeWire input on Linux,
+  and for rekordbox on a laptop how its sound and data reach the Linux computer. Each step that SV can see for itself
+  is ticked off: the device found, sound coming in, the rekordbox receiver running, deck data arriving.
+- The connect button takes the right device: BlackHole 2ch on a Mac for system audio and rekordbox, CABLE Output on
+  Windows for rekordbox; each way of playing remembers its own input.
+- The rekordbox data receiver starts with the server (this computer only; `--rekordbox-lan` for the network,
+  `--no-rekordbox` to leave it off). With Rekordbox chosen, the status line shows which deck plays. The data does not
+  steer the show yet.
+
 ## 0.30.0
 
 - The crowd dances the way the music asks. Five ways, chosen by the mood: peak, raw and hard techno, trance and bass

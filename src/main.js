@@ -163,6 +163,7 @@ function frame() {
       ? 'Paused' : { receiving: 'Audio detected', silent: 'No audio detected', lost: 'Input disconnected', suspended: 'Click to resume audio' }[signal.state];
     const bpm = Math.round(signals.stableBpm || m.bpm) || '--';
     state.textContent = audio.message || changeMessage || `${audio.live ? 'Live: ' + audio.label + (audioNote ? ' · ' + audioNote : '') : 'Demo mode'} · ${audio.live && m.activity < 0.05 ? 'waiting for music' : director.status}`;
+    if (sound.note && !audio.message && !changeMessage) state.textContent += ' · ' + sound.note;   // the deck rekordbox plays
     state.title = state.textContent; $('bpm').value = bpm;
     $('miniStatus').textContent = state.textContent + ` · ${bpm} BPM` + (director.manual.blackout ? ' · BLACKOUT' : '') + (cameraFrozen ? ' · Camera paused' : '');
     sound.update(signal);

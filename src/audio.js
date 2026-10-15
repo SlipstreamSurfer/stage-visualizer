@@ -47,10 +47,10 @@ export class Audio {
     this.listenTo(this.ctx.createMediaStreamSource(stream), stream, label || track.label);
     return true;
   }
-  // an input such as BlackHole or a microphone
-  async input(deviceId) {
+  // an input such as BlackHole or a microphone; label: what the status line calls it (else the device's name)
+  async input(deviceId, label) {
     const request = ++this.request;
-    return this.useStream(await navigator.mediaDevices.getUserMedia({ audio: { ...plain, deviceId: deviceId ? { exact: deviceId } : undefined } }), request);
+    return this.useStream(await navigator.mediaDevices.getUserMedia({ audio: { ...plain, deviceId: deviceId ? { exact: deviceId } : undefined } }), request, label);
   }
   // What the computer plays. On Linux through the PipeWire input when it is set up; elsewhere a browser only hands it
   // over as part of a screen share, so the picture is asked for as small as possible and never used.

@@ -1,4 +1,4 @@
-// Usage: node tools/serve.mjs [port]      (or: npm start)
+// Usage: node tools/serve.mjs [port] [--no-rekordbox] [--rekordbox-lan]      (or: npm start)
 // Serves this folder to this computer only. Nothing is cached, so a reload always shows the files as they are now,
 // and an open page reloads by itself when the code changes.
 import http from 'node:http';
@@ -97,10 +97,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2), port = +(args.find(arg => /^\d+$/.test(arg)) || 8765);
   let rekordbox;
   try {
-    if (args.includes('--rekordbox')) rekordbox = await startRekordboxReceiver({ host: args.includes('--rekordbox-lan') ? '0.0.0.0' : '127.0.0.1' });
+    // The rekordbox data receiver runs unless asked not to: on this computer only, or for the network with
+    // --rekordbox-lan (rekordbox on a laptop, SV here). A taken port leaves the show running without it.
+    if (!args.includes('--no-rekordbox')) {
+      try { rekordbox = await startRekordboxReceiver({ host: args.includes('--rekordbox-lan') ? '0.0.0.0' : '127.0.0.1' }); }
+      catch (e) { console.error(`Rekordbox receiver not started (${e.code === 'EADDRINUSE' ? 'UDP 4460 is in use' : e.message}); the show runs without it.`); }
+    }
     const server = await serve(port, { rekordbox });
     console.log(`Stage Visualizer: http://127.0.0.1:${port}/`);
-    if (rekordbox) console.log(`Rekordbox receiver: UDP 4460 · http://127.0.0.1:${port}/rekordbox.html`);
+    if (rekordbox) console.log(`Rekordbox receiver: UDP 4460${args.includes('--rekordbox-lan') ? ' (network)' : ''} · http://127.0.0.1:${port}/rekordbox.html`);
     if (args.includes('--open') && process.platform === 'darwin') execFile('open', [`http://127.0.0.1:${port}/${args.includes('--rekordbox') ? 'rekordbox.html' : ''}`], error => { if (error) console.error('Open the connection page using the URL above.'); });
     const stop = () => { server.close(); rekordbox?.socket.close(); };
     process.once('SIGINT', stop); process.once('SIGTERM', stop);

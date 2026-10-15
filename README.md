@@ -71,20 +71,20 @@ On macOS you can also double-click `Start-SV-Mac.command` after installing Node.
 
 ## Connect music
 
-Choose a **Sound source** and use its connection button:
+One choice says how you play, under **Sound** in the controls and on the start screen:
 
-- **Audio file:** select or drag in a local track. Playback includes pause, seek
-  and restart, with optional Good/Wrong marks and CSV export.
-- **Audio input:** connect a microphone, audio interface or virtual input.
-  Select an input and click **Connect audio input**. Allow the expected browser
-  microphone permission; device names appear after permission is granted.
-- **System audio:** use the browser's supported system-audio sharing option.
-  On Linux, a PipeWire input can carry system sound; see [Linux audio](linux/stage-visualizer.conf).
+- **System audio:** whatever the computer plays (Spotify, a browser, any player).
+- **Rekordbox:** you play yourself. The sound comes in through a virtual cable or an audio interface; track, tempo
+  and phrase data from [rkbx_link](https://github.com/grufkork/rkbx_link) arrive on UDP 4460, which the server
+  receives by itself.
+- **Audio file:** select or drag in a local track, with pause, seek and restart, and optional Good/Wrong marks.
+- **Other input:** a microphone, audio interface or any virtual input.
 
-On macOS, an audio interface with loopback or a virtual audio device can carry
-sound from a music player, streaming app or DJ software into SV. See the
-[macOS audio setup guide](docs/macos-audio.md). Reconnect the audio input after
-closing or reloading the page. A connected input with no detected audio is silent.
+**Settings → Sound** shows the steps for the chosen way on this computer, macOS, Windows or Linux, in the names those
+systems use (BlackHole 2ch and a Multi-Output Device on a Mac, VB-Cable or screen sharing with system audio on
+Windows, the PipeWire input on Linux), and ticks off what SV can see: the device found, sound coming in, rekordbox
+data arriving. The connect button takes the right device by itself. See also the
+[macOS audio setup guide](docs/macos-audio.md).
 
 ## Control the show
 

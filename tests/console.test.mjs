@@ -56,7 +56,7 @@ test('the console keeps the show controls in one place, settings open apart and 
     // A first visit sees the start screen: it waits for the venue, ignores show shortcuts and leaves on a click.
     await evaluate(`document.documentElement.classList.remove('started')`);
     await until(`!document.getElementById('startShow').disabled && document.getElementById('startShow').textContent === 'Start the show'`, 'The start screen did not offer the show');
-    assert.equal(await evaluate(`document.querySelectorAll('#startSource button').length === 3 && document.querySelectorAll('#startQuality button').length === 4`), true);
+    assert.equal(await evaluate(`document.querySelectorAll('#startSource button').length === 4 && document.querySelectorAll('#startQuality button').length === 4`), true);
     await evaluate(`dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }))`);
     assert.equal(await evaluate('window.__show.director.manual.blinder'), false, 'show shortcuts wait for the start');
     await evaluate(`document.getElementById('startDemo').click()`);
@@ -87,6 +87,27 @@ test('a newer tab with the show pauses this one until it is clicked, and then th
     assert.equal(await evaluate('window.__show.signals.phase'), clock, 'a paused tab does not run the show');
     await evaluate(`document.getElementById('elsewhere').click()`);
     await until(`document.getElementById('elsewhere').hidden && window.__heard.includes('playing')`, 'clicking did not take the show back');
+    assert.deepEqual(errors, []);
+  });
+});
+
+test('one choice says how you play, and the settings show its setup for this computer with what SV can see', { timeout: 120000 }, async () => {
+  await withPage(renderFlags(), async ({ send, evaluate, until, errors, port }) => {
+    await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=hangar&quality=low` });
+    await until('!!window.__show?.ready', 'The Hangar did not start');
+    assert.deepEqual(await evaluate(`[...document.getElementById('audioSource').options].map(o => o.textContent)`), ['System audio', 'Rekordbox', 'Audio file', 'Other input']);
+    await evaluate(`(() => { const s = document.getElementById('audioSource'); s.value = 'rekordbox'; s.dispatchEvent(new Event('change')); document.getElementById('openSettings').click(); document.getElementById('tabSound').click(); })()`);
+    assert.equal(await evaluate(`document.getElementById('playFile').textContent`), 'Connect rekordbox');
+    assert.equal(await evaluate(`document.getElementById('setupSource').textContent`), 'Rekordbox');
+    assert.equal(await evaluate(`document.getElementById('inputControls').hidden`), false, 'rekordbox comes in through an input device');
+    for (const platform of ['macos', 'windows', 'linux']) {
+      await evaluate(`[...document.querySelectorAll('#platform + .seg button')].find(b => b.dataset.value === '${platform}').click()`);
+      assert.ok(await evaluate(`document.querySelectorAll('#setupSteps li').length`) >= 3, `rekordbox steps on ${platform}`);
+    }
+    // this test server runs without the rekordbox receiver: the step says so
+    await until(`[...document.querySelectorAll('#setupSteps .state')].some(s => s.textContent.includes('receiver off'))`, 'the receiver state was not shown');
+    await evaluate(`(() => { const s = document.getElementById('audioSource'); s.value = 'system'; s.dispatchEvent(new Event('change')); })()`);
+    await until(`document.getElementById('setupSource').textContent === 'System audio' && document.getElementById('inputControls').hidden`, 'system audio needs no device choice');
     assert.deepEqual(errors, []);
   });
 });

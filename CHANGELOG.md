@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.27.2
+
+- Clearer headers: each part of the console has its own small icon and a fine line after its name; the settings
+  pages mark their sections in orange, and the settings title sits beside the logo light.
+
 ## 0.27.1
 
 - The page code is split: the console, settings and start screen (`src/ui.js`), connecting the sound

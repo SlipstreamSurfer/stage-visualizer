@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.27.1
+
+- The page code is split: the console, settings and start screen (`src/ui.js`), connecting the sound
+  (`src/sound-ui.js`), the live effects (`src/effects-ui.js`) and saved presets (`src/presets-ui.js`) each have their
+  own file, and `src/main.js` keeps the show itself. Nothing changes in what you see or can do.
+- GitHub checks every pull request: `npm test` runs, and every commit must carry a GitHub noreply address.
+- The camera and full-page browser checks draw on the graphics card where there is one, like the other page checks,
+  instead of failing in software rendering.
+
 ## 0.27.0
 
 - One console along the bottom of the screen holds every control you use during the show, always in the same place

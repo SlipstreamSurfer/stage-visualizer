@@ -1,0 +1,48 @@
+# The fast Hangar checks on every pull request and on main, and a guard that every commit of a pull request
+# carries a GitHub noreply address, so no private e-mail address reaches the public history.
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: npm test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm test
+
+  noreply:
+    name: Commit addresses
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Every commit uses a noreply address
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Author and committer of each commit; only the commit id is printed, never the address.
+          bad=$(git log --format='%H %ae %ce' "$BASE..$HEAD" | awk '{ for (i = 2; i <= 3; i++) if ($i !~ /@users\.noreply\.github\.com$/ && $i != "noreply@github.com") { print $1; break } }')
+          if [ -n "$bad" ]; then
+            echo "These commits carry an address that is not a GitHub noreply address:"
+            echo "$bad"
+            echo "Rewrite them with the noreply address before merging."
+            exit 1
+          fi
+          echo "All commits use a noreply address."

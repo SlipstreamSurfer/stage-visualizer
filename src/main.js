@@ -18,11 +18,10 @@ import { mountPlayback } from './playback.js';
 import { QUALITY, AutoQuality } from './quality.js';
 import { disposeScene } from './resources.js';
 import { DEFAULT_OFF, LIGHT_ROLES, PALETTES, RING_NAMES, COIL_MODES, parseStored, normalizeControls, normalizeLook, normalizePresets } from './show-controls.js';
-
-const $ = id => document.getElementById(id);
-const keep = (key, value) => { try { localStorage.setItem('sv.' + key, value); } catch {} };
-const kept = (key, fallback) => { try { return localStorage.getItem('sv.' + key) ?? fallback; } catch { return fallback; } };
-const started = () => document.documentElement.classList.contains('started');   // past the start screen (index.html)
+import { $, keep, kept, started, fill, groups, sliderValue, segmented, syncSegments, mountControls, mountStart } from './ui.js';
+import { mountSound } from './sound-ui.js';
+import { mountEffects } from './effects-ui.js';
+import { mountPresets } from './presets-ui.js';
 
 // ----- the picture -----
 const params = new URLSearchParams(location.search);
@@ -81,8 +80,6 @@ let cams = new CameraDirector(shots(world.layout, world.shots));
 let controls = normalizeControls(parseStored(kept('controls', '{}')));
 const look = { ...normalizeLook({ light: +kept('light', 1), bloom: +kept('bloom', 1), haze: +kept('haze', 1), hall: +kept('hall', 1), off: params.has('all') ? Object.fromEntries(Object.keys(DEFAULT_OFF).map(role => [role, false])) : parseStored(kept('off', JSON.stringify(DEFAULT_OFF))) }), controls };
 let cameraFrozen = false, cameraTime = 0, cameraAge = 0, cameraIndex = -1;
-const EFFECTS = { btnStrobe: { name: 'Strobe', roles: ['strobe'], hold: 'strobe' }, btnBlinder: { name: 'Blinders', roles: ['blinder'], hold: 'blinder' }, btnCo2: { name: 'CO2', roles: ['co2'] }, btnPyro: { name: 'Pyro', roles: ['flame', 'spark', 'firework'] }, btnConfetti: { name: 'Confetti', roles: ['confetti'] } };
-const held = { strobe: { pointer: false, key: false }, blinder: { pointer: false, key: false } };
 const audio = new Audio(() => { signals.reset(); director.reset(clock.elapsedTime); });
 const clock = new THREE.Clock();
 let readDemo = demo(signals, director.mood.demoBpm, director.mood.flow), statusAt = 0, exposure = 1, frames = 0;
@@ -90,6 +87,10 @@ const SKIP = +(params.get('skip') || 0);   // ?skip=24: the demo track starts th
 // for looking in from the console; view = [x, y, z, lookAtX, lookAtY, lookAtZ] puts the camera anywhere
 let changing = false, changeMessage = '';
 const show = window.__show = { signals, director, world, cams, look, audio, renderer, camera, quality: qualityKey, changing: false, view: null, heard: [], webgl: WEBGL, fps: 0 };   // heard: what the listener found in live sound, [{ t, what }] with t on the sound's clock
+const effects = mountEffects({ show: () => ({ director, world, look }), now: () => clock.elapsedTime });
+const sound = mountSound(audio);
+const ui = mountControls({ release: () => effects.release() });
+const start = mountStart({ wake: sound.wake, connect: () => $('playFile').click() });
 const playback = mountPlayback({ audio, root: $('filePlayback'), notes: $('trackNotes'), snapshot: () => ({ venue: venueKey, mood: $('mood').value, sensitivity: +$('sens').value, section: signals.m.section, phase: signals.m.phase, bpm: signals.m.bpm, build: signals.m.build, show_status: director.status, segment_start_seconds: audio.segmentStart, listener_seconds: signals.now, sample_rate: audio.ctx?.sampleRate, audio_worklet: audio.tapped }) });
 
 function frame() {
@@ -149,87 +150,18 @@ function frame() {
     state.textContent = audio.message || changeMessage || `${audio.live ? 'Live: ' + audio.label + (audioNote ? ' · ' + audioNote : '') : 'Demo mode'} · ${audio.live && m.activity < 0.05 ? 'waiting for music' : director.status}`;
     state.title = state.textContent; $('bpm').value = bpm;
     $('miniStatus').textContent = state.textContent + ` · ${bpm} BPM` + (director.manual.blackout ? ' · BLACKOUT' : '') + (cameraFrozen ? ' · Camera paused' : '');
-    const source = $('audioSource').value;
-    $('playFile').dataset.connected = String(audio.live && signal.state !== 'lost' && signal.state !== 'suspended');
-    $('playFile').textContent = audio.live && signal.state !== 'lost' && signal.state !== 'suspended'
-      ? { file: 'Choose another audio file', system: 'System audio connected · reconnect', input: 'Audio input connected · reconnect' }[source]
-      : { file: 'Choose an audio file', system: 'Connect system audio', input: 'Connect audio input' }[source];
+    sound.update(signal);
     if (!changing) $('loading')?.remove(); show.ready ||= Math.round(performance.now());   // how long the venue took to build, in milliseconds
-    if (!started()) {
-      const busy = changing;
-      if ($('startShow').disabled !== busy) {
-        $('startShow').disabled = $('startDemo').disabled = busy; $('startShow').textContent = busy ? 'Building the venue…' : 'Start the show';
-        if (!busy) $('startShow').focus();
-      }
-    }
+    start.update(changing);
     syncSegments();
   }
   const lower = autoQuality.sample(raw, { visible: !document.hidden, ready: !changing && !!show.ready, automatic: qualityChoice === 'auto', quality: qualityKey });
   if (lower) changeQuality(lower).catch(changeFailed);
 }
 
-// ----- the controls: a console with what the show needs, always in the same place, and settings for the rest -----
-const MENU_PAGES = ['Show', 'Lights', 'Picture', 'Presets', 'Sound', 'Keys'];
-function selectMenuPage(page, focus = false) {
-  if (!MENU_PAGES.includes(page)) page = 'Show';
-  releaseHeld();
-  for (const name of MENU_PAGES) {
-    const active = name === page, tab = $('tab' + name);
-    tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1;
-    $('page' + name).hidden = !active;
-  }
-  $('page' + page).parentElement.scrollTop = 0;
-  keep('menuTab', page);
-  if (focus) $('tab' + page).focus();
-}
-for (const [i, page] of MENU_PAGES.entries()) {
-  $('tab' + page).onclick = () => selectMenuPage(page);
-  $('tab' + page).onkeydown = e => {
-    const next = e.key === 'ArrowRight' ? (i + 1) % MENU_PAGES.length : e.key === 'ArrowLeft' ? (i + MENU_PAGES.length - 1) % MENU_PAGES.length : e.key === 'Home' ? 0 : e.key === 'End' ? MENU_PAGES.length - 1 : -1;
-    if (next < 0) return;
-    e.preventDefault(); selectMenuPage(MENU_PAGES[next], true);
-  };
-}
-function setConsoleVisible(visible) {
-  if (!visible) { releaseHeld(); setSettingsOpen(false); }
-  $('console').classList.toggle('hidden', !visible); $('openPanel').hidden = visible;
-  $('openPanel').setAttribute('aria-expanded', String(visible));
-}
-function setSettingsOpen(open) {
-  $('panel').classList.toggle('hidden', !open);
-  $('openSettings').setAttribute('aria-expanded', String(open));
-  if (open) document.querySelector('.menu-tabs [aria-selected="true"]').focus();
-}
-// settings stay above the console, however high it is
-new ResizeObserver(() => document.documentElement.style.setProperty('--console-h', ($('console').offsetHeight && $('console').offsetHeight + 12) + 'px')).observe($('console'));
-$('hidePanel').onclick = () => { setConsoleVisible(false); $('openPanel').focus(); };
-$('openPanel').onclick = () => { setConsoleVisible(true); $('hidePanel').focus(); };
-$('openSettings').onclick = () => setSettingsOpen($('panel').classList.contains('hidden'));
-$('closeSettings').onclick = () => { setSettingsOpen(false); $('openSettings').focus(); };
-selectMenuPage(kept('menuTab', 'Show'));
-// buttons for the options of a select, all in view: the select keeps the value, so everything that reads or sets it still works
-const segments = [];
-function segmented(select, box) {
-  if (!box) { box = document.createElement('div'); select.after(box); }
-  box.classList.add('seg'); box.setAttribute('role', 'group');
-  if (!box.hasAttribute('aria-labelledby')) box.setAttribute('aria-label', select.labels?.[0]?.textContent || select.getAttribute('aria-label') || '');
-  const sync = () => { for (const b of box.children) { b.setAttribute('aria-pressed', String(b.dataset.value === select.value)); b.disabled = select.disabled; } };
-  const draw = () => {
-    box.replaceChildren(...[...select.options].filter(o => !o.disabled).map(o => {
-      const b = document.createElement('button'); b.type = 'button'; b.textContent = o.text; b.dataset.value = o.value;
-      b.onclick = () => { select.value = o.value; select.dispatchEvent(new Event('change')); sync(); };
-      return b;
-    }));
-    sync();
-  };
-  select.addEventListener('change', sync); draw(); segments.push({ draw, sync });
-}
-const syncSegments = () => { for (const s of segments) s.sync(); };
+// ----- the show's own controls -----
 for (const id of ['showTheme', 'lookPace', 'lookPreset']) segmented($(id));
 segmented($('audioSource'), $('startSource'));
-const fill = (select, entries, value) => { select.replaceChildren(); for (const [v, name] of entries) select.add(new Option(name, v)); select.value = value; };
-// a list in groups: [[group, [[value, name], ...]], ...]
-const groups = (select, lists, value) => { select.replaceChildren(); for (const [label, entries] of lists) if (entries.length) { const g = document.createElement('optgroup'); g.label = label; for (const [v, name] of entries) g.append(new Option(name, v)); select.append(g); } select.value = value; };
 groups($('venue'), KINDS.map(kind => [kind, Object.entries(VENUES).filter(([, v]) => (v.kind || 'Halls') === kind).map(([k, v]) => [k, v.name])]), venueKey in VENUES ? venueKey : 'hangar');
 function fillVenuePanel(moodKey, cameraValue = 'auto') {
   const suits = world.layout.genres.filter(k => k in MOODS);
@@ -269,14 +201,13 @@ function refreshTheme() {
 }
 $('showTheme').onchange = () => {
   controls.showTheme = $('showTheme').value;
-  if (controls.showTheme !== 'auto') { look.off.wall = false; keep('off', JSON.stringify(look.off)); fillSwitches(); refreshEffects(); }
+  if (controls.showTheme !== 'auto') { look.off.wall = false; keep('off', JSON.stringify(look.off)); fillSwitches(); effects.refresh(); }
   persistControls(); refreshTheme();
 };
 $('lightChoreography').onchange = () => { controls.lightChoreography = $('lightChoreography').value; persistControls(); refreshTheme(); };
 $('cameraFollowsLight').onchange = () => { controls.cameraFollowsLight = $('cameraFollowsLight').checked; persistControls(); };
 const LOOK_SLIDERS = [['lookLight', 'light'], ['lookBloom', 'bloom'], ['lookHaze', 'haze'], ['lookHall', 'hall']];
 const LOOK_PRESETS = { standard: { light: 1, bloom: 1, haze: 1, hall: 1 }, calm: { light: 0.8, bloom: 0.6, haze: 0.65, hall: 1.15 }, cinematic: { light: 0.9, bloom: 1.15, haze: 1.3, hall: 0.65 }, energetic: { light: 1.2, bloom: 1.3, haze: 1.15, hall: 0.85 } };
-const sliderValue = id => { $(id + 'Value').value = (+$(id).value).toFixed(2) + '×'; };
 function refreshLookPreset() {
   $('lookPreset').value = Object.keys(LOOK_PRESETS).find(k => LOOK_SLIDERS.every(([, key]) => Math.abs(LOOK_PRESETS[k][key] - look[key]) < 0.001)) || 'custom';
   syncSegments();
@@ -315,7 +246,7 @@ function fillSwitches() {
   for (const roles of FIXTURE_ROLES) for (const [i, role] of roles.filter(role => world.groups[role]?.length).entries()) {
     const label = document.createElement('label'), input = document.createElement('input');
     Object.assign(input, { id: 'fixture-' + role, type: 'checkbox', checked: !look.off[role] });
-    input.onchange = () => { look.off[role] = !input.checked; keep('off', JSON.stringify(look.off)); refreshEffects(); };
+    input.onchange = () => { look.off[role] = !input.checked; keep('off', JSON.stringify(look.off)); effects.refresh(); };
     label.className = 'chip'; label.style.gridColumnStart = i === 0 ? 1 : ''; label.append(input, ROLE_NAME[role]);
     $('switches').append(label);
     if (!LIGHT_ROLES.includes(role)) continue;
@@ -327,7 +258,7 @@ function fillSwitches() {
     row.append(caption, fader, output); $('fixtureLevels').append(row);
   }
   $('switches').closest('.deck').hidden = !$('switches').childElementCount;
-  refreshEffects();
+  effects.refresh();
 }
 function persistControls() { keep('controls', JSON.stringify(controls)); }
 const ICON = { pause: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="currentColor" stroke="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>', play: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="currentColor" stroke="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5v14l12-7z"/></svg>' };
@@ -432,79 +363,16 @@ async function replaceVenue(key, { force = false, nextQuality = qualityKey } = {
 }
 async function changeQuality(key) { await replaceVenue($('venue').value, { force: true, nextQuality: key }); }
 
-// Named presets keep show controls, never live audio connections or graphics quality.
-let savedPresets = normalizePresets(parseStored(kept('presets', '[]'), []));
-function refreshSavedPresets(selected = '') {
-  fill($('savedPreset'), [['', 'Choose a preset'], ...savedPresets.map(p => [p.id, p.name])], selected);
-  const found = savedPresets.find(p => p.id === $('savedPreset').value);
-  for (const id of ['loadPreset', 'updatePreset', 'deletePreset']) $(id).disabled = !found;
-}
-function storePresets(next) {
-  try { localStorage.setItem('sv.presets', JSON.stringify(next)); savedPresets = next; return true; }
-  catch { $('presetStatus').textContent = 'Could not save in this browser. Free some browser storage and try again.'; return false; }
-}
-function capturePreset(id, name) {
-  return normalizePresets([{ id, name, venue: venueKey, mood: $('mood').value, moodLocked, cam: $('cam').value, sens: +$('sens').value, look, controls,
-    pose: cameraFrozen ? { position: camera.position.toArray(), quaternion: camera.quaternion.toArray(), fov: camera.fov } : null }])[0];
-}
-$('savedPreset').onchange = () => {
-  const selected = $('savedPreset').value; refreshSavedPresets(selected);
-  $('presetName').value = savedPresets.find(p => p.id === selected)?.name || ''; $('presetStatus').textContent = '';
-};
-$('savePreset').onclick = () => {
-  if (changing) { $('presetStatus').textContent = 'Wait for the venue to finish loading.'; return; }
-  const name = $('presetName').value.trim();
-  if (!name) { $('presetStatus').textContent = 'Enter a name first.'; $('presetName').focus(); return; }
-  if (savedPresets.length >= 30) { $('presetStatus').textContent = '30 presets saved. Update or delete one to make room.'; return; }
-  const preset = capturePreset(crypto.randomUUID(), name);
-  if (storePresets([...savedPresets, preset])) { refreshSavedPresets(preset.id); $('presetStatus').textContent = `Saved “${preset.name}”.`; }
-};
-$('updatePreset').onclick = () => {
-  if (changing) { $('presetStatus').textContent = 'Wait for the venue to finish loading.'; return; }
-  const id = $('savedPreset').value, old = savedPresets.find(p => p.id === id), name = $('presetName').value.trim();
-  if (!old || !name) { $('presetStatus').textContent = 'Select a preset and enter its name first.'; return; }
-  const preset = capturePreset(id, name);
-  if (storePresets(savedPresets.map(p => p.id === id ? preset : p))) { refreshSavedPresets(id); $('presetStatus').textContent = `Updated “${preset.name}”.`; }
-};
-let deletedPreset = null;
-$('deletePreset').onclick = () => {
-  const id = $('savedPreset').value;
-  const old = savedPresets.find(p => p.id === id), index = savedPresets.findIndex(p => p.id === id);
-  if (!old) return;
-  if (storePresets(savedPresets.filter(p => p.id !== id))) { deletedPreset = { preset: old, index }; $('undoDeletePreset').hidden = false; refreshSavedPresets(); $('presetName').value = ''; $('presetStatus').textContent = `Deleted “${old.name}”. You can undo this.`; }
-};
-$('undoDeletePreset').onclick = () => {
-  if (!deletedPreset || savedPresets.length >= 30) { $('presetStatus').textContent = 'Make room for a preset first.'; return; }
-  const { preset, index } = deletedPreset, next = savedPresets.filter(p => p.id !== preset.id);
-  next.splice(index, 0, preset);
-  if (storePresets(next)) { refreshSavedPresets(preset.id); $('presetName').value = preset.name; $('presetStatus').textContent = `Restored “${preset.name}”.`; deletedPreset = null; $('undoDeletePreset').hidden = true; }
-};
-$('exportPresets').onclick = () => {
-  const url = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, presets: savedPresets }, null, 2)], { type: 'application/json' }));
-  const link = Object.assign(document.createElement('a'), { href: url, download: 'stage-visualizer-presets.json' }); link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000); $('presetStatus').textContent = `Exported ${savedPresets.length} presets.`;
-};
-$('importPresets').onclick = () => $('presetBackupFile').click();
-$('presetBackupFile').onchange = async e => {
-  const file = e.target.files[0]; e.target.value = ''; if (!file) return;
-  try {
-    if (file.size > 1024 * 1024) throw new Error('Backup is too large (maximum 1 MB).');
-    const raw = JSON.parse(await file.text()), items = Array.isArray(raw) ? raw : raw.presets;
-    const incoming = normalizePresets(items).filter(p => Object.hasOwn(VENUES, p.venue) && Object.hasOwn(MOODS, p.mood)).map(p => ({ ...p, cam: p.cam === 'auto' || /^[0-8]$/.test(p.cam) ? p.cam : 'auto' }));
-    if (!incoming.length) throw new Error('No compatible presets found.');
-    const fresh = incoming.filter(p => !savedPresets.some(old => old.id === p.id));
-    if (savedPresets.length + fresh.length > 30) throw new Error('Not enough room: maximum 30 presets. Your existing presets were kept.');
-    if (storePresets([...savedPresets, ...fresh])) { refreshSavedPresets(fresh[0]?.id || $('savedPreset').value); $('presetStatus').textContent = `Imported ${fresh.length} presets. Existing presets kept.`; }
-  } catch (error) { $('presetStatus').textContent = 'Could not import: ' + error.message; }
-};
-$('loadPreset').onclick = async () => {
-  const preset = savedPresets.find(p => p.id === $('savedPreset').value);
-  if (!preset || !(preset.venue in VENUES) || !(preset.mood in MOODS)) { $('presetStatus').textContent = 'This preset’s venue or mood is unavailable.'; return; }
-  for (const id of ['loadPreset', 'updatePreset', 'deletePreset', 'savePreset', 'savedPreset', 'resetShow']) $(id).disabled = true;
-  try {
+// Presets (presets-ui.js) keep show controls, never live audio connections or graphics quality.
+const presets = mountPresets({
+  busy: () => changing,
+  usable: p => Object.hasOwn(VENUES, p.venue) && Object.hasOwn(MOODS, p.mood),
+  capture: (id, name) => normalizePresets([{ id, name, venue: venueKey, mood: $('mood').value, moodLocked, cam: $('cam').value, sens: +$('sens').value, look, controls,
+    pose: cameraFrozen ? { position: camera.position.toArray(), quaternion: camera.quaternion.toArray(), fov: camera.fov } : null }])[0],
+  apply: async preset => {
     await replaceVenue(preset.venue);
     if (venueKey !== preset.venue || changing) throw new Error('Venue changed while loading. Try again.');
-    releaseHeld(); director.manual.blackout = false;
+    effects.release(); director.manual.blackout = false;
     controls = normalizeControls(preset.controls); look.controls = controls; persistControls();
     look.off = { ...preset.look.off }; keep('off', JSON.stringify(look.off)); applyLook(preset.look);
     moodLocked = preset.moodLocked; $('moodLock').checked = moodLocked; keep('moodLock', String(moodLocked));
@@ -512,22 +380,18 @@ $('loadPreset').onclick = async () => {
     $('sens').value = preset.sens; $('sens').oninput();
     setCam(preset.cam); fillSwitches(); refreshControlPanel();
     if (preset.pose) { camera.position.fromArray(preset.pose.position); camera.quaternion.fromArray(preset.pose.quaternion).normalize(); camera.fov = preset.pose.fov; camera.updateProjectionMatrix(); setCameraFrozen(true); }
-    $('presetStatus').textContent = `Loaded “${preset.name}”.`;
-  } catch (e) { $('presetStatus').textContent = 'Could not load: ' + e.message; }
-  finally { for (const id of ['savePreset', 'savedPreset', 'resetShow']) $(id).disabled = false; refreshSavedPresets($('savedPreset').value); }
-};
-refreshSavedPresets();
+  },
+});
 $('resetShow').onclick = () => {
-  releaseHeld(); director.manual.blackout = false;
+  effects.release(); director.manual.blackout = false;
   controls = normalizeControls({}); look.controls = controls; persistControls();
   look.off = { ...DEFAULT_OFF }; keep('off', JSON.stringify(look.off)); applyLook(LOOK_PRESETS.standard);
   $('sens').value = 1; $('sens').oninput(); setCam('auto'); show.view = null;
   moodLocked = false; $('moodLock').checked = false; keep('moodLock', 'false');
   $('mood').value = world.layout.mood in MOODS ? world.layout.mood : 'techno'; $('mood').onchange({ target: $('mood') });
   director.resetRingLook(clock.elapsedTime);
-  fillSwitches(); refreshControlPanel(); refreshEffects();
-  $('savedPreset').value = ''; refreshSavedPresets(); $('presetName').value = '';
-  $('presetStatus').textContent = 'Balanced starting point restored. Saved presets kept.';
+  fillSwitches(); refreshControlPanel(); effects.refresh();
+  presets.clear('Balanced starting point restored. Saved presets kept.');
 };
 
 // a picture or a video for the LED walls
@@ -541,157 +405,32 @@ $('wallFile').onchange = e => {
   world.env.media.colorSpace = THREE.SRGBColorSpace;
 };
 $('wallClear').onclick = () => { world.env.media = null; };
-const failed = e => { audio.message = 'No audio: ' + e.message; $('status').textContent = audio.message; };
-const wakeAudio = () => {
-  if (audio.ctx?.state === 'suspended') audio.ctx.resume().then(() => { if (audio.message === 'Click or press a key to start the audio') audio.message = ''; }).catch(failed);
-};
-addEventListener('pointerdown', wakeAudio); addEventListener('keydown', wakeAudio);
-let preferredInput = kept('input', ''), inputListRequest = 0;
-async function refreshInputs() {
-  const request = ++inputListRequest;
-  try {
-    if (!navigator.mediaDevices?.enumerateDevices) throw new Error('Audio inputs are unavailable in this browser');
-    const devices = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput' && d.deviceId);
-    if (request !== inputListRequest) return;
-    const entries = [['', 'System default'], ...devices.map((d, i) => [d.deviceId, d.label || `Audio input ${i + 1}`])];
-    const missing = preferredInput && !devices.some(d => d.deviceId === preferredInput);
-    if (missing) entries.push([preferredInput, 'Previously selected input (unavailable)']);
-    fill($('audioInput'), entries, preferredInput);
-    if (missing) $('inputHint').textContent = 'The selected input is unavailable. Choose another device and connect.';
-    else if (!devices.some(d => d.label)) $('inputHint').textContent = 'Connect once to reveal device names. For rekordbox, choose BlackHole 2ch.';
-    else $('inputHint').textContent = 'For rekordbox, choose BlackHole 2ch and route rekordbox to your Multi-Output Device.';
-  } catch (e) { if (request === inputListRequest) $('inputHint').textContent = e.message; }
-}
-$('refreshInputs').onclick = refreshInputs;
-$('audioInput').onchange = () => { preferredInput = $('audioInput').value; keep('input', preferredInput); };
-navigator.mediaDevices?.addEventListener('devicechange', refreshInputs);
-$('audioSource').onchange = () => {
-  $('playFile').textContent = { file: 'Choose an audio file', system: 'Connect system audio', input: 'Connect audio input' }[$('audioSource').value];
-  $('inputControls').hidden = $('audioSource').value !== 'input';
-  if (!$('inputControls').hidden) refreshInputs();
-};
-const chooseSource = source => { $('audioSource').value = source; $('audioSource').onchange(); keep('source', source); };
-$('audioSource').value = ['file', 'system', 'input'].includes(kept('source', 'file')) ? kept('source', 'file') : 'file';
-$('audioSource').onchange();
-$('playFile').onclick = () => {
-  const source = $('audioSource').value;
-  if (source === 'file') $('audioFile').click();
-  else {
-    $('playFile').disabled = true;
-    audio.message = 'Connecting audio…'; $('status').textContent = audio.message;
-    (source === 'system' ? audio.system() : audio.input(preferredInput)).then(connected => {
-      if (connected !== false) chooseSource(source);
-      return refreshInputs();
-    }).catch(e => {
-      const messages = { NotAllowedError: 'Audio permission denied · allow microphone access in the browser and try again', NotFoundError: 'The selected audio input is unavailable · refresh devices and choose another', OverconstrainedError: 'The selected audio input is unavailable · refresh devices and choose another', NotReadableError: 'The audio input could not start · check the device and other apps' };
-      failed(new Error(source === 'input' ? messages[e.name] || e.message : e.message));
-    }).finally(() => { $('playFile').disabled = false; });
-  }
-};
-$('audioFile').onchange = e => { const file = e.target.files[0]; e.target.value = ''; if (file) audio.file(file).then(() => chooseSource('file')).catch(failed); };
-addEventListener('dragover', e => e.preventDefault());
-addEventListener('drop', e => {   // an audio file dropped anywhere on the page plays too
-  e.preventDefault();
-  const file = [...e.dataTransfer.files].find(f => f.type.startsWith('audio/') || f.type.startsWith('video/'));
-  if (file) audio.file(file).then(() => chooseSource('file')).catch(failed);
-});
-function refreshEffects() {
-  for (const [id, effect] of Object.entries(EFFECTS)) {
-    const present = effect.roles.filter(role => world.groups[role]?.length), enabled = present.some(role => !look.off[role]);
-    const btn = $(id);
-    if (effect.hold && !enabled) { held[effect.hold].pointer = held[effect.hold].key = false; director.manual[effect.hold] = false; }
-    btn.disabled = !enabled;
-    btn.dataset.state = !present.length ? 'missing' : !enabled ? 'off' : effect.hold && director.manual[effect.hold] ? 'held' : 'ready';
-    btn.title = !present.length ? `This venue has no ${effect.name.toLowerCase()}` : !enabled ? 'Switch it on under Fixtures' : effect.hold ? 'Hold to activate; release to stop' : 'Fire once';
-    if (effect.hold) btn.setAttribute('aria-pressed', String(director.manual[effect.hold]));
-  }
-  $('btnBlackout').dataset.state = director.manual.blackout ? 'on' : 'off';
-  $('btnBlackout').setAttribute('aria-pressed', String(director.manual.blackout));
-}
-function setHeld(key, source, on) {
-  const btn = $(key === 'strobe' ? 'btnStrobe' : 'btnBlinder');
-  held[key][source] = on && !btn.disabled;
-  director.manual[key] = held[key].pointer || held[key].key;
-  refreshEffects();
-}
-function releaseHeld(source) {
-  for (const key of Object.keys(held)) {
-    if (source) held[key][source] = false;
-    else held[key].pointer = held[key].key = false;
-    director.manual[key] = held[key].pointer || held[key].key;
-  }
-  refreshEffects();
-}
-for (const [id, effect] of Object.entries(EFFECTS)) if (effect.hold) {
-  const btn = $(id);
-  btn.onpointerdown = e => { if (e.button === 0) setHeld(effect.hold, 'pointer', true); };
-  btn.onpointerup = btn.onpointerleave = btn.onpointercancel = () => setHeld(effect.hold, 'pointer', false);
-  btn.onkeydown = e => { if (e.code === 'Space' || e.key === 'Enter') { e.preventDefault(); setHeld(effect.hold, 'key', true); } };
-  btn.onkeyup = e => { if (e.code === 'Space' || e.key === 'Enter') { e.preventDefault(); setHeld(effect.hold, 'key', false); } };
-  btn.onblur = () => setHeld(effect.hold, 'key', false);
-}
-addEventListener('pointerup', () => releaseHeld('pointer'));
-addEventListener('pointercancel', () => releaseHeld('pointer'));
-addEventListener('blur', () => releaseHeld());
-document.addEventListener('visibilitychange', () => { if (document.hidden) releaseHeld(); });
-const pyro = () => { if (!$('btnPyro').disabled) for (const kind of ['flame', 'spark', 'firework']) director.fire(kind, clock.elapsedTime); };
-$('btnCo2').onclick = () => { if (!$('btnCo2').disabled) director.fire('co2', clock.elapsedTime); };
-$('btnPyro').onclick = pyro;
-$('btnConfetti').onclick = () => { if (!$('btnConfetti').disabled) director.fire('confetti', clock.elapsedTime); };
-$('btnBlackout').onclick = () => { director.manual.blackout = !director.manual.blackout; refreshEffects(); };
-const fullscreen = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
-$('fullscreenPanel').onclick = fullscreen;
-renderer.domElement.addEventListener('dblclick', fullscreen);
+renderer.domElement.addEventListener('dblclick', ui.fullscreen);
 addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey || $('shortcutHelp').open || !started()) return;
   const key = e.key.toLowerCase();
-  if (key === 'escape' && !$('panel').classList.contains('hidden')) { setSettingsOpen(false); $('openSettings').focus(); return; }
-  if (key === 'h' && !e.repeat && !['SELECT', 'INPUT', 'TEXTAREA'].includes(e.target.tagName) && !e.target.isContentEditable) { setConsoleVisible($('console').classList.contains('hidden')); return; }
+  if (key === 'escape' && ui.settingsOpen()) { ui.setSettingsOpen(false); $('openSettings').focus(); return; }
+  if (key === 'h' && !e.repeat && !['SELECT', 'INPUT', 'TEXTAREA'].includes(e.target.tagName) && !e.target.isContentEditable) { ui.setConsoleVisible(!ui.consoleVisible()); return; }
   if (!e.repeat && !['SELECT', 'INPUT', 'TEXTAREA', 'AUDIO', 'VIDEO'].includes(e.target.tagName) && !e.target.isContentEditable) {
-    if (key === '?') { showShortcutHelp(); return; }
-    if (key === 's') { setSettingsOpen($('panel').classList.contains('hidden')); return; }
+    if (key === '?') { ui.showShortcutHelp(); return; }
+    if (key === 's') { ui.setSettingsOpen(!ui.settingsOpen()); return; }
     if (key === 'p') { setCameraFrozen(!cameraFrozen); return; }
     if (key === 'n' && !changing) { director.next(clock.elapsedTime, signals.m.section); return; }
   }
   if (['SELECT', 'INPUT', 'BUTTON', 'SUMMARY', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
   if (['t', 'g', 'x'].includes(e.key.toLowerCase()) && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { playback.markMoment({ t: 'unrated', g: 'good', x: 'wrong' }[e.key.toLowerCase()]); return; }
   if (['AUDIO', 'VIDEO'].includes(e.target.tagName)) return;   // keep the player's native keyboard controls
-  if (e.code === 'Space') { setHeld('strobe', 'key', true); e.preventDefault(); }
-  if (key === 'b') setHeld('blinder', 'key', true);
+  if (e.code === 'Space') { effects.setHeld('strobe', 'key', true); e.preventDefault(); }
+  if (key === 'b') effects.setHeld('blinder', 'key', true);
   if (e.repeat) return;
   if (key === 'c') $('btnCo2').click();
-  if (key === 'v') pyro();
+  if (key === 'v') effects.pyro();
   if (key === 'k') $('btnConfetti').click();
-  if (key === 'f') fullscreen();
+  if (key === 'f') ui.fullscreen();
   if (key === 'm') { const m = $('mood'); m.selectedIndex = (m.selectedIndex + 1) % m.options.length; m.dispatchEvent(new Event('change')); }
   if (e.key >= '0' && e.key <= '9') { $('cam').value = e.key === '0' ? 'auto' : String(e.key - 1); $('cam').dispatchEvent(new Event('change')); }
 });
-addEventListener('keyup', e => { if (e.code === 'Space') setHeld('strobe', 'key', false); if (e.key.toLowerCase() === 'b') setHeld('blinder', 'key', false); });
-function showShortcutHelp() {
-  releaseHeld(); const hint = $('hint').cloneNode(true); hint.removeAttribute('id');
-  $('shortcutHelpContent').replaceChildren(hint); if (!$('shortcutHelp').open) $('shortcutHelp').showModal();
-}
-$('helpButton').onclick = showShortcutHelp;
-document.addEventListener('dblclick', e => {
-  if (!e.target.matches('input[type="range"]')) return;
-  const input = e.target, defaults = { sens: 1, lookLight: 1, lookBloom: 1, lookHaze: 1, lookHall: 1, beamWidth: 1, cameraSpeed: 1 };
-  const value = defaults[input.id] ?? (input.id.startsWith('level-') ? 1 : input.id.startsWith('coilSpeed-') ? 1 : null);
-  if (value === null) return; input.value = value; input.dispatchEvent(new Event('input', { bubbles: true }));
-});
-let idle = 0;
-addEventListener('pointermove', () => { document.body.classList.remove('idle'); clearTimeout(idle); idle = setTimeout(() => document.body.classList.add('idle'), 3000); });
-// Restore the sound source of last time. A browser lets the page listen again without a click while it still has
-// permission for the input; if it does not, the status line asks for a click.
-(async () => {
-  const source = kept('source', '');
-  if (!source || source === 'file' || !navigator.permissions) return;
-  try { if ((await navigator.permissions.query({ name: 'microphone' })).state !== 'granted') return; } catch { return; }
-  (source === 'system' ? audio.system() : audio.input(preferredInput)).then(connected => {
-    if (connected === false) return;
-    if (audio.ctx.state !== 'running') audio.message = 'Click or press a key to start the audio';
-    refreshInputs();
-  }).catch(failed);
-})();
+addEventListener('keyup', e => { if (e.code === 'Space') effects.setHeld('strobe', 'key', false); if (e.key.toLowerCase() === 'b') effects.setHeld('blinder', 'key', false); });
 // While working on the show: the page keeps a log of what the show decides with live sound (a line a second, and one
 // for every break, drop, lift and change of part or program), so it can be held against the recording afterwards.
 const logLines = [JSON.stringify({ w: Date.now(), what: 'page loaded' })];
@@ -710,17 +449,6 @@ function logShow(t) {
   }
 }
 if (params.has('hide')) { $('console').classList.add('hidden'); $('miniStatus').hidden = true; }   // ?hide: no controls, for a picture
-// The start screen covers the venue while it builds. The click that leaves it may connect the sound, which a
-// browser only allows after a click; a reload in the same tab goes straight back to the show.
-function startShow(withSound) {
-  if ($('startShow').disabled) return;
-  document.documentElement.classList.add('started');
-  try { sessionStorage.setItem('sv.started', '1'); } catch {}
-  wakeAudio();
-  if (withSound) $('playFile').click();
-}
-$('startShow').onclick = () => startShow(true);
-$('startDemo').onclick = () => startShow(false);
 $('venueSetting').hidden = Object.keys(VENUES).length < 2;   // one venue: nothing to choose
 // While working on the show: when a file changes, the page reloads itself (the local server says when).
 if (!navigator.webdriver && (location.hostname === '127.0.0.1' || location.hostname === 'localhost')) {

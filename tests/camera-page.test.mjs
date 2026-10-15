@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { withPage, waitFor } from './browser.mjs';
+import { withPage, waitFor, renderFlags } from './browser.mjs';
 
 test('Hangar camera controls render the hall views', { timeout: 240000 }, async () => {
-  await withPage([], async ({ send, evaluate, until, errors, port }) => {
+  await withPage(renderFlags(), async ({ send, evaluate, until, errors, port }) => {
     await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 760, deviceScaleFactor: 1, mobile: false });
     await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=hangar&quality=normal&skip=24&details` });
     await until('!!window.__show?.ready', 'The camera preview did not start');

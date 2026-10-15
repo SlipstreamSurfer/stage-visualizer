@@ -21,5 +21,8 @@ Use `npm test` for the short daily check, `npm run test:audio` for audio-engine 
 Hangar page check. Run `npm run test:extended` only when broader application
 changes require it. Do not tour unrelated venues for a Hangar change.
 
+Every pull request runs `npm test` on GitHub and checks that each commit uses a GitHub noreply address
+(`<id>+<name>@users.noreply.github.com`); a commit with a private address must be rewritten before it is merged.
+
 See [Publishing a release](docs/releases.md) for versioning, required checks,
 release tags and the separate GitHub Release publication step.

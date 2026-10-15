@@ -4,7 +4,7 @@
 // Chrome, Edge or Chromium is required; BROWSER_PATH can select its executable.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { withPage, waitFor } from './browser.mjs';
+import { withPage, waitFor, renderFlags } from './browser.mjs';
 import { RATE, listen } from '../tools/hear.mjs';
 import { track } from './synth.mjs';
 import { VENUES } from '../src/venues/index.js';
@@ -24,10 +24,10 @@ function wav(pcm) {
 
 // The current show is checked. Headless Chromium loses a software WebGPU device within seconds, so the show is asked
 // for its WebGL way of drawing here: the same page, the same scene and the same materials, with every fixture on, at
-// the lightest quality so that a software browser gets through all the venues. What only WebGPU has (the smoke as
+// the lightest quality. It draws on the graphics card where there is one (renderFlags), in software otherwise. What only WebGPU has (the smoke as
 // particles) is not covered.
 for (const [title, page, store, venues] of [['the show: Hangar builds', 'index.html?webgl&all&quality=low&', 'sv.', TOUR]])
-test(`${title}, the demo show runs, the pyro fires and a dropped audio file is heard`, { timeout: 900000 }, () => withPage(['--use-angle=swiftshader', '--enable-unsafe-swiftshader'], async ({ send, errors, port }) => {
+test(`${title}, the demo show runs, the pyro fires and a dropped audio file is heard`, { timeout: 900000 }, () => withPage(renderFlags(), async ({ send, errors, port }) => {
     const look = async () => JSON.parse((await send('Runtime.evaluate', { returnByValue: true, expression:
       `JSON.stringify({ loading: !!document.getElementById('loading'), status: document.getElementById('status')?.textContent, flow: !!window.__show?.director.mood.flow, beat: window.__show?.signals.beats ?? -1, phase: window.__show?.signals.m.phase, venue: window.__show?.world.layout.name, fixtures: window.__show?.world.layout.things.length })` })).result.value);
     let seen;

@@ -30,13 +30,13 @@ WebGPU renders the show when available; WebGL provides a fallback.
 
 | Music | Light show | Your controls |
 | --- | --- | --- |
-| Local tracks, audio inputs and supported system-audio sharing | Moving heads, LED arches, haze and a dancing crowd | Nine camera views, look presets and quick light switches |
+| Local tracks, audio inputs and supported system-audio sharing | Moving heads, LED arches, haze and a dancing crowd | Nine camera views, level faders and a switch for every light group |
 | Audio processed locally in your browser | Automatic scenes shaped by the incoming music | Fine tuning, saved presets and keyboard effects |
 
 <table>
   <tr>
     <td width="50%"><a href="docs/screenshots/hangar-dj-booth.jpg"><img src="docs/screenshots/hangar-dj-booth.jpg" alt="Hangar from behind the DJ booth, looking across the decks and crowd" width="100%"></a></td>
-    <td width="50%"><a href="docs/screenshots/hangar-controls.jpg"><img src="docs/screenshots/hangar-controls.jpg" alt="Show controls with Hangar, mood, camera movement and Energetic look settings" width="100%"></a></td>
+    <td width="50%"><a href="docs/screenshots/hangar-controls.jpg"><img src="docs/screenshots/hangar-controls.jpg" alt="The console along the bottom: sound, show, level faders, fixture switches and effects" width="100%"></a></td>
   </tr>
   <tr>
     <td align="center"><strong>From the DJ booth</strong><br>Decks, crowd and the lighting rig.</td>
@@ -80,14 +80,21 @@ closing or reloading the page. A connected input with no detected audio is silen
 
 ## Control the show
 
-Venue, mood, look and camera are the main controls. Show, Lights, Effects and
-Settings tabs contain finer controls. Venue and quality changes preserve the
-active audio stream. Automatic quality reduces detail after sustained slow
-rendering; explicit Light, Normal and High choices are remembered.
+The page opens on a start screen: choose the sound source and the picture quality while the venue builds behind
+it, then **Start the show**. That click connects the sound, so the browser does not ask for another one. A reload in
+the same tab goes straight back to the show.
 
-Look presets include Standard, Calm, Cinematic and Energetic. Adjust light,
-glow, haze and hall sliders for a custom look. Light groups, palettes, beam
-width and camera speed have their own controls. **Show theme** combines wall images, light colours and arch/laser patterns:
+During the show one console along the bottom holds everything you use live, always in the same place and without
+scrolling: **Sound** (source, tempo, connect), **Track** (while a file plays), **Show** (mood, theme, pace of changes,
+camera and freeze), **Levels** (faders for light, glow, haze, hall light, beam width, sound sensitivity and camera
+speed), **Fixtures** (a switch for every light group and effect) and **Effects** (strobe, blinder, blackout, CO2,
+pyro, confetti). **Settings** (the gear, or **S**) holds what you set once: choreography, hall heads and truss
+formation, look presets, colour palette and a level per light group, quality and extra smoke, screen content,
+presets, the audio input device and the keyboard shortcuts. Venue and quality changes preserve the active audio
+stream. Automatic quality reduces detail after sustained slow rendering; explicit Light, Normal and High choices are
+remembered.
+
+Look presets include Standard, Calm, Cinematic and Energetic; moving a fader makes a custom look. **Show theme** combines wall images, light colours and arch/laser patterns:
 Industrial, Hypnotic or Melodic; the wall develops within the theme through quiet passages, builds and peaks.
 **Light choreography → Composed show** adds stage openings, slow hall waves and held light pictures, and the
 automatic camera shows each composition. The hall heads have 25 looks and change them within a track and for every new track, the hall trusses hold one of
@@ -95,7 +102,7 @@ automatic camera shows each composition. The hall heads have 25 looks and change
 Browser presets save your preferred settings. **Restore a balanced starting point** resets the show.
 
 Hold **Space** for strobe and **B** for blinders. **K** triggers confetti,
-**C** CO2 and **V** pyro where enabled. **H** hides the panel; **F** toggles
+**C** CO2 and **V** pyro where enabled. **H** hides the console, **S** opens the settings and **Esc** closes them; **F** toggles
 fullscreen; **1–9** select cameras and **0** selects automatic cameras.
 Effects unavailable in a venue are marked. Releasing a hold or leaving the
 window releases held effects.

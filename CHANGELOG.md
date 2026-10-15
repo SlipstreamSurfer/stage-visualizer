@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.27.0
+
+- One console along the bottom of the screen holds every control you use during the show, always in the same place
+  and without scrolling: Sound, Track (while a file plays), Show, Levels, Fixtures and Effects. The look sliders,
+  beam width, sound sensitivity and camera speed are faders side by side; theme and pace of changes are buttons
+  instead of lists; every light group and effect is a switch. On a narrower screen the console folds onto two rows,
+  on a phone it becomes a sheet.
+- Settings (the gear, or S) hold what you set once, in six short pages: Show, Lights, Picture, Presets, Sound and
+  Keys. The level per light group moved there from the quick lights tray, which is gone. Escape closes them.
+- A start screen covers the venue while it builds. Choose the sound source and the picture quality, then start the
+  show: that click connects the sound. A reload in the same tab, a test browser and `?hide` skip it.
+
 ## 0.26.6
 
 - The hall heads are programmed like a lighting desk: a look combines a position, a movement, which heads are lit,

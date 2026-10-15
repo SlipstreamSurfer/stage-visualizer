@@ -83,7 +83,7 @@ Zigzag, Front low, Twin valleys, Ramp tilted, Canopy, Middle low, Twisted, Back 
 formations come in calm parts, high ones in peaks. A break lowers them with the build, never below 7 metres; the
 drop takes them back to their formation.
 
-In the Show panel, **Hall heads** and **Truss formation** pin one look or formation, and **Changes** sets the pace:
+In the settings (Show), **Hall heads** and **Truss formation** pin one look or formation, and **Changes** on the console sets the pace:
 Calm (looks about every 80 seconds, formations every four minutes), Normal (40 seconds, two minutes) or Lively
 (20 seconds, one minute). These settings are saved with presets. All of this works the same in every mood.
 

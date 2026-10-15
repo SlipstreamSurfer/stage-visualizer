@@ -5,127 +5,162 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stage Visualizer</title>
 <link rel="icon" href="data:,">
+<script>
+  // A test browser, a picture (?hide) or a reload in the same tab goes straight to the show.
+  try { if (navigator.webdriver || new URLSearchParams(location.search).has('hide') || sessionStorage.getItem('sv.started')) document.documentElement.classList.add('started'); } catch {}
+</script>
 <style>
+  :root { --glass: rgba(14, 16, 22, .8); --edge: rgba(255,255,255,.16); --line: rgba(255,255,255,.1); --text: #e8eaf0; --dim: #8d93a1; --accent: #ff6845; --on: rgba(255,104,69,.2); --on-edge: rgba(255,104,69,.7); --held: #504329; --held-edge: #c5a568; }
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: -apple-system, system-ui, sans-serif; }
   canvas { display: block; }
   #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; }
   #loading { position: fixed; inset: 0; display: grid; place-items: center; color: #777; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; pointer-events: none; }
   body.idle { cursor: none; }
   [hidden] { display: none !important; }
-  #miniStatus { display: none; position: fixed; left: 16px; bottom: 16px; max-width: calc(100vw - 200px); color: #ddd; background: #111c; border: 1px solid #444; border-radius: 10px; padding: 9px 12px; font-size: 12px; pointer-events: none; }
-  #panel.hidden ~ #miniStatus { display: block; }
-  #shortcutHelp { background: #14161c; color: #eee; border: 1px solid #555; border-radius: 14px; max-width: min(420px, 85vw); line-height: 1.8; }
-  #shortcutHelp::backdrop { background: #0009; }
+  button, select, input { font: inherit; }
+  button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible, .chip:has(input:focus-visible) { outline: 2px solid #b1bac8; outline-offset: 2px; }
+  .glass { background: var(--glass); border: 1px solid var(--edge); color: var(--text); backdrop-filter: blur(18px) saturate(125%); -webkit-backdrop-filter: blur(18px) saturate(125%); box-shadow: 0 18px 55px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.06); }
+  .ctl { box-sizing: border-box; height: 28px; padding: 0 8px; background: rgba(8,10,14,.6); color: #eee; border: 1px solid var(--edge); border-radius: 7px; font-size: 12px; cursor: pointer; }
+  button.ctl:hover:not(:disabled) { background: #2a2c33; }
+  button.ctl:disabled { opacity: .4; cursor: default; }
+  .ctl.primary { background: #e8e8e8; color: #000; border-color: #fff; font-weight: 600; }
+  .ctl.primary:hover:not(:disabled) { background: #fff; }
+  input[type="checkbox"], input[type="range"] { accent-color: #c9cfdb; }
+  /* buttons that stand for the options of a select beside them */
+  .seg { display: flex; min-width: 0; border: 1px solid var(--edge); border-radius: 7px; overflow: hidden; background: rgba(8,10,14,.6); }
+  .seg button { flex: 1 1 0; min-width: 0; height: 26px; padding: 0 6px; margin: 0; border: 0; border-left: 1px solid var(--line); background: transparent; color: var(--dim); font-size: 11px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .seg button:first-child { border-left: 0; }
+  .seg button:hover:not(:disabled) { color: #fff; background: rgba(255,255,255,.06); }
+  .seg button[aria-pressed="true"] { color: #fff; background: var(--on); box-shadow: inset 0 -2px var(--accent); }
+  .seg button:disabled { opacity: .4; cursor: default; }
+  select.segmented { display: none; }
 
-  #panel { --glass: rgba(16, 18, 24, .72); position: fixed; top: 16px; left: 16px; width: min(470px, calc(100vw - 32px)); max-height: calc(100dvh - 32px);
-    display: grid; grid-template-columns: 78px minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
-    grid-template-areas: "head head" "audio audio" "nav page" "foot foot";
-    background: var(--glass); border: 1px solid rgba(255,255,255,.2); border-radius: 18px; color: #e8eaf0; font-size: 13px;
-    backdrop-filter: blur(18px) saturate(125%); -webkit-backdrop-filter: blur(18px) saturate(125%);
-    box-shadow: 0 18px 55px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.07); overflow: hidden; }
+  /* ----- the start screen: the venue builds behind it ----- */
+  #start { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 40%, rgba(0,0,0,.35), rgba(0,0,0,.82)); backdrop-filter: blur(14px) saturate(120%); -webkit-backdrop-filter: blur(14px) saturate(120%); color: var(--text); }
+  .started #start { display: none; }
+  .start-card { width: min(440px, calc(100vw - 32px)); display: grid; gap: 14px; text-align: center; }
+  .start-card h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; color: #fff; }
+  .start-venue { margin: -6px 0 18px; color: var(--dim); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+  .start-field { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 10px; text-align: left; }
+  .start-field > span { color: var(--dim); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  .start-field .seg button { height: 34px; font-size: 12px; }
+  #startShow { height: 48px; margin-top: 12px; border-radius: 12px; font-size: 15px; }
+  #startDemo { justify-self: center; border: 0; background: none; color: var(--dim); font-size: 12px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  #startDemo:hover { color: #fff; }
+
+  /* ----- the console: everything for the show, always in the same place ----- */
+  #console { position: fixed; z-index: 4; left: 12px; right: 12px; bottom: 12px; width: fit-content; max-width: calc(100vw - 24px); box-sizing: border-box; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; row-gap: 12px; padding: 10px 8px 10px 0; border-radius: 16px; font-size: 12px; }
+  #console.hidden { display: none; }
+  html:not(.started) #console { visibility: hidden; }
+  .deck { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 0 16px; border-left: 1px solid var(--line); }
+  .deck:first-child, .deck-sound { border-left: 0; }
+  .deck h2 { margin: 0; font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+  .deck-sound { width: 200px; }
+  .sound-line { display: flex; align-items: center; gap: 8px; }
+  .sound-line select { flex: 1; min-width: 0; }
+  .bpm { display: flex; align-items: baseline; gap: 6px; }
+  #bpm { font-size: 24px; font-weight: 600; color: #fff; font-variant-numeric: tabular-nums; line-height: 1; }
+  .bpm span { color: var(--dim); font-size: 10px; letter-spacing: .08em; }
+  #inputLevel { flex: 1; height: 6px; accent-color: #8c9; }
+  #status { color: #9fb79f; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #status[data-audio-state="silent"], #status[data-audio-state="lost"] { color: #db8; }
+  #playFile[data-connected="true"] { background: rgba(8,10,14,.6); color: #cfe3cf; border-color: #47634a; font-weight: 400; }
+  .deck-track { width: 230px; }
+  #playbackTime { color: #eee; font-size: 15px; font-variant-numeric: tabular-nums; }
+  #fileTransport audio { display: block; width: 100%; height: 30px; color-scheme: dark; }
+  .row { display: flex; gap: 6px; }
+  .row > * { flex: 1; min-width: 0; }
+  #markStatus { min-height: 13px; color: var(--dim); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .deck-show { width: 300px; }
+  .field { display: grid; grid-template-columns: 58px minmax(0, 1fr); align-items: center; gap: 8px; }
+  .field > label { color: var(--dim); font-size: 11px; }
+  .field .pair { display: flex; gap: 6px; min-width: 0; }
+  .field .pair select { flex: 1; min-width: 0; }
+  #freezeCamera { display: grid; place-items: center; width: 34px; padding: 0; }
+  #freezeCamera[aria-pressed="true"] { background: var(--held); border-color: var(--held-edge); color: #fff; }
+  .faders { display: flex; gap: 4px; flex: 1; }
+  .fader { width: 42px; display: grid; grid-template-rows: auto 1fr auto; justify-items: center; gap: 3px; }
+  .fader output { color: #ccd; font-size: 10px; font-variant-numeric: tabular-nums; }
+  .fader input { writing-mode: vertical-lr; direction: rtl; width: 22px; height: 86px; margin: 0; cursor: pointer; }
+  .fader label { color: var(--dim); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+  .chips { display: grid; grid-template-columns: repeat(4, 80px); gap: 5px; }
+  .chip { position: relative; display: flex; align-items: center; justify-content: center; height: 24px; padding: 0 4px; border: 1px solid var(--line); border-radius: 6px; color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; cursor: pointer; user-select: none; }
+  .chip input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+  .chip:hover { color: #fff; border-color: var(--edge); }
+  .chip:has(input:checked) { color: #fff; background: var(--on); border-color: var(--on-edge); }
+  .effect-grid { display: grid; grid-template-columns: repeat(3, 66px); gap: 6px; }
+  .effect-grid button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 52px; padding: 0; margin: 0; border: 1px solid var(--edge); border-radius: 9px; background: rgba(8,10,14,.6); color: #eee; font-size: 12px; cursor: pointer; }
+  .effect-grid button:hover:not(:disabled) { background: #2a2c33; }
+  .effect-grid kbd { color: #8d93a1; font-family: inherit; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+  .effect-grid button:disabled { opacity: .3; cursor: default; }
+  .effect-grid button[data-state="held"], .effect-grid button[data-state="on"] { background: var(--held); border-color: var(--held-edge); color: #fff; }
+  #btnBlackout { border-color: #684142; }
+  #btnBlackout[data-state="on"] { background: #613034; border-color: #b7676e; }
+  .deck-tools { display: flex; flex-direction: column; gap: 5px; padding: 0 0 0 10px; border-left: 1px solid var(--line); }
+  .deck-tools button { display: grid; place-items: center; width: 30px; height: 26px; padding: 0; margin: 0; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #cfd4de; font-size: 14px; cursor: pointer; }
+  .deck-tools button:hover, #openSettings[aria-expanded="true"] { background: rgba(255,255,255,.08); border-color: var(--edge); }
+  #openPanel { position: fixed; z-index: 4; left: 16px; bottom: 16px; padding: 10px 14px; border-radius: 12px; font-size: 12px; cursor: pointer; }
+  #miniStatus { display: none; position: fixed; left: 150px; bottom: 16px; max-width: calc(100vw - 200px); color: #ddd; background: #111c; border: 1px solid #444; border-radius: 10px; padding: 9px 12px; font-size: 12px; pointer-events: none; }
+  #console.hidden ~ #miniStatus { display: block; }
+
+  /* ----- settings: what is set once, not during the show ----- */
+  #panel { position: fixed; z-index: 6; top: 16px; left: 16px; width: min(500px, calc(100vw - 32px)); max-height: calc(100dvh - var(--console-h, 0px) - 44px);
+    display: grid; grid-template-rows: auto auto minmax(0, 1fr); border-radius: 16px; font-size: 13px; overflow: hidden; }
   #panel.hidden { display: none; }
   #panel h1 { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #fff; }
-  .panel-header { grid-area: head; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.1); }
-  .panel-actions { display: flex; gap: 6px; }
-  #panel .panel-actions button { width: 28px; height: 28px; padding: 0; margin: 0; font-size: 16px; }
-  #panel .audio-card { grid-area: audio; padding: 0 14px 12px; max-height: min(220px, 30dvh); overflow-y: auto; scrollbar-width: thin; }
-  #panel .audio-card details { border: 0; margin: 0; max-height: min(260px, 28dvh); overflow-y: auto; scrollbar-width: thin; }
-  #panel .audio-card summary { font-size: 12px; }
-  #panel .audio-card select { margin-top: 8px; }
-  #panel .audio-card label + select { margin-top: 0; }
-  #panel .menu-tabs { grid-area: nav; display: flex; flex-direction: column; gap: 7px; padding: 12px 8px; border-right: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.035); }
-  #panel .menu-tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-height: 62px; margin: 0; border: 1px solid transparent; background: transparent; font-size: 10px; padding: 7px 3px; color: #b4b9c5; border-radius: 10px; text-transform: uppercase; letter-spacing: .04em; }
-  #panel .menu-tabs button .tab-glyph { font-size: 18px; line-height: 1; color: #d9deea; }
-  #panel .menu-tabs button[aria-selected="true"] { color: #fff; background: linear-gradient(145deg, rgba(255,100,61,.27), rgba(184,198,224,.1)); border-color: rgba(255,255,255,.2); box-shadow: inset 2px 0 #ff6845, 0 4px 14px rgba(0,0,0,.18); }
-  .panel-pages { grid-area: page; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #45454d transparent; padding: 4px 14px 14px; }
-  #panel h2 { margin: 14px 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #aaa; }
-  #panel .panel-footer { grid-area: foot; border-top: 1px solid rgba(255,255,255,.1); padding: 9px 14px; font-size: 10px; color: #a1a6b1; }
-  #panel .panel-note { color: #92929d; font-size: 11px; line-height: 1.5; margin: 8px 0 12px; }
-  #panel label { display: block; margin: 10px 0 4px; color: #999; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
-  #panel select, #panel button, #panel input { width: 100%; box-sizing: border-box; }
-  #panel input[type="text"], #panel select, #panel button { padding: 7px 8px; background: rgba(10,12,17,.62); color: #eee; border: 1px solid rgba(255,255,255,.16); border-radius: 8px; font-size: 13px; }
-  #panel button { cursor: pointer; margin-top: 6px; }
-  #panel button:hover { background: #2a2a30; }
-  #panel button:focus-visible, #panel select:focus-visible, #panel input:focus-visible, #panel summary:focus-visible, #openPanel:focus-visible { outline: 2px solid #b1bac8; outline-offset: 2px; }
-  #panel button:disabled { opacity: .45; cursor: default; }
-  #panel button[data-state]::after { display: block; margin-top: 3px; font-size: 10px; font-weight: 400; color: #aaa; }
-  #panel button[data-state="ready"]::after { content: 'Ready'; }
-  #panel button[data-state="held"]::after { content: 'Held'; }
-  #panel button[data-state="off"]::after { content: 'Off'; }
-  #panel button[data-state="missing"]::after { content: 'Unavailable'; }
-  #panel button[data-state="on"]::after { content: 'On'; }
-  #panel button[data-state="held"], #panel button[data-state="on"] { background: #504329; border-color: #c5a568; color: #fff; }
-  #panel label output { float: right; color: #ccc; text-transform: none; letter-spacing: 0; }
-  #panel .inline-option { display: flex; align-items: center; gap: 6px; margin-top: 7px; text-transform: none; letter-spacing: 0; }
-  #panel .inline-option input { width: auto; margin: 0; }
-  #panel button.primary { background: #e8e8e8; color: #000; border-color: #fff; font-weight: 600; margin-top: 0; }
-  #panel #playFile { margin-top: 8px; }
-  #panel details { border-top: 1px solid #2a2a2e; margin-top: 14px; padding-top: 2px; }
-  #panel summary { cursor: pointer; color: #ccc; margin-top: 10px; }
-  .row { display: flex; gap: 6px; }
-  .switches .fixture-level { margin-top: 8px; }
-  .switches .fixture-level label { display: block; font-size: 10px; color: #999; }
-  .switches .fixture-level input { width: 100%; }
-  #panel .coil-card { border-left: 2px solid #45454d; padding-left: 10px; margin-top: 12px; }
-  .fixture-group { border: 0; border-top: 1px solid rgba(255,255,255,.13); padding: 8px 0 3px; margin: 8px 0 0; min-width: 0; }
-  .fixture-group legend { padding: 0 8px 0 0; color: #aeb3be; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
-  .switch-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
-  .switches label { display: flex; align-items: flex-start; gap: 7px; margin: 0; color: #ddd; font-size: 12px; line-height: 1.35; text-transform: none; letter-spacing: 0; cursor: pointer; }
-  .switches input { width: auto; margin: 0; }
-  #panel input[type="checkbox"], #panel input[type="range"] { accent-color: #b1bac8; }
-  #panel .effect-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  #panel .effect-grid button { min-height: 62px; margin: 0; text-align: left; padding: 10px; }
-  #panel .effect-grid kbd { float: right; color: #aaa; font-size: 10px; font-family: inherit; border: 1px solid #44444c; border-radius: 3px; padding: 1px 4px; }
-  #panel #btnBlackout { border-color: #684142; }
-  #panel #btnBlackout[data-state="on"] { background: #613034; border-color: #b7676e; }
-  .meter { height: 5px; background: #222; border-radius: 3px; margin: 4px 0; overflow: hidden; }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 10px 16px; }
+  #closeSettings { width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: #ccd; font-size: 18px; cursor: pointer; }
+  #closeSettings:hover { background: rgba(255,255,255,.08); }
+  .menu-tabs { display: flex; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line); }
+  .menu-tabs button { flex: 1; margin: 0; padding: 8px 2px 9px; border: 0; background: transparent; color: var(--dim); font-size: 12px; cursor: pointer; box-shadow: inset 0 -2px transparent; }
+  .menu-tabs button:hover { color: #fff; }
+  .menu-tabs button[aria-selected="true"] { color: #fff; box-shadow: inset 0 -2px var(--accent); }
+  .panel-pages { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #45454d transparent; padding: 6px 16px 16px; }
+  #panel h2 { margin: 16px 0 8px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); }
+  #panel .panel-page > h2:first-child { margin-top: 10px; }
+  .setting { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: center; gap: 10px; margin: 8px 0; }
+  .setting > label, .setting > span { color: #b8bdc8; font-size: 12px; }
+  .setting select, .setting .ctl { width: 100%; }
+  .panel-note { color: #8d93a1; font-size: 11px; line-height: 1.5; margin: 4px 0 8px; }
+  .check { display: flex; align-items: center; gap: 8px; margin: 10px 0; color: #ccd; font-size: 12px; cursor: pointer; }
+  .check input { margin: 0; }
+  #panel .wide { width: 100%; margin-top: 4px; }
+  #panel details { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 4px; }
+  #panel summary { cursor: pointer; color: #ccd; margin-top: 8px; font-size: 12px; }
+  #panel input[type="text"] { width: 100%; cursor: text; }
+  #fixtureLevels { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; }
+  .level { display: grid; grid-template-columns: 82px minmax(0, 1fr) 38px; align-items: center; gap: 6px; font-size: 11px; color: #b8bdc8; }
+  .level input { width: 100%; margin: 0; }
+  .level output { color: #ccd; font-variant-numeric: tabular-nums; text-align: right; }
+  .coil-card { border-left: 2px solid #45454d; padding-left: 10px; margin-top: 12px; }
+  .meters { display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 4px 10px; color: #b8bdc8; font-size: 11px; }
+  .meter { height: 5px; background: #222; border-radius: 3px; margin: 5px 0; overflow: hidden; }
   .meter > div { height: 100%; width: 0; background: #fff; }
-  #status { margin-top: 10px; color: #8a8; font-size: 12px; }
-  #inputHint { margin-top: 6px; color: #999; font-size: 11px; line-height: 1.5; }
-  #status[data-audio-state="silent"], #status[data-audio-state="lost"] { color: #db8; }
-  #playFile[data-connected="true"] { border-color: #47634a; }
-  #inputLevel { width: 100%; accent-color: #8c9; }
-  #filePlayback { margin-top: 10px; }
-  #playbackTime { display: block; color: #eee; font-size: 16px; font-variant-numeric: tabular-nums; }
-  #fileTransport audio { display: block; width: 100%; height: 36px; margin-top: 6px; color-scheme: dark; }
-  #panel #markStatus { font-size: 11px; color: #aaa; margin-top: 5px; }
+  #fps { color: #8d93a1; font-size: 11px; }
   #markList { list-style: none; padding: 0; margin: 8px 0; }
   #markList li { border-top: 1px solid #333; padding: 8px 0; }
   #markList .mark-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  #panel #markList button { width: auto; margin: 0; font-size: 11px; padding: 4px 8px; }
-  #panel #markList input, #panel #markList select { margin-top: 6px; }
-  #fps { margin-top: 2px; color: #666; font-size: 11px; }
-  #hint { margin-top: 8px; color: #666; font-size: 11px; line-height: 1.5; }
-  #quickLights { position: fixed; z-index: 5; right: 18px; bottom: max(18px, env(safe-area-inset-bottom)); color: #eee; font-size: 13px; }
-  #quickLightsToggle { min-width: 132px; min-height: 48px; padding: 10px 16px; border: 1px solid rgba(255,255,255,.24); border-radius: 14px; color: #fff; background: rgba(20,22,29,.78); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 10px 32px rgba(0,0,0,.38); cursor: pointer; font: inherit; }
-  #quickLightsToggle[aria-expanded="true"] { border-color: rgba(255,104,69,.75); background: rgba(47,31,32,.88); }
-  #quickLightPanel { position: absolute; right: 0; bottom: calc(100% + 10px); width: min(380px, calc(100vw - 32px)); max-height: 55dvh; overflow: auto; padding: 14px; border: 1px solid rgba(255,255,255,.2); border-radius: 16px; background: rgba(16,18,24,.88); backdrop-filter: blur(22px) saturate(130%); -webkit-backdrop-filter: blur(22px) saturate(130%); box-shadow: 0 18px 55px rgba(0,0,0,.44); }
-  #quickLightPanel h2 { margin: 0 0 5px; color: #fff; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
-  #quickLightPanel p { margin: 0 0 10px; color: #aeb3be; font-size: 11px; line-height: 1.45; }
-  #quickLightPanel .fixture-group { margin-top: 8px; }
-  #quickLightPanel .switch-list { grid-template-columns: repeat(2, minmax(0,1fr)); }
-  #quickLightPanel .switch-list > div { padding: 7px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: rgba(255,255,255,.04); }
-  #quickLightPanel .switches label { align-items: center; min-height: 32px; }
-  #quickLightPanel input[type="checkbox"] { min-width: 18px; min-height: 18px; }
-  #quickLights:focus-within #quickLightsToggle { border-color: rgba(255,255,255,.36); }
-  #openPanel { position: fixed; top: 16px; left: 16px; padding: 10px 14px; background: rgba(16,18,24,.76); border: 1px solid rgba(255,255,255,.2); border-radius: 12px; color: #eee; font: inherit; font-size: 12px; cursor: pointer; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 8px 28px rgba(0,0,0,.32); }
+  #markList button { width: auto; font-size: 11px; padding: 4px 8px; }
+  #markList input, #markList select { width: 100%; margin-top: 6px; }
+  #hint { color: #b8bdc8; font-size: 12px; line-height: 1.9; }
+  #panel a { color: #a8c8ff; font-size: 12px; }
+  #shortcutHelp { background: #14161c; color: #eee; border: 1px solid #555; border-radius: 14px; max-width: min(420px, 85vw); line-height: 1.8; }
+  #shortcutHelp::backdrop { background: #0009; }
+
+  /* below the width of the full console it folds onto two rows; on a phone it is a sheet that scrolls */
   @media (max-width: 600px) {
-    #panel { top: auto; bottom: max(72px, calc(env(safe-area-inset-bottom) + 64px)); left: 8px; width: calc(100vw - 16px); max-height: min(70dvh, 620px); border-radius: 18px; grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto auto minmax(0,1fr) auto; grid-template-areas: "head" "audio" "nav" "page" "foot"; }
-    #panel .panel-header { padding: 10px 14px; }
-    #panel .audio-card { max-height: 24dvh; }
-    #panel .audio-card details { max-height: 20dvh; }
-    #panel .menu-tabs { flex-direction: row; padding: 5px 7px; gap: 4px; border-right: 0; border-top: 1px solid rgba(255,255,255,.1); border-bottom: 1px solid rgba(255,255,255,.1); }
-    #panel .menu-tabs button { flex: 1; min-width: 0; min-height: 52px; flex-direction: row; gap: 6px; font-size: 10px; }
-    #panel .menu-tabs button .tab-glyph { font-size: 16px; }
-    #panel .panel-pages { padding-bottom: 18px; }
-    #panel .effect-grid button { min-height: 68px; }
-    #panel .panel-actions button { min-width: 40px; min-height: 40px; }
-    #openPanel { top: auto; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; min-height: 44px; }
-    #quickLights { right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); }
-    #quickLightsToggle { min-width: 118px; min-height: 48px; }
-    #quickLightPanel { width: min(360px, calc(100vw - 24px)); max-height: 52dvh; }
+    #console { left: 6px; right: 6px; bottom: 6px; max-height: 58dvh; overflow-y: auto; flex-direction: column; flex-wrap: nowrap; padding: 10px 12px; gap: 14px; }
+    .deck, .deck-sound, .deck-track, .deck-show { width: auto; padding: 0; border-left: 0; }
+    .chips { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .effect-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .faders { justify-content: space-between; }
+    .deck-tools { flex-direction: row; padding: 0; border-left: 0; }
+    #panel { top: 8px; left: 8px; width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+    .setting { grid-template-columns: 1fr; gap: 4px; }
+    #fixtureLevels { grid-template-columns: 1fr; }
+    #miniStatus { left: 12px; bottom: 64px; max-width: calc(100vw - 24px); }
   }
-  @media (prefers-reduced-motion: no-preference) { #panel:not(.hidden) { animation: menu-arrive .16s ease-out; } @keyframes menu-arrive { from { opacity: .6; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } }
+  @media (prefers-reduced-motion: no-preference) { #panel:not(.hidden) { animation: arrive .16s ease-out; } @keyframes arrive { from { opacity: .6; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } }
 </style>
 <script type="importmap">
 { "imports": { "three": "./vendor/three/three.webgpu.js", "three/webgpu": "./vendor/three/three.webgpu.js", "three/tsl": "./vendor/three/three.tsl.js", "three/addons/": "./vendor/three/addons/" } }
@@ -134,166 +169,170 @@
 <body>
 <div id="fade"></div>
 <div id="loading">Building the venue&hellip;</div>
-<div id="panel" role="region" aria-label="Show controls">
-  <header class="panel-header">
-    <h1>Stage Visualizer</h1>
-    <div class="panel-actions">
-      <button id="helpButton" type="button" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
-      <button id="fullscreenPanel" type="button" title="Fullscreen (F)" aria-label="Toggle fullscreen">⛶</button>
-      <button id="hidePanel" type="button" title="Hide controls (H)" aria-label="Hide controls">−</button>
-    </div>
-  </header>
-  <div class="audio-card">
-  <details open>
-  <summary>Sound connection</summary>
-  <label for="audioSource" hidden>Sound source</label>
-  <select id="audioSource"><option value="file">Audio file</option><option value="system">System audio</option><option value="input">Audio input</option></select>
-  <div id="inputControls" hidden>
-    <label for="audioInput">Input device</label>
-    <select id="audioInput" aria-describedby="inputHint"><option value="">System default</option></select>
-    <button id="refreshInputs">Refresh devices</button>
-    <div id="inputHint" role="status">Connect once to reveal device names. For rekordbox, choose BlackHole 2ch.</div>
+
+<div id="start" role="dialog" aria-modal="true" aria-labelledby="startTitle">
+  <div class="start-card">
+    <h1 id="startTitle">Stage Visualizer</h1>
+    <p class="start-venue">Hangar</p>
+    <div class="start-field"><span id="startSourceLabel">Sound</span><div id="startSource" class="seg" role="group" aria-labelledby="startSourceLabel"></div></div>
+    <div class="start-field"><span id="startQualityLabel">Picture</span><div id="startQuality" class="seg" role="group" aria-labelledby="startQualityLabel"></div></div>
+    <button id="startShow" class="ctl primary" type="button" disabled>Building the venue&hellip;</button>
+    <button id="startDemo" type="button" disabled>Watch without sound</button>
   </div>
-  <button id="playFile" class="primary">Choose an audio file</button>
-  <input id="audioFile" type="file" accept="audio/*,video/*" hidden>
-  </details>
-  <meter id="inputLevel" min="0" max="1" value="0" aria-label="Incoming audio level" hidden></meter>
-  <div id="status" role="status">Demo mode</div>
-  <a href="rekordbox.html" target="_blank" rel="noopener" style="display:block;margin-top:8px;color:#a8c8ff;font-size:12px">Rekordbox connection</a>
-  <div id="filePlayback" hidden>
+</div>
+
+<div id="console" class="glass" role="region" aria-label="Show controls">
+  <section class="deck deck-sound" aria-labelledby="deckSound">
+    <h2 id="deckSound">Sound</h2>
+    <div class="sound-line">
+      <select id="audioSource" class="ctl" aria-label="Sound source"><option value="file">Audio file</option><option value="system">System audio</option><option value="input">Audio input</option></select>
+    </div>
+    <div class="sound-line"><div class="bpm"><output id="bpm" aria-label="Tempo">--</output><span>BPM</span></div><meter id="inputLevel" min="0" max="1" value="0" aria-label="Incoming audio level" hidden></meter></div>
+    <div id="status" role="status">Demo mode</div>
+    <button id="playFile" class="ctl primary" type="button">Choose an audio file</button>
+    <input id="audioFile" type="file" accept="audio/*,video/*" hidden>
+  </section>
+  <section id="filePlayback" class="deck deck-track" aria-labelledby="deckTrack" hidden>
+    <h2 id="deckTrack">Track</h2>
     <span id="playbackTime" role="timer" aria-live="off" aria-label="Elapsed time and track duration">0:00.0 / --:--</span>
     <div id="fileTransport"></div>
-    <div class="row"><button id="restartFile" type="button" title="Restart track">Restart</button><button id="markGood" type="button" title="Mark a good moment (G)">Good · G</button><button id="markMoment" type="button" title="Mark a wrong moment (X)">Wrong · X</button></div>
+    <div class="row"><button id="restartFile" class="ctl" type="button" title="Restart track">Restart</button><button id="markGood" class="ctl" type="button" title="Mark a good moment (G)">Good</button><button id="markMoment" class="ctl" type="button" title="Mark a wrong moment (X)">Wrong</button></div>
     <div id="markStatus" role="status"></div>
+  </section>
+  <section class="deck deck-show" aria-labelledby="deckShow">
+    <h2 id="deckShow">Show</h2>
+    <div class="field"><label for="mood">Mood</label><select id="mood" class="ctl"></select></div>
+    <div class="field"><label for="showTheme">Theme</label><select id="showTheme" class="segmented"><option value="auto">Auto</option><option value="industrial">Industrial</option><option value="hypnotic">Hypnotic</option><option value="melodic">Melodic</option></select></div>
+    <div class="field"><label for="lookPace">Changes</label><select id="lookPace" class="segmented"><option value="calm">Calm</option><option value="normal">Normal</option><option value="lively">Lively</option></select></div>
+    <div class="field"><label for="cam">Camera</label><div class="pair"><select id="cam" class="ctl"></select><button id="freezeCamera" class="ctl" type="button" aria-pressed="false" title="Freeze this view (P)" aria-label="Freeze this view"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="currentColor" stroke="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button></div></div>
+  </section>
+  <section class="deck deck-levels" aria-labelledby="deckLevels">
+    <h2 id="deckLevels">Levels</h2>
+    <div class="faders">
+      <div class="fader" title="Light: how bright the rig is"><output id="lookLightValue" for="lookLight">1.00×</output><input id="lookLight" type="range" min="0.1" max="1.3" step="0.05" value="1"><label for="lookLight">Light</label></div>
+      <div class="fader" title="Glow round what is bright"><output id="lookBloomValue" for="lookBloom">1.00×</output><input id="lookBloom" type="range" min="0" max="1.5" step="0.05" value="1"><label for="lookBloom">Glow</label></div>
+      <div class="fader" title="Haze and smoke"><output id="lookHazeValue" for="lookHaze">1.00×</output><input id="lookHaze" type="range" min="0" max="2" step="0.05" value="1"><label for="lookHaze">Haze</label></div>
+      <div class="fader" title="Light in the hall"><output id="lookHallValue" for="lookHall">1.00×</output><input id="lookHall" type="range" min="0" max="4" step="0.05" value="1"><label for="lookHall">Hall</label></div>
+      <div class="fader" title="Beam width"><output id="beamWidthValue" for="beamWidth">1.00×</output><input id="beamWidth" type="range" min="0.35" max="2" step="0.05" value="1"><label for="beamWidth">Beam</label></div>
+      <div class="fader" title="Sound sensitivity: how strongly the show reacts"><output id="sensValue" for="sens">1.00×</output><input id="sens" type="range" min="0.5" max="2.5" step="0.05" value="1"><label for="sens">Sens</label></div>
+      <div class="fader" title="Camera movement speed"><output id="cameraSpeedValue" for="cameraSpeed">1.00×</output><input id="cameraSpeed" type="range" min="0.15" max="1" step="0.05" value="1"><label for="cameraSpeed">Cam</label></div>
+    </div>
+  </section>
+  <section class="deck deck-fixtures" aria-labelledby="deckFixtures">
+    <h2 id="deckFixtures">Fixtures</h2>
+    <div id="switches" class="chips"></div>
+  </section>
+  <section class="deck deck-effects" aria-labelledby="deckEffects">
+    <h2 id="deckEffects">Effects</h2>
+    <div class="effect-grid">
+      <button id="btnStrobe" type="button">Strobe<kbd>Space</kbd></button>
+      <button id="btnBlinder" type="button">Blinder<kbd>B</kbd></button>
+      <button id="btnBlackout" type="button" aria-pressed="false">Blackout</button>
+      <button id="btnCo2" type="button">CO2<kbd>C</kbd></button>
+      <button id="btnPyro" type="button">Pyro<kbd>V</kbd></button>
+      <button id="btnConfetti" type="button">Confetti<kbd>K</kbd></button>
+    </div>
+  </section>
+  <div class="deck-tools">
+    <button id="openSettings" type="button" aria-controls="panel" aria-expanded="false" title="Settings (S)" aria-label="Settings"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    <button id="helpButton" type="button" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+    <button id="fullscreenPanel" type="button" title="Fullscreen (F)" aria-label="Toggle fullscreen"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
+    <button id="hidePanel" type="button" title="Hide controls (H)" aria-label="Hide controls"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
   </div>
-  </div>
-  <nav class="menu-tabs" role="tablist" aria-label="Control sections">
-    <button id="tabShow" type="button" role="tab" aria-controls="pageShow" aria-selected="true"><span class="tab-glyph" aria-hidden="true">◉</span><span>Show</span></button>
-    <button id="tabLights" type="button" role="tab" aria-controls="pageLights" aria-selected="false" tabindex="-1"><span class="tab-glyph" aria-hidden="true">✳</span><span>Lights</span></button>
-    <button id="tabEffects" type="button" role="tab" aria-controls="pageEffects" aria-selected="false" tabindex="-1"><span class="tab-glyph" aria-hidden="true">ϟ</span><span>Effects</span></button>
-    <button id="tabSettings" type="button" role="tab" aria-controls="pageSettings" aria-selected="false" tabindex="-1"><span class="tab-glyph" aria-hidden="true">⚙</span><span>Settings</span></button>
+</div>
+<button id="openPanel" class="glass" type="button" aria-controls="console" aria-expanded="true" hidden>Show controls · H</button>
+<div id="miniStatus"></div>
+
+<div id="panel" class="glass hidden" role="dialog" aria-labelledby="settingsTitle">
+  <header class="panel-header"><h1 id="settingsTitle">Settings</h1><button id="closeSettings" type="button" title="Close (Esc)" aria-label="Close settings">×</button></header>
+  <nav class="menu-tabs" role="tablist" aria-label="Settings sections">
+    <button id="tabShow" type="button" role="tab" aria-controls="pageShow" aria-selected="true">Show</button>
+    <button id="tabLights" type="button" role="tab" aria-controls="pageLights" aria-selected="false" tabindex="-1">Lights</button>
+    <button id="tabPicture" type="button" role="tab" aria-controls="pagePicture" aria-selected="false" tabindex="-1">Picture</button>
+    <button id="tabPresets" type="button" role="tab" aria-controls="pagePresets" aria-selected="false" tabindex="-1">Presets</button>
+    <button id="tabSound" type="button" role="tab" aria-controls="pageSound" aria-selected="false" tabindex="-1">Sound</button>
+    <button id="tabKeys" type="button" role="tab" aria-controls="pageKeys" aria-selected="false" tabindex="-1">Keys</button>
   </nav>
   <div class="panel-pages">
   <section id="pageShow" class="panel-page" role="tabpanel" aria-labelledby="tabShow">
-  <h2>Venue and music</h2>
-  <details id="trackNotes" hidden>
-    <summary>Track notes · <span id="markCount">0 marked moments</span></summary>
-    <p class="panel-note">Press Good or Wrong while listening. Choose a reason later if useful; a written explanation is optional.</p>
-    <p id="feedbackSave" class="panel-note" role="status"></p>
-    <button id="exportMarks" type="button" disabled>Download marks (CSV)</button>
-    <ul id="markList"></ul>
-  </details>
-  <label for="venue">Venue</label>
-  <select id="venue"></select>
-  <label for="mood">Mood</label>
-  <select id="mood"></select>
-  <label class="inline-option"><input id="moodLock" type="checkbox">Keep mood when changing venue</label>
-  <label for="showTheme">Show theme</label>
-  <select id="showTheme" aria-describedby="themeHint"><option value="auto">Follow the mood</option><option value="industrial">Industrial</option><option value="hypnotic">Hypnotic</option><option value="melodic">Melodic</option></select>
-  <p id="themeHint" class="panel-note">The current mood shapes the show.</p>
-  <label for="lightChoreography">Light choreography</label>
-  <select id="lightChoreography" aria-describedby="choreographyHint"><option value="original">Original show</option><option value="composed">Composed show</option><option value="stage">Stage opening</option><option value="wave">Hall wave</option><option value="hold">Held picture</option><option value="sweep">Towards the stage</option><option value="pingpong">Left and right</option><option value="solo">Truss by truss</option><option value="centre">From the middle</option><option value="pulse">Breathing room</option><option value="answer">Call and response</option></select>
-  <p id="choreographyHint" class="panel-note">Use the original Hangar light patterns.</p>
-  <label for="headLook">Hall heads</label>
-  <select id="headLook"><option value="auto">Automatic: new looks for every track</option></select>
-  <label for="trussLook">Truss formation</label>
-  <select id="trussLook"><option value="auto">Automatic: held for minutes</option></select>
-  <label for="lookPace">Changes</label>
-  <select id="lookPace"><option value="calm">Calm: about every 80 seconds</option><option value="normal">Normal: about every 40 seconds</option><option value="lively">Lively: about every 20 seconds</option></select>
-  <h2>View</h2>
-  <label for="cam">Camera</label>
-  <select id="cam"></select>
-  <label for="cameraSpeed">Camera movement <output id="cameraSpeedValue" for="cameraSpeed">1.00×</output></label>
-  <input id="cameraSpeed" type="range" min="0.15" max="1" step="0.05" value="1">
-  <button id="freezeCamera" type="button" aria-pressed="false">Freeze this view</button>
-  <label class="inline-option"><input id="cameraFollowsLight" type="checkbox" checked>Automatic camera follows the light choreography</label>
-  <label for="lookPreset">Look</label>
-  <select id="lookPreset"><option value="standard">Standard</option><option value="calm">Calm</option><option value="cinematic">Cinematic</option><option value="energetic">Energetic</option><option value="custom" disabled>Custom</option></select>
-  <details open>
-    <summary>My show presets</summary>
-    <label for="savedPreset">Saved shows</label><select id="savedPreset"><option value="">Choose a preset</option></select>
-    <button id="loadPreset" type="button" disabled>Load selected</button>
-    <label for="presetName">Preset name</label><input id="presetName" type="text" maxlength="60" placeholder="My favourite show">
-    <button id="savePreset" type="button">Save as new</button>
-    <div class="row"><button id="updatePreset" type="button" disabled>Update selected</button><button id="deletePreset" type="button" disabled>Delete selected</button></div>
-    <button id="undoDeletePreset" type="button" hidden>Undo deletion</button>
-    <div class="row"><button id="exportPresets" type="button">Export backup</button><button id="importPresets" type="button">Import backup</button></div>
-    <input id="presetBackupFile" type="file" accept="application/json,.json" hidden>
-    <p class="panel-note">Saved in this browser: venue, mood, light settings, rings and camera. A frozen view is saved too.</p>
-    <div id="presetStatus" class="panel-note" role="status"></div>
-  </details>
+    <div id="venueSetting">
+      <h2>Venue</h2>
+      <div class="setting"><label for="venue">Venue</label><select id="venue" class="ctl"></select></div>
+      <label class="check"><input id="moodLock" type="checkbox">Keep mood when changing venue</label>
+    </div>
+    <h2>Light show</h2>
+    <div class="setting"><label for="lightChoreography">Choreography</label><select id="lightChoreography" class="ctl" aria-describedby="choreographyHint"><option value="original">Original show</option><option value="composed">Composed show</option><option value="stage">Stage opening</option><option value="wave">Hall wave</option><option value="hold">Held picture</option><option value="sweep">Towards the stage</option><option value="pingpong">Left and right</option><option value="solo">Truss by truss</option><option value="centre">From the middle</option><option value="pulse">Breathing room</option><option value="answer">Call and response</option></select></div>
+    <p id="choreographyHint" class="panel-note">Use the original Hangar light patterns.</p>
+    <div class="setting"><label for="headLook">Hall heads</label><select id="headLook" class="ctl"><option value="auto">Automatic: new looks for every track</option></select></div>
+    <div class="setting"><label for="trussLook">Truss formation</label><select id="trussLook" class="ctl"><option value="auto">Automatic: held for minutes</option></select></div>
+    <p id="themeHint" class="panel-note">The current mood shapes the show.</p>
+    <h2>Camera</h2>
+    <label class="check"><input id="cameraFollowsLight" type="checkbox" checked>Automatic camera follows the light choreography</label>
+    <h2>Start again</h2>
+    <button id="resetShow" class="ctl wide" type="button">Restore a balanced starting point</button>
+    <p class="panel-note">Resets the mood, light levels, colours, rings, camera and sensitivity. Your saved presets remain available.</p>
   </section>
   <section id="pageLights" class="panel-page" role="tabpanel" aria-labelledby="tabLights" hidden>
-    <h2>Colour and beams</h2>
-    <label for="palette">Colour palette</label><select id="palette"></select>
-    <label for="beamWidth">Beam width <output id="beamWidthValue" for="beamWidth">1.00×</output></label>
-    <input id="beamWidth" type="range" min="0.35" max="2" step="0.05" value="1">
+    <h2>Look</h2>
+    <div class="setting"><label for="lookPreset">Levels</label><select id="lookPreset" class="segmented"><option value="standard">Standard</option><option value="calm">Calm</option><option value="cinematic">Cinematic</option><option value="energetic">Energetic</option><option value="custom" disabled>Custom</option></select></div>
+    <div class="setting"><label for="palette">Colour palette</label><select id="palette" class="ctl"></select></div>
+    <button id="resetSliders" class="ctl wide" type="button" title="Restore sensitivity, light, glow, haze and hall light to their defaults">Reset the level faders</button>
+    <h2>Fixture levels</h2>
+    <div id="fixtureLevels"></div>
     <details id="ringControls">
       <summary>Audience rings</summary>
-      <label for="ringLook">Ring arrangement</label><select id="ringLook"></select>
+      <div class="setting"><label for="ringLook">Ring arrangement</label><select id="ringLook" class="ctl"></select></div>
       <p class="panel-note">Changes the heights and beam arrangement. The steel moves gradually.</p>
       <div id="coilControls"></div>
     </details>
-    <p class="panel-note">Use Quick lights at the bottom for fast fixture switches.</p>
-  <details>
-    <summary>Fine tune the look</summary>
-    <label for="lookLight">Light <output id="lookLightValue" for="lookLight">1.00×</output></label><input id="lookLight" type="range" min="0.1" max="1.3" step="0.05" value="1">
-    <label for="lookBloom">Glow <output id="lookBloomValue" for="lookBloom">1.00×</output></label><input id="lookBloom" type="range" min="0" max="1.5" step="0.05" value="1">
-    <label for="lookHaze">Haze and smoke <output id="lookHazeValue" for="lookHaze">1.00×</output></label><input id="lookHaze" type="range" min="0" max="2" step="0.05" value="1">
-    <label for="lookHall">Hall light <output id="lookHallValue" for="lookHall">1.00×</output></label><input id="lookHall" type="range" min="0" max="4" step="0.05" value="1">
-    <button id="resetSliders" title="Restore sensitivity, light, glow, haze and hall light to their defaults">Reset look sliders</button>
-  </details>
   </section>
-  <section id="pageEffects" class="panel-page" role="tabpanel" aria-labelledby="tabEffects" hidden>
-    <h2>Live effects</h2>
-    <p class="panel-note">Hold Strobe or Blinder. Tap the other effects to fire once. Blackout stays on until you switch it off.</p>
-    <div class="effect-grid">
-      <button id="btnStrobe">Strobe <kbd>Space</kbd></button>
-      <button id="btnBlinder">Blinder <kbd>B</kbd></button>
-      <button id="btnCo2">CO2 <kbd>C</kbd></button>
-      <button id="btnPyro">Pyro <kbd>V</kbd></button>
-      <button id="btnConfetti">Confetti <kbd>K</kbd></button>
-      <button id="btnBlackout" aria-pressed="false">Blackout</button>
-    </div>
-  </section>
-  <section id="pageSettings" class="panel-page" role="tabpanel" aria-labelledby="tabSettings" hidden>
-    <h2>Restore the show</h2>
-    <button id="resetShow" type="button">Restore a balanced starting point</button>
-    <p class="panel-note">Resets the mood, light levels, colours, rings, camera and sensitivity. Your saved presets remain available.</p>
+  <section id="pagePicture" class="panel-page" role="tabpanel" aria-labelledby="tabPicture" hidden>
     <h2>Performance</h2>
-    <label for="quality">Quality</label><select id="quality"></select>
-    <div id="qualityNote" class="panel-note" role="status"></div>
-    <div id="fps"></div>
-    <label for="particles">Extra smoke (heavy)</label><select id="particles"><option value="0">Off</option><option value="300000">Light</option><option value="600000">Dense</option><option value="1200000">Very dense</option></select>
-    <h2>Sound response</h2>
-    <label for="sens">Sound sensitivity <output id="sensValue" for="sens">1.00×</output></label>
-    <input id="sens" type="range" min="0.5" max="2.5" step="0.05" value="1">
-    <label>Bass / Mid / High</label>
-    <div class="meter"><div id="mBass"></div></div>
-    <div class="meter"><div id="mMid"></div></div>
-    <div class="meter"><div id="mHigh"></div></div>
-    <h2>Media</h2>
-    <label>Screen content</label>
-    <div class="row"><button id="wallPick">Picture or video</button><button id="wallClear">Clear</button></div>
+    <div class="setting"><label for="quality">Quality</label><select id="quality" class="ctl"></select></div>
+    <div class="setting"><span></span><div><div id="qualityNote" class="panel-note" role="status"></div><div id="fps"></div></div></div>
+    <div class="setting"><label for="particles">Extra smoke (heavy)</label><select id="particles" class="ctl"><option value="0">Off</option><option value="300000">Light</option><option value="600000">Dense</option><option value="1200000">Very dense</option></select></div>
+    <h2>Screen content</h2>
+    <div class="row"><button id="wallPick" class="ctl" type="button">Picture or video</button><button id="wallClear" class="ctl" type="button">Clear</button></div>
     <input id="wallFile" type="file" accept="image/*,video/*" hidden>
-  <details>
-    <summary>Keyboard shortcuts</summary>
-    <div id="hint">H = hide panel &middot; F = fullscreen<br>? = shortcuts &middot; P = pause camera &middot; N = next scene<br>G = good moment &middot; X = wrong moment<br>T = unrated moment<br>Space = strobe &middot; B = blinders<br>C = CO2 &middot; V = pyro &middot; K = confetti<br>1&ndash;9 = camera &middot; 0 = automatic &middot; M = mood<br>Double-click a slider to restore its default.</div>
-  </details>
+  </section>
+  <section id="pagePresets" class="panel-page" role="tabpanel" aria-labelledby="tabPresets" hidden>
+    <h2>My show presets</h2>
+    <div class="setting"><label for="savedPreset">Saved shows</label><select id="savedPreset" class="ctl"><option value="">Choose a preset</option></select></div>
+    <button id="loadPreset" class="ctl wide" type="button" disabled>Load selected</button>
+    <div class="setting"><label for="presetName">Preset name</label><input id="presetName" class="ctl" type="text" maxlength="60" placeholder="My favourite show"></div>
+    <button id="savePreset" class="ctl wide" type="button">Save as new</button>
+    <div class="row" style="margin-top:6px"><button id="updatePreset" class="ctl" type="button" disabled>Update selected</button><button id="deletePreset" class="ctl" type="button" disabled>Delete selected</button></div>
+    <button id="undoDeletePreset" class="ctl wide" type="button" hidden>Undo deletion</button>
+    <h2>Backup</h2>
+    <div class="row"><button id="exportPresets" class="ctl" type="button">Export backup</button><button id="importPresets" class="ctl" type="button">Import backup</button></div>
+    <input id="presetBackupFile" type="file" accept="application/json,.json" hidden>
+    <p class="panel-note">Saved in this browser: venue, mood, light settings, rings and camera. A frozen view is saved too.</p>
+    <div id="presetStatus" class="panel-note" role="status"></div>
+  </section>
+  <section id="pageSound" class="panel-page" role="tabpanel" aria-labelledby="tabSound" hidden>
+    <h2>Input</h2>
+    <div id="inputControls" hidden>
+      <div class="setting"><label for="audioInput">Input device</label><select id="audioInput" class="ctl" aria-describedby="inputHint"><option value="">System default</option></select></div>
+      <button id="refreshInputs" class="ctl wide" type="button">Refresh devices</button>
+      <div id="inputHint" class="panel-note" role="status">Connect once to reveal device names. For rekordbox, choose BlackHole 2ch.</div>
+    </div>
+    <p class="panel-note">Choose the sound source in the Sound section of the controls. <a href="rekordbox.html" target="_blank" rel="noopener">Rekordbox connection</a></p>
+    <h2>What the show hears</h2>
+    <div class="meters"><span>Bass</span><div class="meter"><div id="mBass"></div></div><span>Mid</span><div class="meter"><div id="mMid"></div></div><span>High</span><div class="meter"><div id="mHigh"></div></div></div>
+    <details id="trackNotes" hidden>
+      <summary>Track notes · <span id="markCount">0 marked moments</span></summary>
+      <p class="panel-note">Press Good or Wrong while listening. Choose a reason later if useful; a written explanation is optional.</p>
+      <p id="feedbackSave" class="panel-note" role="status"></p>
+      <button id="exportMarks" class="ctl wide" type="button" disabled>Download marks (CSV)</button>
+      <ul id="markList"></ul>
+    </details>
+  </section>
+  <section id="pageKeys" class="panel-page" role="tabpanel" aria-labelledby="tabKeys" hidden>
+    <h2>Keyboard shortcuts</h2>
+    <div id="hint">H = hide controls &middot; S = settings &middot; F = fullscreen<br>? = shortcuts &middot; P = freeze camera &middot; N = next scene<br>G = good moment &middot; X = wrong moment &middot; T = unrated moment<br>Space = strobe &middot; B = blinders<br>C = CO2 &middot; V = pyro &middot; K = confetti<br>1&ndash;9 = camera &middot; 0 = automatic &middot; M = mood<br>Double-click a fader to restore its default.</div>
   </section>
   </div>
-  <footer class="panel-footer">H &middot; hide controls &nbsp; F &middot; fullscreen</footer>
 </div>
-<aside id="quickLights" aria-label="Quick light controls">
-  <button id="quickLightsToggle" type="button" aria-expanded="false" aria-controls="quickLightPanel">✳ &nbsp; Quick lights</button>
-  <div id="quickLightPanel" hidden>
-    <h2>Quick lights</h2>
-    <p>Switch fixture groups on or off during the show.</p>
-    <div id="switches" class="switches"></div>
-  </div>
-</aside>
-<button id="openPanel" type="button" aria-controls="panel" aria-expanded="false" hidden>Show controls</button>
-<div id="miniStatus"></div>
 <dialog id="shortcutHelp" aria-labelledby="shortcutHelpTitle"><h2 id="shortcutHelpTitle">Keyboard shortcuts</h2><div id="shortcutHelpContent"></div><form method="dialog"><button type="submit">Close · Esc</button></form></dialog>
 <script type="module" src="src/main.js"></script>
 </body>

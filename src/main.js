@@ -22,6 +22,7 @@ import { DEFAULT_OFF, LIGHT_ROLES, PALETTES, RING_NAMES, COIL_MODES, parseStored
 const $ = id => document.getElementById(id);
 const keep = (key, value) => { try { localStorage.setItem('sv.' + key, value); } catch {} };
 const kept = (key, fallback) => { try { return localStorage.getItem('sv.' + key) ?? fallback; } catch { return fallback; } };
+const started = () => document.documentElement.classList.contains('started');   // past the start screen (index.html)
 
 // ----- the picture -----
 const params = new URLSearchParams(location.search);
@@ -144,21 +145,31 @@ function frame() {
     state.dataset.audioState = signal.state;
     const audioNote = audio.source === audio.playerNode && audio.player?.paused && !audio.player.ended
       ? 'Paused' : { receiving: 'Audio detected', silent: 'No audio detected', lost: 'Input disconnected', suspended: 'Click to resume audio' }[signal.state];
-    state.textContent = audio.message || changeMessage || `${audio.live ? 'Live: ' + audio.label + (audioNote ? ' · ' + audioNote : '') : 'Demo mode'} · ${Math.round(signals.stableBpm || m.bpm) || '--'} BPM · ${audio.live && m.activity < 0.05 ? 'waiting for music' : director.status}`;
-    $('miniStatus').textContent = state.textContent + (director.manual.blackout ? ' · BLACKOUT' : '') + (cameraFrozen ? ' · Camera paused' : '');
+    const bpm = Math.round(signals.stableBpm || m.bpm) || '--';
+    state.textContent = audio.message || changeMessage || `${audio.live ? 'Live: ' + audio.label + (audioNote ? ' · ' + audioNote : '') : 'Demo mode'} · ${audio.live && m.activity < 0.05 ? 'waiting for music' : director.status}`;
+    state.title = state.textContent; $('bpm').value = bpm;
+    $('miniStatus').textContent = state.textContent + ` · ${bpm} BPM` + (director.manual.blackout ? ' · BLACKOUT' : '') + (cameraFrozen ? ' · Camera paused' : '');
     const source = $('audioSource').value;
     $('playFile').dataset.connected = String(audio.live && signal.state !== 'lost' && signal.state !== 'suspended');
     $('playFile').textContent = audio.live && signal.state !== 'lost' && signal.state !== 'suspended'
       ? { file: 'Choose another audio file', system: 'System audio connected · reconnect', input: 'Audio input connected · reconnect' }[source]
       : { file: 'Choose an audio file', system: 'Connect system audio', input: 'Connect audio input' }[source];
     if (!changing) $('loading')?.remove(); show.ready ||= Math.round(performance.now());   // how long the venue took to build, in milliseconds
+    if (!started()) {
+      const busy = changing;
+      if ($('startShow').disabled !== busy) {
+        $('startShow').disabled = $('startDemo').disabled = busy; $('startShow').textContent = busy ? 'Building the venue…' : 'Start the show';
+        if (!busy) $('startShow').focus();
+      }
+    }
+    syncSegments();
   }
   const lower = autoQuality.sample(raw, { visible: !document.hidden, ready: !changing && !!show.ready, automatic: qualityChoice === 'auto', quality: qualityKey });
   if (lower) changeQuality(lower).catch(changeFailed);
 }
 
-// ----- the panel -----
-const MENU_PAGES = ['Show', 'Lights', 'Effects', 'Settings'];
+// ----- the controls: a console with what the show needs, always in the same place, and settings for the rest -----
+const MENU_PAGES = ['Show', 'Lights', 'Picture', 'Presets', 'Sound', 'Keys'];
 function selectMenuPage(page, focus = false) {
   if (!MENU_PAGES.includes(page)) page = 'Show';
   releaseHeld();
@@ -179,35 +190,43 @@ for (const [i, page] of MENU_PAGES.entries()) {
     e.preventDefault(); selectMenuPage(MENU_PAGES[next], true);
   };
 }
-function setPanelVisible(visible) {
-  if (!visible) releaseHeld();
-  $('panel').classList.toggle('hidden', !visible); $('openPanel').hidden = visible;
+function setConsoleVisible(visible) {
+  if (!visible) { releaseHeld(); setSettingsOpen(false); }
+  $('console').classList.toggle('hidden', !visible); $('openPanel').hidden = visible;
   $('openPanel').setAttribute('aria-expanded', String(visible));
 }
-const quickLights = $('quickLights'), quickLightsToggle = $('quickLightsToggle'), quickLightPanel = $('quickLightPanel');
-const hoverQuickLights = matchMedia('(hover: hover) and (pointer: fine)');
-function setQuickLightsVisible(visible) {
-  quickLightPanel.hidden = !visible;
-  quickLightsToggle.setAttribute('aria-expanded', String(visible));
+function setSettingsOpen(open) {
+  $('panel').classList.toggle('hidden', !open);
+  $('openSettings').setAttribute('aria-expanded', String(open));
+  if (open) document.querySelector('.menu-tabs [aria-selected="true"]').focus();
 }
-quickLightsToggle.onclick = () => {
-  quickLights.dataset.pinned = String(quickLights.dataset.pinned !== 'true');
-  setQuickLightsVisible(quickLights.dataset.pinned === 'true');
-};
-quickLights.addEventListener('pointerenter', () => {
-  if (hoverQuickLights.matches) { quickLights.dataset.hovering = 'true'; setQuickLightsVisible(true); }
-});
-quickLights.addEventListener('pointerleave', () => {
-  if (hoverQuickLights.matches) quickLights.dataset.hovering = 'false';
-  if (hoverQuickLights.matches && quickLights.dataset.pinned !== 'true' && !quickLights.contains(document.activeElement)) setQuickLightsVisible(false);
-});
-quickLights.addEventListener('focusin', () => setQuickLightsVisible(true));
-quickLights.addEventListener('focusout', e => {
-  if (!quickLights.contains(e.relatedTarget) && quickLights.dataset.pinned !== 'true' && quickLights.dataset.hovering !== 'true') setQuickLightsVisible(false);
-});
-$('hidePanel').onclick = () => { setPanelVisible(false); $('openPanel').focus(); };
-$('openPanel').onclick = () => { setPanelVisible(true); document.querySelector('.menu-tabs [aria-selected="true"]').focus(); };
+// settings stay above the console, however high it is
+new ResizeObserver(() => document.documentElement.style.setProperty('--console-h', ($('console').offsetHeight && $('console').offsetHeight + 12) + 'px')).observe($('console'));
+$('hidePanel').onclick = () => { setConsoleVisible(false); $('openPanel').focus(); };
+$('openPanel').onclick = () => { setConsoleVisible(true); $('hidePanel').focus(); };
+$('openSettings').onclick = () => setSettingsOpen($('panel').classList.contains('hidden'));
+$('closeSettings').onclick = () => { setSettingsOpen(false); $('openSettings').focus(); };
 selectMenuPage(kept('menuTab', 'Show'));
+// buttons for the options of a select, all in view: the select keeps the value, so everything that reads or sets it still works
+const segments = [];
+function segmented(select, box) {
+  if (!box) { box = document.createElement('div'); select.after(box); }
+  box.classList.add('seg'); box.setAttribute('role', 'group');
+  if (!box.hasAttribute('aria-labelledby')) box.setAttribute('aria-label', select.labels?.[0]?.textContent || select.getAttribute('aria-label') || '');
+  const sync = () => { for (const b of box.children) { b.setAttribute('aria-pressed', String(b.dataset.value === select.value)); b.disabled = select.disabled; } };
+  const draw = () => {
+    box.replaceChildren(...[...select.options].filter(o => !o.disabled).map(o => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = o.text; b.dataset.value = o.value;
+      b.onclick = () => { select.value = o.value; select.dispatchEvent(new Event('change')); sync(); };
+      return b;
+    }));
+    sync();
+  };
+  select.addEventListener('change', sync); draw(); segments.push({ draw, sync });
+}
+const syncSegments = () => { for (const s of segments) s.sync(); };
+for (const id of ['showTheme', 'lookPace', 'lookPreset']) segmented($(id));
+segmented($('audioSource'), $('startSource'));
 const fill = (select, entries, value) => { select.replaceChildren(); for (const [v, name] of entries) select.add(new Option(name, v)); select.value = value; };
 // a list in groups: [[group, [[value, name], ...]], ...]
 const groups = (select, lists, value) => { select.replaceChildren(); for (const [label, entries] of lists) if (entries.length) { const g = document.createElement('optgroup'); g.label = label; for (const [v, name] of entries) g.append(new Option(name, v)); select.append(g); } select.value = value; };
@@ -246,6 +265,7 @@ function refreshTheme() {
   $('showTheme').disabled = venueKey !== 'hangar';
   $('themeHint').textContent = venueKey !== 'hangar' ? 'Show themes are available in Hangar.'
     : SHOW_THEMES[controls.showTheme]?.description || 'The current mood shapes the show.';
+  syncSegments();
 }
 $('showTheme').onchange = () => {
   controls.showTheme = $('showTheme').value;
@@ -259,6 +279,7 @@ const LOOK_PRESETS = { standard: { light: 1, bloom: 1, haze: 1, hall: 1 }, calm:
 const sliderValue = id => { $(id + 'Value').value = (+$(id).value).toFixed(2) + '×'; };
 function refreshLookPreset() {
   $('lookPreset').value = Object.keys(LOOK_PRESETS).find(k => LOOK_SLIDERS.every(([, key]) => Math.abs(LOOK_PRESETS[k][key] - look[key]) < 0.001)) || 'custom';
+  syncSegments();
 }
 function applyLook(values) {
   for (const [id, key] of LOOK_SLIDERS) { look[key] = values[key]; $(id).value = values[key]; keep(key, values[key]); sliderValue(id); }
@@ -275,6 +296,7 @@ $('sens').value = kept('sens', 1); sliderValue('sens');
 $('sens').oninput = () => { keep('sens', $('sens').value); sliderValue('sens'); };
 $('resetSliders').onclick = () => { applyLook(LOOK_PRESETS.standard); $('sens').value = 1; keep('sens', 1); sliderValue('sens'); };
 fill($('quality'), [['auto', 'Automatic'], ...Object.entries(QUALITY).map(([k, v]) => [k, v.name])], qualityChoice);
+segmented($('quality'), $('startQuality'));
 $('quality').onchange = e => {
   qualityChoice = e.target.value; keep('quality', qualityChoice); autoQuality.reset();
   changeQuality(qualityChoice === 'auto' ? 'normal' : qualityChoice).catch(changeFailed);
@@ -285,48 +307,35 @@ $('particles').onchange = e => {
   replaceVenue($('venue').value, { force: true }).catch(changeFailed);
 };
 // a switch for every role this venue has
-const ROLE_NAME = { overhead: 'Heads overhead', stage: 'Heads on stage', wash: 'Washes', bars: 'LED bars', coil: 'LED coils', strobe: 'Strobes', blinder: 'Blinders', laser: 'Lasers', wall: 'LED walls', screen: 'Screen', dome: 'Dome', kinetic: 'Kinetic ceiling', triangles: 'LED triangles', ball: 'Mirror ball', arch: 'LED arches', roof: 'LED roof', rings: 'LED rings', truss: 'Moving trusses', glow: 'Light on the building', floor: 'Lit floor', festoon: 'Strings of lamps', house: 'House lights', pool: 'Pool', co2: 'CO2', flame: 'Flames', spark: 'Sparks', firework: 'Fireworks', confetti: 'Confetti' };
-const FIXTURE_GROUPS = [
-  ['Moving lights', ['overhead', 'stage', 'wash']],
-  ['LED and motion', ['coil', 'rings', 'roof', 'triangles', 'kinetic', 'truss', 'bars', 'arch', 'wall', 'screen', 'dome', 'floor']],
-  ['Effects', ['strobe', 'blinder', 'laser', 'ball', 'co2', 'flame', 'spark', 'firework', 'confetti']],
-  ['Venue lighting', ['glow', 'house', 'festoon', 'pool']],
-];
+const ROLE_NAME = { overhead: 'Hall heads', stage: 'Stage heads', wash: 'Washes', bars: 'LED bars', coil: 'LED coils', strobe: 'Strobes', blinder: 'Blinders', laser: 'Lasers', wall: 'LED walls', screen: 'Screen', dome: 'Dome', kinetic: 'Kinetic', triangles: 'Triangles', ball: 'Mirror ball', arch: 'LED arches', roof: 'LED roof', rings: 'LED rings', truss: 'Trusses', glow: 'Building', floor: 'Lit floor', festoon: 'Festoons', house: 'House lights', pool: 'Pool', co2: 'CO2', flame: 'Flames', spark: 'Sparks', firework: 'Fireworks', confetti: 'Confetti' };
+// lights first, then the effects on a row of their own
+const FIXTURE_ROLES = [['overhead', 'stage', 'wash', 'bars', 'arch', 'wall', 'truss', 'coil', 'rings', 'roof', 'triangles', 'kinetic', 'screen', 'dome', 'floor', 'glow', 'house', 'festoon', 'pool', 'ball'], ['strobe', 'blinder', 'laser', 'co2', 'flame', 'spark', 'firework', 'confetti']];
 function fillSwitches() {
-  $('switches').replaceChildren();
-  for (const [name, roles] of FIXTURE_GROUPS) {
-    const present = roles.filter(role => world.groups[role]?.length);
-    if (!present.length) continue;
-    const group = document.createElement('fieldset'), legend = document.createElement('legend'), list = document.createElement('div');
-    group.className = 'fixture-group'; legend.textContent = name; list.className = 'switch-list';
-    for (const role of present) {
-      const label = document.createElement('label'), input = document.createElement('input');
-      Object.assign(input, { id: 'fixture-' + role, type: 'checkbox', checked: !look.off[role] });
-      input.onchange = () => { look.off[role] = !input.checked; keep('off', JSON.stringify(look.off)); refreshEffects(); };
-      label.append(input, ROLE_NAME[role]);
-      const item = document.createElement('div'); item.append(label);
-      if (LIGHT_ROLES.includes(role)) {
-        const fine = document.createElement('div'), caption = document.createElement('label'), output = document.createElement('output'), fader = document.createElement('input');
-        fine.className = 'fixture-level'; caption.htmlFor = 'level-' + role; caption.append('Level ', output);
-        Object.assign(fader, { id: 'level-' + role, type: 'range', min: '0', max: '1.5', step: '0.05', value: controls.levels[role] });
-        output.id = fader.id + 'Value'; output.setAttribute('for', fader.id); output.value = (+fader.value).toFixed(2) + '×';
-        fader.oninput = () => { controls.levels[role] = +fader.value; output.value = (+fader.value).toFixed(2) + '×'; persistControls(); };
-        fine.append(caption, fader); item.append(fine);
-      }
-      list.append(item);
-    }
-    group.append(legend, list); $('switches').append(group);
+  $('switches').replaceChildren(); $('fixtureLevels').replaceChildren();
+  for (const roles of FIXTURE_ROLES) for (const [i, role] of roles.filter(role => world.groups[role]?.length).entries()) {
+    const label = document.createElement('label'), input = document.createElement('input');
+    Object.assign(input, { id: 'fixture-' + role, type: 'checkbox', checked: !look.off[role] });
+    input.onchange = () => { look.off[role] = !input.checked; keep('off', JSON.stringify(look.off)); refreshEffects(); };
+    label.className = 'chip'; label.style.gridColumnStart = i === 0 ? 1 : ''; label.append(input, ROLE_NAME[role]);
+    $('switches').append(label);
+    if (!LIGHT_ROLES.includes(role)) continue;
+    const row = document.createElement('div'), caption = document.createElement('label'), output = document.createElement('output'), fader = document.createElement('input');
+    row.className = 'level'; caption.htmlFor = 'level-' + role; caption.textContent = ROLE_NAME[role];
+    Object.assign(fader, { id: 'level-' + role, type: 'range', min: '0', max: '1.5', step: '0.05', value: controls.levels[role] });
+    output.id = fader.id + 'Value'; output.setAttribute('for', fader.id); output.value = (+fader.value).toFixed(2) + '×';
+    fader.oninput = () => { controls.levels[role] = +fader.value; output.value = (+fader.value).toFixed(2) + '×'; persistControls(); };
+    row.append(caption, fader, output); $('fixtureLevels').append(row);
   }
-  $('quickLights').hidden = !$('switches').childElementCount;
-  if ($('quickLights').hidden) setQuickLightsVisible(false);
+  $('switches').closest('.deck').hidden = !$('switches').childElementCount;
   refreshEffects();
 }
 function persistControls() { keep('controls', JSON.stringify(controls)); }
+const ICON = { pause: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="currentColor" stroke="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>', play: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="currentColor" stroke="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5v14l12-7z"/></svg>' };
 function setCameraFrozen(frozen) {
   cameraFrozen = frozen;
   if (!frozen) { cams.pending = null; cams.lastCut = clock.elapsedTime; cams.fadeIn = -10; cams.fade = 1; }
   $('freezeCamera').setAttribute('aria-pressed', String(frozen));
-  $('freezeCamera').textContent = frozen ? 'Resume camera' : 'Freeze this view';
+  $('freezeCamera').innerHTML = frozen ? ICON.play : ICON.pause; $('freezeCamera').title = frozen ? 'Resume camera (P)' : 'Freeze this view (P)'; $('freezeCamera').setAttribute('aria-label', frozen ? 'Resume camera' : 'Freeze this view');
 }
 $('freezeCamera').onclick = () => setCameraFrozen(!cameraFrozen);
 fill($('palette'), [['auto', 'Follow the show'], ...Object.entries(PALETTES).map(([key, p]) => [key, p.name])], controls.palette);
@@ -593,7 +602,7 @@ function refreshEffects() {
     if (effect.hold && !enabled) { held[effect.hold].pointer = held[effect.hold].key = false; director.manual[effect.hold] = false; }
     btn.disabled = !enabled;
     btn.dataset.state = !present.length ? 'missing' : !enabled ? 'off' : effect.hold && director.manual[effect.hold] ? 'held' : 'ready';
-    btn.title = !present.length ? `This venue has no ${effect.name.toLowerCase()}` : !enabled ? 'Enable this effect under Lights and fixtures' : effect.hold ? 'Hold to activate; release to stop' : 'Fire once';
+    btn.title = !present.length ? `This venue has no ${effect.name.toLowerCase()}` : !enabled ? 'Switch it on under Fixtures' : effect.hold ? 'Hold to activate; release to stop' : 'Fire once';
     if (effect.hold) btn.setAttribute('aria-pressed', String(director.manual[effect.hold]));
   }
   $('btnBlackout').dataset.state = director.manual.blackout ? 'on' : 'off';
@@ -634,11 +643,13 @@ const fullscreen = () => document.fullscreenElement ? document.exitFullscreen() 
 $('fullscreenPanel').onclick = fullscreen;
 renderer.domElement.addEventListener('dblclick', fullscreen);
 addEventListener('keydown', e => {
-  if (e.ctrlKey || e.metaKey || e.altKey || $('shortcutHelp').open) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || $('shortcutHelp').open || !started()) return;
   const key = e.key.toLowerCase();
-  if (key === 'h' && !e.repeat && !['SELECT', 'INPUT', 'TEXTAREA'].includes(e.target.tagName) && !e.target.isContentEditable) { setPanelVisible($('panel').classList.contains('hidden')); return; }
+  if (key === 'escape' && !$('panel').classList.contains('hidden')) { setSettingsOpen(false); $('openSettings').focus(); return; }
+  if (key === 'h' && !e.repeat && !['SELECT', 'INPUT', 'TEXTAREA'].includes(e.target.tagName) && !e.target.isContentEditable) { setConsoleVisible($('console').classList.contains('hidden')); return; }
   if (!e.repeat && !['SELECT', 'INPUT', 'TEXTAREA', 'AUDIO', 'VIDEO'].includes(e.target.tagName) && !e.target.isContentEditable) {
     if (key === '?') { showShortcutHelp(); return; }
+    if (key === 's') { setSettingsOpen($('panel').classList.contains('hidden')); return; }
     if (key === 'p') { setCameraFrozen(!cameraFrozen); return; }
     if (key === 'n' && !changing) { director.next(clock.elapsedTime, signals.m.section); return; }
   }
@@ -698,7 +709,19 @@ function logShow(t) {
     if (location.hostname === '127.0.0.1' && !navigator.webdriver && !/Headless/.test(navigator.userAgent)) fetch('/__log', { method: 'POST', body: lines, keepalive: true }).catch(() => {});   // not from a test browser
   }
 }
-if (params.has('hide')) $('panel').classList.add('hidden');   // ?hide: no panel, for a picture
+if (params.has('hide')) { $('console').classList.add('hidden'); $('miniStatus').remove(); }   // ?hide: no controls, for a picture
+// The start screen covers the venue while it builds. The click that leaves it may connect the sound, which a
+// browser only allows after a click; a reload in the same tab goes straight back to the show.
+function startShow(withSound) {
+  if ($('startShow').disabled) return;
+  document.documentElement.classList.add('started');
+  try { sessionStorage.setItem('sv.started', '1'); } catch {}
+  wakeAudio();
+  if (withSound) $('playFile').click();
+}
+$('startShow').onclick = () => startShow(true);
+$('startDemo').onclick = () => startShow(false);
+$('venueSetting').hidden = Object.keys(VENUES).length < 2;   // one venue: nothing to choose
 // While working on the show: when a file changes, the page reloads itself (the local server says when).
 if (!navigator.webdriver && (location.hostname === '127.0.0.1' || location.hostname === 'localhost')) {
   let seen = null;

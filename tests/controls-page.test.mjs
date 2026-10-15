@@ -104,9 +104,8 @@ for (const backend of ['webgl', 'webgpu']) test(`${backend}: looks, remembered s
     assert.equal((await states()).btnBlinder, 'held');
     await evaluate(`Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new Event('visibilitychange')); delete document.hidden;`);
     assert.equal(await evaluate('window.__show.director.manual.blinder'), false, 'a hidden tab releases its hold');
-    // Effects moved from a details block to their own tab. Open that tab before
-    // checking native focus and the keyboard hold/release behavior.
-    await evaluate(`document.getElementById('tabEffects').click(); const btn = document.getElementById('btnBlinder'); btn.focus(); btn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));`);
+    // The effects sit on the console. Check native focus and the keyboard hold/release behavior there.
+    await evaluate(`const btn = document.getElementById('btnBlinder'); btn.focus(); btn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));`);
     assert.equal(await evaluate(`document.activeElement === document.getElementById('btnBlinder')`), true);
     assert.equal(await evaluate(`document.getElementById('btnBlinder').getAttribute('aria-pressed')`), 'true');
     await evaluate(`document.getElementById('btnBlinder').blur()`);
@@ -119,14 +118,18 @@ for (const backend of ['webgl', 'webgpu']) test(`${backend}: looks, remembered s
     fs.mkdirSync('rec/look/controls', { recursive: true });
     for (const width of [1280, 390]) {
       await send('Emulation.setDeviceMetricsOverride', { width, height: 800, deviceScaleFactor: 1, mobile: false });
-      await evaluate(`document.getElementById('tabEffects').click(); document.getElementById('panel').scrollTop = 0`);
+      await evaluate(`document.getElementById('panel').classList.add('hidden')`);
       const shot = await send('Page.captureScreenshot', { format: 'png' });
       fs.writeFileSync(`rec/look/controls/${backend}-${width}.png`, Buffer.from(shot.data, 'base64'));
       assert.equal(await evaluate(`(() => {
-        const panel = document.getElementById('panel'), box = panel.getBoundingClientRect();
+        const panel = document.getElementById('console'), box = panel.getBoundingClientRect();
         return box.right <= innerWidth && box.bottom <= innerHeight && panel.scrollWidth <= panel.clientWidth;
       })()`), true, 'controls fit the viewport without horizontal scrolling');
-      await evaluate(`document.getElementById('tabLights').click(); document.getElementById('resetSliders').scrollIntoView({ block: 'center' })`);
+      await evaluate(`document.getElementById('openSettings').click(); document.getElementById('tabLights').click()`);
+      assert.equal(await evaluate(`(() => {
+        const panel = document.getElementById('panel'), box = panel.getBoundingClientRect();
+        return box.right <= innerWidth && box.bottom <= innerHeight && panel.scrollWidth <= panel.clientWidth;
+      })()`), true, 'settings fit the viewport without horizontal scrolling');
       const settings = await send('Page.captureScreenshot', { format: 'png' });
       fs.writeFileSync(`rec/look/controls/${backend}-${width}-settings.png`, Buffer.from(settings.data, 'base64'));
     }

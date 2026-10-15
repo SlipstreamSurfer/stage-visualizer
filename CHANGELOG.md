@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.30.0
+
+- The crowd dances the way the music asks. Five ways, chosen by the mood: peak, raw and hard techno, trance and bass
+  stomp (knees, fists, jumping when the room goes off); deep and hypnotic techno drive (a steady bounce, now and then
+  a hand); house and open format groove (bouncy, the arms along); organic, afro, melodic, progressive and deep house
+  sway (from foot to foot in half time, hands in front of the chest on the beat or one arm up to the vibe, nobody
+  jumping on a drop); concert and ambient stand and listen. A change of mood changes the dancing over a few seconds.
+- Where someone stands says how they dance: in the middle up front the most and the first hands in the air, along
+  the walls and at the back calmer. Along the walls the crowd is thinner, and some stand turned to each other,
+  talking.
+
 ## 0.29.0
 
 - DJ view, the second camera (key 2), in place of Dance floor: through the eyes of whoever plays, with the hands on

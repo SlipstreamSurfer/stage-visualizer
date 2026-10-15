@@ -16,6 +16,7 @@ import { buildSmoke } from './smoke.js';
 import { surfaces } from './surfaces.js';
 import { box, strut, truss, batcher } from './shapes.js';
 import { people, peopleMaterial, peopleU, shadowMaterial, SHIRTS } from './people.js';
+import { DANCES, danceOf } from './dance.js';
 
 const WHITE = new THREE.Color(1, 1, 1), tone = new THREE.Color();
 // What is part of a stage or a rig, and so is built even while bars, exits and the rest are parked.
@@ -181,7 +182,9 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
     for (let gx = F.x0; gx <= F.x1; gx += STEP) for (let gz = F.z0; gz <= F.z1; gz += STEP) {
       const x = gx + (Math.random() - 0.5) * STEP * 0.7, z = gz + (Math.random() - 0.5) * STEP * 0.7;
       if (!L.inside(x, z, 1.2) || (centre && L.onStage(x, z, st.height > 0.3 ? 1.8 : 0.45)) || taken(x, z)) continue;   // a booth on the floor has people right up to it
-      if (Math.random() < (L.crowd.even ? 0.6 : Math.max(0.1, Math.pow(1 - Math.min(1, away(x, z)), 1.7)) * 0.9)) spots.push([x, z]);
+      // fewer along the walls: some want room round them rather than to stand shoulder to shoulder in the middle
+      const wall = centre ? 0 : Math.max(0, Math.abs(x) / (W / 2) - 0.55) / 0.45;
+      if (Math.random() < (L.crowd.even ? 0.6 : Math.max(0.1, Math.pow(1 - Math.min(1, away(x, z)), 1.7)) * 0.9) * (1 - wall * 0.45)) spots.push([x, z]);
     }
     for (let i = spots.length - 1; i > 0; i--) { const k = Math.random() * (i + 1) | 0; [spots[i], spots[k]] = [spots[k], spots[i]]; }
     spots.length = Math.min(spots.length, count);
@@ -214,7 +217,11 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   for (let i = 0; i < n; i++) {
     const [x, z, turned, still, kind, y = 0, seated = false] = spots[i];
     const s = 0.9 + Math.random() * 0.25, build = 0.88 + Math.random() * 0.26;
-    const yaw = turned ?? facing(x, z) + (Math.random() - 0.5) * 0.7;   // turned towards whoever plays, more or less
+    // Where someone stands says how they dance: in the middle up front the most, along the walls and at the back the
+    // least, and along the walls some stand turned to each other, talking (zone: 1 up front in the middle, 0 at the edges)
+    const wall = centre ? 0 : Math.max(0, Math.abs(x) / (W / 2) - 0.55) / 0.45, zone = i < dancers ? Math.max(0, 1 - Math.min(1, away(x, z)) * 0.8 - wall * 0.7) : 0.5;
+    const talking = i < dancers && i >= PHONES && wall > 0.3 && Math.random() < wall * 0.45;
+    const yaw = turned ?? facing(x, z) + (talking ? (i % 2 ? 1 : -1) * (1.1 + Math.random() * 0.5) : (Math.random() - 0.5) * 0.7);   // turned towards whoever plays, more or less
     crowd.put(i, x, z, yaw, s, build); crowd.sit(i, y, seated); crowd.shirt(i, c.setHex(KIND[kind] ?? SHIRTS[Math.random() * SHIRTS.length | 0]));
     o.rotation.set(0, yaw, 0);
     if (kind === 'security') { o.position.set(x, 0, z); o.scale.set(1.04 * s * build, s, 1.04 * s * build); o.updateMatrix(); vests.setMatrixAt(g++, o.matrix); }
@@ -228,7 +235,8 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       }
     }
     o.position.set(x, y + 0.015, z); o.rotation.set(0, 0, 0); o.scale.set(s, 1, s); o.updateMatrix(); blobs.setMatrixAt(i, o.matrix);
-    crowd.seed(i, Math.random(), still ? 0.99 : Math.random(), i < PHONES ? 0.15 : still ? 0.3 : 0.4 + Math.random() * 0.6, i < PHONES ? 0 : 1);   // filming, talking or sitting keeps you still
+    const eager = still || talking ? 0.99 : Math.min(0.98, Math.random() * (1.35 - zone * 0.7)), bounce = i < PHONES ? 0.15 : still ? 0.3 : talking ? 0.12 : (0.25 + zone * 0.4) + Math.random() * 0.45;
+    crowd.seed(i, Math.random(), eager, bounce, i < PHONES ? 0 : 1);   // filming, talking or sitting keeps you still; up front the hands go up first
   }
   // how packed it is around each person: neighbours within arm's reach, 0 (alone) to 1 (shoulder to shoulder),
   // counted with a grid so a big crowd does not take long
@@ -398,6 +406,9 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       hands += (want * (calm ? 0.5 : 1) - hands) * Math.min(1, dt * 2.5);
       filming += ((brk && m.hasGrooved ? 0.9 : signals.hype * 0.8) - filming) * Math.min(1, dt * 1.5);
       U.time.value = t; U.dance.value = signals.phase; U.hands.value = hands; U.film.value = filming; U.hype.value = signals.hype * (brk ? 0 : 1);
+      // the way of dancing follows the music, changing over a few seconds when the mood does
+      const style = DANCES[danceOf(director.moodKey, director.mood)], k = Math.min(1, dt / 3);
+      for (const key in style) U[key].value += (style[key] - U[key].value) * k;
       U.front.value.copy(env.wallColor).multiplyScalar(2.2).add(tone.setRGB(...director.room.color).multiplyScalar(director.room.level * (hangarRig ? 0.007 : 0.012))).multiplyScalar(look.light * (director.manual.blackout ? 0 : 1));
       U.rim.value.copy(stageLight.color).lerp(WHITE, 0.5).multiplyScalar((0.1 + signals.kick * 0.35 + signals.drop + director.blind) * look.light * (director.manual.blackout ? 0 : 1));
       phones.visible = torches.visible = filming > 0.05; phones.material.color.setRGB(0.6, 0.75, 1).multiplyScalar(filming * 1.5);

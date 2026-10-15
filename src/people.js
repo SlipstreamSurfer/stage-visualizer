@@ -52,7 +52,8 @@ const fall = (from, to, x) => smoothstep(to, from, x).oneMinus();   // 1 below `
 // What all people share: the time, the beat as a clock, how many hands are up, how wild it is, how much everyone
 // moves, how many are filming, the light that catches heads and shoulders from the stage (rim), and the light the
 // stage throws on everyone who faces it (front): the LED wall is the biggest lamp in the room.
-export const peopleU = () => ({ time: uniform(0), dance: uniform(0), hands: uniform(0), hype: uniform(0), groove: uniform(0.3), film: uniform(0), rim: uniform(new THREE.Color(0)), front: uniform(new THREE.Color(0)), stage: uniform(new THREE.Vector3(0, 7, -20)) });
+export const peopleU = () => ({ time: uniform(0), dance: uniform(0), hands: uniform(0), hype: uniform(0), groove: uniform(0.3), film: uniform(0), rim: uniform(new THREE.Color(0)), front: uniform(new THREE.Color(0)), stage: uniform(new THREE.Vector3(0, 7, -20)),
+  bounce: uniform(1), rock: uniform(1), half: uniform(0.3), jump: uniform(1), chest: uniform(0.1), oneArm: uniform(0.3) });   // the way of dancing: see dance.js
 
 // What belongs to one person travels in one buffer (WebGPU allows eight vertex buffers a mesh): four random numbers
 // (phase, eagerness, bounce, freedom of the arms), where they stand (x, z, the way they face, their size), their
@@ -100,7 +101,7 @@ export function peopleMaterial({ light, U, walking = false }) {
   } else {
     // Everyone dances to the same music but in their own way: on the beat or in half time, a little ahead or behind
     // and drifting, with their own mix of moves, and joining in or easing off at their own moment.
-    const halfTime = step(rnd(aSeed.y.add(6)), 0.3);
+    const halfTime = step(rnd(aSeed.y.add(6)), U.half);
     const drift = sin(U.time.mul(rnd(aSeed.x.add(7)).mul(0.1).add(0.05)).add(aSeed.y.mul(40))).mul(0.12);
     const ph = U.dance.mul(halfTime.mul(-0.5).add(1)).add(aSeed.x.sub(0.5).mul(0.45)).add(drift).add(halfTime.mul(0.5).mul(step(0.5, rnd(aSeed.x.add(8)))));
     const cBeat = fract(ph), pump = cos(cBeat.mul(6.2832)).mul(-0.5).add(0.5);                       // down and up once a beat
@@ -109,23 +110,27 @@ export function peopleMaterial({ light, U, walking = false }) {
     // the arms: hanging and swinging with the beat, or raised and pumping; the forearm bends at the elbow
     const free = aSeed.w, v1 = fract(aSeed.x.mul(7.3)), v2 = fract(aSeed.y.mul(5.1).add(0.3));
     const thr = select(aArm.lessThan(0), aSeed.y, fract(aSeed.y.mul(1.7).add(0.13)));
-    const raised = smoothstep(thr.sub(0.08), thr.add(0.08), U.hands);
+    const oneArm = step(rnd(aSeed.w.add(aSeed.x).add(3)), U.oneArm).mul(step(aArm, 0));   // the left arm stays down for whoever raises one
+    const raised = smoothstep(thr.sub(0.08), thr.add(0.08), U.hands).mul(oneArm.oneMinus());
     const sit = aWalk.y, up = select(free.equal(0).and(aArm.greaterThan(0)), max(raised, U.film), raised).mul(sit.oneMinus());   // someone filming holds a phone up; whoever sits keeps their hands down
-    const [qy, qz] = turn(q0.y, q0.z, up.oneMinus().mul(v1.mul(0.6).add(0.35).add(pump.mul(0.3).mul(lively).mul(free))));
+    // hands at the chest: the elbow bent up and the arm a little forward, the hands going with the beat
+    const chest = up.oneMinus().mul(step(rnd(aSeed.x.add(aSeed.y).add(15)), U.chest)).mul(sit.oneMinus());
+    const [qy, qz] = turn(q0.y, q0.z, mix(up.oneMinus().mul(v1.mul(0.6).add(0.35).add(pump.mul(0.3).mul(lively).mul(free))), pump.mul(0.3).mul(lively).add(2.05), chest));
     const [qx, qy2] = turn(q0.x, qy, side.mul(up).mul(v1.sub(0.5).mul(0.6).add(cos(cBeat.mul(6.2832)).mul(0.3)).mul(free).add(0.58)));
-    const p1 = select(forearm, vec3(qx, qy2.sub(UPPER), qz), p0);
+    const [cx, cz] = turn(qx, qz, side.negate().mul(chest).mul(0.65));   // and turned in, so the hands meet in front of the chest
+    const p1 = select(forearm, vec3(cx, qy2.sub(UPPER), cz), p0);
     const [ax, ay] = turn(p1.x, p1.y, side.mul(up.mul(v2.sub(0.5).mul(0.7).mul(free).add(2.42)).add(0.07)));
-    const [ay2, az] = turn(ay, p1.z, up.negate().mul(v1.mul(0.35).mul(free).add(0.25)).add(up.oneMinus().mul(0.12).mul(rock).mul(side).mul(lively).mul(free)));
+    const [ay2, az] = turn(ay, p1.z, up.negate().mul(v1.mul(0.35).mul(free).add(0.25)).add(up.oneMinus().mul(0.12).mul(rock).mul(side).mul(lively).mul(free)).sub(chest.mul(0.3)));
     // sitting: the thighs forward, the shins down, and everything else as much lower as a shin is long
     const seatedLeg = select(h.lessThan(0.5), vec3(pos.x, h.add(0.42), pos.z.sub(0.42)), vec3(pos.x, float(0.92).sub(pos.z), h.sub(0.92)));
     const body = select(isArm, vec3(ax, ay2, az).add(shoulder), select(h.lessThan(0.93), mix(pos, seatedLeg, sit), pos));
     // dancing: the feet stay put while the knees give on the beat, the weight shifts and the head nods
-    const above = smoothstep(0.05, 1.0, h), move = aSeed.z.mul(lively).mul(sit.mul(-0.7).add(1));
-    const [tx, tz] = turn(body.x, body.z, rock.mul(0.22).mul(rnd(aSeed.y.add(11))).mul(move).mul(smoothstep(0.8, 1.4, h)));
+    const above = smoothstep(0.05, 1.0, h), move = aSeed.z.mul(lively).mul(sit.mul(-0.7).add(1)), knees = move.mul(U.bounce), sway = move.mul(U.rock);
+    const [tx, tz] = turn(body.x, body.z, rock.mul(0.22).mul(rnd(aSeed.y.add(11))).mul(sway).mul(smoothstep(0.8, 1.4, h)));
     moved = vec3(
-      tx.add(rock.mul(rnd(aSeed.x.add(12)).mul(0.05).add(0.025)).mul(move).mul(above)).add(sin(U.time.mul(1.1).add(aSeed.x.mul(50))).mul(0.012).mul(h)),
-      body.y.sub(pump.mul(rnd(aSeed.y.add(13)).mul(0.045).add(0.025)).mul(move).mul(above)).add(U.hype.mul(1.6).mul(cBeat).mul(cBeat.oneMinus()).mul(step(aSeed.y, 0.8)).mul(sit.oneMinus())).sub(sit.mul(0.45)),   // and jumping, when the room goes off
-      tz.sub(pump.mul(rnd(aSeed.x.add(14)).mul(0.045).add(0.015)).mul(move).mul(smoothstep(1.2, 1.75, h))));
+      tx.add(rock.mul(rnd(aSeed.x.add(12)).mul(0.05).add(0.025)).mul(sway).mul(above)).add(sin(U.time.mul(1.1).add(aSeed.x.mul(50))).mul(0.012).mul(h)),
+      body.y.sub(pump.mul(rnd(aSeed.y.add(13)).mul(0.045).add(0.025)).mul(knees).mul(above)).add(U.hype.mul(U.jump).mul(1.6).mul(cBeat).mul(cBeat.oneMinus()).mul(step(aSeed.y, 0.8)).mul(sit.oneMinus())).sub(sit.mul(0.45)),   // and jumping, when the room goes off
+      tz.sub(pump.mul(rnd(aSeed.x.add(14)).mul(0.045).add(0.015)).mul(knees).mul(smoothstep(1.2, 1.75, h))));
     // deep in a packed crowd little light gets past the heads and shoulders; a raised arm is out in the light
     open = mix(mix(1, mix(0.22, 1, smoothstep(0.5, 1.5, h)), aDense), 1, select(isArm, up, 0));
   }

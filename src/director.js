@@ -187,7 +187,7 @@ export class Director {
     for (const list of Object.values(groups)) for (const [slot, f] of list.entries()) { f.rp = Math.random() * 2 - 1; f.rt = Math.random(); f.hangarSlot = slot; }
     this.setMood(moodKey);
   }
-  setMood(key) { this.mood = MOODS[key]; this.choreography.reset(); this.palette = 0; this.f = null; this.pick('intro'); }
+  setMood(key) { this.mood = MOODS[key]; this.moodKey = key; this.choreography.reset(); this.palette = 0; this.f = null; this.pick('intro'); }
   resetRingLook(t) { this.ringVariant = 0; this.ringTargets = [...RING_LOOKS[0].drops]; this.ringAt = t; this.ringScene = this.scene; this.ringBreak = false; }
   reset(t) { this.choreography.reset(); this.beat = 0; this.colorIdx = 0; this.archPattern = 0; this.sceneAt = t; this.pick('intro'); }
   // the next program for this part of the track, never the one that is already up if there is a choice

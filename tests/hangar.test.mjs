@@ -188,3 +188,15 @@ test('a scene changes on the first beat of a phrase, counted from the drop, also
   for (const at of after) assert.equal((at - 1) % 8, 0, `a scene changed on beat ${at}, not on the first beat of a pair of bars (${changes})`);
   assert.ok(after.some(at => (at - 1) % 64 === 0 && at > 64), `no change on the first beat of a phrase: ${changes}`);
 });
+
+test('the crowd dances the way the music asks: organic house sways and does not jump, peak techno stomps and jumps, and every mood has a way', async () => {
+  const { DANCES, danceOf } = await import('../src/dance.js');
+  assert.equal(danceOf('organic', MOODS.organic), 'sway');
+  assert.equal(danceOf('techno', MOODS.techno), 'stomp');
+  assert.equal(danceOf('hypnotic', MOODS.hypnotic), 'drive');
+  assert.equal(danceOf('house', MOODS.house), 'groove');
+  assert.equal(danceOf('ambient', MOODS.ambient), 'still');
+  assert.equal(DANCES.sway.jump, 0, 'nobody jumps on an organic house drop');
+  assert.ok(DANCES.sway.rock > DANCES.stomp.rock && DANCES.sway.bounce < DANCES.stomp.bounce && DANCES.sway.half > 0.5, 'swaying from foot to foot, in half time, instead of bouncing');
+  for (const [key, mood] of Object.entries(MOODS)) assert.ok(DANCES[danceOf(key, mood)], `${key} has a way of dancing`);
+});

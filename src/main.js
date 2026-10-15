@@ -709,7 +709,7 @@ function logShow(t) {
     if (location.hostname === '127.0.0.1' && !navigator.webdriver && !/Headless/.test(navigator.userAgent)) fetch('/__log', { method: 'POST', body: lines, keepalive: true }).catch(() => {});   // not from a test browser
   }
 }
-if (params.has('hide')) { $('console').classList.add('hidden'); $('miniStatus').remove(); }   // ?hide: no controls, for a picture
+if (params.has('hide')) { $('console').classList.add('hidden'); $('miniStatus').hidden = true; }   // ?hide: no controls, for a picture
 // The start screen covers the venue while it builds. The click that leaves it may connect the sound, which a
 // browser only allows after a click; a reload in the same tab goes straight back to the show.
 function startShow(withSound) {

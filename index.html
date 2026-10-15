@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stage Visualizer</title>
-<link rel="icon" href="data:,">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%22-12%20-8%20204%20216%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%2217%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M90%2028L8%20192M90%2028L172%20192M90%2028V192%22/%3E%3C/g%3E%3Ccircle%20cx%3D%2290%22%20cy%3D%2228%22%20r%3D%2226%22%20fill%3D%22%23ff5a36%22/%3E%3C/svg%3E">
 <script>
   // A test browser, a picture (?hide) or a reload in the same tab goes straight to the show.
   try { if (navigator.webdriver || new URLSearchParams(location.search).has('hide') || sessionStorage.getItem('sv.started')) document.documentElement.classList.add('started'); } catch {}
@@ -39,8 +39,9 @@
   #start { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 40%, rgba(0,0,0,.35), rgba(0,0,0,.82)); backdrop-filter: blur(14px) saturate(120%); -webkit-backdrop-filter: blur(14px) saturate(120%); color: var(--text); }
   .started #start { display: none; }
   .start-card { width: min(440px, calc(100vw - 32px)); display: grid; gap: 14px; text-align: center; }
-  .start-card h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; color: #fff; }
-  .start-venue { margin: -6px 0 18px; color: var(--dim); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+  .start-card h1 { margin: 0 auto; width: min(400px, 100%); line-height: 0; }
+  .start-card h1 .logo { width: 100%; height: auto; }
+  .start-venue { margin: 2px 0 22px; color: var(--dim); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
   .start-field { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 10px; text-align: left; }
   .start-field > span { color: var(--dim); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
   .start-field .seg button { height: 34px; font-size: 12px; }
@@ -107,6 +108,7 @@
   #panel { position: fixed; z-index: 6; top: 16px; left: 16px; width: min(500px, calc(100vw - 32px)); max-height: calc(100dvh - var(--console-h, 0px) - 44px);
     display: grid; grid-template-rows: auto auto minmax(0, 1fr); border-radius: 16px; font-size: 13px; overflow: hidden; }
   #panel.hidden { display: none; }
+  #panel h1 .mark { width: 15px; height: 16px; margin-right: 9px; color: #fff; vertical-align: -3px; }
   #panel h1 { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #fff; }
   .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 10px 16px; }
   #closeSettings { width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: #ccd; font-size: 18px; cursor: pointer; }
@@ -172,7 +174,7 @@
 
 <div id="start" role="dialog" aria-modal="true" aria-labelledby="startTitle">
   <div class="start-card">
-    <h1 id="startTitle">Stage Visualizer</h1>
+    <h1 id="startTitle"><svg viewBox="-12 -8 1614 216" role="img" aria-label="Stage Visualizer" class="logo"><g fill="none" stroke="#ffffff" stroke-width="15" stroke-linecap="round"><path d="M90 28L8 192M90 28L172 192M90 28V192"/></g><circle cx="90" cy="28" r="24" fill="#ff5a36"/><g transform="translate(256 60)" fill="none" stroke="#ffffff" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"><path transform="translate(0 0)" d="M56 21C51 8 42 0 30 0C14 0 3 10 3 24C3 39 15 44 30 49C46 54 57 60 57 75C57 90 46 100 30 100C16 100 5 92 0 79"/><path transform="translate(92 0)" d="M0 0H66M33 0V100"/><path transform="translate(176 0)" d="M0 100L38 0L76 100M14.4 62H61.6"/><path transform="translate(278 0)" d="M66.5 23.5A36 50 0 1 0 72 50H40"/><path transform="translate(386 0)" d="M54 0H0V100H54M0 50H43"/><path transform="translate(530 0)" d="M0 0L38 100L76 0"/><path transform="translate(636 0)" d="M0 0V100"/><path transform="translate(670 0)" d="M56 21C51 8 42 0 30 0C14 0 3 10 3 24C3 39 15 44 30 49C46 54 57 60 57 75C57 90 46 100 30 100C16 100 5 92 0 79"/><path transform="translate(764 0)" d="M0 0V67A33 33 0 0 0 66 67V0"/><path transform="translate(860 0)" d="M0 100L38 0L76 100M14.4 62H61.6"/><path transform="translate(964 0)" d="M0 0V100H50"/><path transform="translate(1050 0)" d="M0 0V100"/><path transform="translate(1084 0)" d="M0 0H64L0 100H64"/><path transform="translate(1184 0)" d="M54 0H0V100H54M0 50H43"/><path transform="translate(1272 0)" d="M0 100V0H34A28 28 0 0 1 34 56H0M34 56L62 100"/></g></svg></h1>
     <p class="start-venue">Hangar</p>
     <div class="start-field"><span id="startSourceLabel">Sound</span><div id="startSource" class="seg" role="group" aria-labelledby="startSourceLabel"></div></div>
     <div class="start-field"><span id="startQualityLabel">Picture</span><div id="startQuality" class="seg" role="group" aria-labelledby="startQualityLabel"></div></div>
@@ -244,7 +246,7 @@
 <div id="miniStatus"></div>
 
 <div id="panel" class="glass hidden" role="dialog" aria-labelledby="settingsTitle">
-  <header class="panel-header"><h1 id="settingsTitle">Settings</h1><button id="closeSettings" type="button" title="Close (Esc)" aria-label="Close settings">×</button></header>
+  <header class="panel-header"><h1 id="settingsTitle"><svg class="mark" viewBox="-12 -8 204 216" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="15" stroke-linecap="round"><path d="M90 28L8 192M90 28L172 192M90 28V192"/></g><circle cx="90" cy="28" r="24" fill="#ff5a36"/></svg>Settings</h1><button id="closeSettings" type="button" title="Close (Esc)" aria-label="Close settings">×</button></header>
   <nav class="menu-tabs" role="tablist" aria-label="Settings sections">
     <button id="tabShow" type="button" role="tab" aria-controls="pageShow" aria-selected="true">Show</button>
     <button id="tabLights" type="button" role="tab" aria-controls="pageLights" aria-selected="false" tabindex="-1">Lights</button>

@@ -64,3 +64,14 @@ test('the console keeps the show controls in one place, settings open apart and 
     assert.deepEqual(errors, []);
   });
 });
+
+test('?hide shows the venue alone and keeps drawing', { timeout: 120000 }, async () => {
+  await withPage(renderFlags(), async ({ send, evaluate, until, errors, port }) => {
+    await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=hangar&quality=low&hide` });
+    await until('!!window.__show?.ready', 'The Hangar picture did not start');
+    const frames = await evaluate('window.__show.signals.beats');
+    await until(`window.__show.signals.beats > ${frames}`, 'The show stopped drawing');
+    assert.equal(await evaluate(`['start', 'console', 'miniStatus', 'openPanel', 'panel'].every(id => { const el = document.getElementById(id); return !el.offsetParent && getComputedStyle(el).display === 'none' || el.classList.contains('hidden') || el.hidden; })`), true);
+    assert.deepEqual(errors, []);
+  });
+});

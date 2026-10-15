@@ -20,7 +20,7 @@
   <a href="LICENSE">MIT license</a>
 </p>
 
-![Hangar viewed from front of house, with blue and cyan moving lights, LED arches and a crowd](docs/screenshots/hangar-overview.jpg)
+![Hangar from front of house: white LED arches, red and white moving-light beams and a dancing crowd](docs/screenshots/hangar-overview.jpg)
 
 <p align="center"><em>Hangar · the main stage of Stage Visualizer</em></p>
 
@@ -40,7 +40,15 @@ WebGPU renders the show when available; WebGL provides a fallback.
   </tr>
   <tr>
     <td align="center"><strong>From the DJ booth</strong><br>Decks, crowd and the lighting rig.</td>
-    <td align="center"><strong>Shape your show</strong><br>Choose a mood, camera and look.</td>
+    <td align="center"><strong>One console</strong><br>Every control for the show, always in the same place.</td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/screenshots/hangar-start.jpg"><img src="docs/screenshots/hangar-start.jpg" alt="The start screen with the Stage Visualizer logo, sound source, picture quality and Start the show" width="100%"></a></td>
+    <td width="50%"><a href="docs/screenshots/hangar-settings.jpg"><img src="docs/screenshots/hangar-settings.jpg" alt="Settings open on Lights: look presets, colour palette and a level per light group" width="100%"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Start the show</strong><br>Pick your sound and picture while the venue builds.</td>
+    <td align="center"><strong>Settings apart</strong><br>What you set once, in six short pages.</td>
   </tr>
 </table>
 

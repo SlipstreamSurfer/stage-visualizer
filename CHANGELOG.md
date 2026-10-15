@@ -11,6 +11,8 @@
   Keys. The level per light group moved there from the quick lights tray, which is gone. Escape closes them.
 - A start screen covers the venue while it builds. Choose the sound source and the picture quality, then start the
   show: that click connects the sound. A reload in the same tab, a test browser and `?hide` skip it.
+- The Stage Visualizer logo on the start screen, its light in the settings and as the tab icon.
+- New screenshots in the README: the Hangar, the DJ booth, the console, the start screen and the settings.
 
 ## 0.26.6
 

@@ -72,7 +72,7 @@ export function buildFacilities(L, ctx) {
   // that brought it, the band's nightliner, a generator, cases waiting, and mobile light towers that light the apron
   // (their pools of light are drawn on it, daylight.js). Drawn only while the door is open.
   function yard(f) {
-    const y = place([f.at, D / 2, 0]), g = y.group, tw = place([f.at, D / 2, 0]), towerGroup = tw.group, mast = tw.parts(alu), base = tw.parts(grey), heads = tw.parts(black), lamp = tw.parts(glow(3.2, 3.0, 2.6)), wire = y.parts(fence), tube = y.parts(alu), blocks = y.parts(grey), wood = y.parts(timber), dark = y.parts(black), bulbs = y.parts(glow(2.2, 1.4, 0.6)), floods = y.parts(glow(3.2, 3.0, 2.6)), glass = y.parts(windows), cabs = y.parts(cab);
+    const y = place([f.at, D / 2, 0]), g = y.group, tw = place([f.at, D / 2, 0]), towerGroup = tw.group, mast = tw.parts(alu), base = tw.parts(grey), heads = tw.parts(black), lamp = tw.parts(glow(3.2, 3.0, 2.6)), wire = y.parts(fence), tube = y.parts(alu), blocks = y.parts(grey), wood = y.parts(timber), dark = y.parts(black), bulbs = y.parts(glow(2.2, 1.4, 0.6)), floods = y.parts(glow(3.2, 3.0, 2.6)), glass = y.parts(windows), cabs = y.parts(cab), embers = y.parts(glow(3, 0.8, 0.2)), hatch = y.parts(glow(1.4, 1.1, 0.7)), sign = y.parts(glow(1.6, 0.5, 0.15)), truckBody = y.parts(white), canvas = y.parts(lit(new THREE.MeshStandardMaterial({ color: 0xd8d4c8, roughness: 0.9, side: THREE.DoubleSide }), 1.3));
     if (env) updates.push(() => { g.visible = towerGroup.visible = env.door > 0.005; });
     layers.terrace = g; layers.towers = towerGroup;
     // the terrace: building fence (a mesh panel in a tube frame on concrete feet) round three sides, a gate at the back
@@ -100,6 +100,16 @@ export function buildFacilities(L, ctx) {
       for (let k = 0, n = 3 + (Math.random() * 2 | 0); k < n; k++) { const a = k / n * 6.28 + Math.random() * 0.3; y.person(x + Math.sin(a) * 0.7, z + Math.cos(a) * 0.7, a + Math.PI, 'guest'); }
     }
     for (let k = 0; k < 9; k++) { const a = Math.random() * 6.28, x = -13 + Math.random() * 26, z = 1.5 + Math.random() * 11; y.person(x, z, a, 'guest'); }   // and some just standing, talking, with a drink
+    // smokers by the door, in twos and threes, a glowing tip here and there
+    for (const [x, z] of [[-11.5, 1.2], [-12.6, 2.1], [11.8, 1.4], [12.9, 0.9], [13.4, 2.2]]) { y.person(x, z, Math.random() * 6.28, 'guest'); if (Math.random() < 0.6) embers.box(0.012, 0.012, 0.012, x + 0.2, 1.42, z + 0.15); }
+    // a food truck along the side fence with its hatch lit and a queue, and a bar under a tent on the other side
+    { const x = 12.6, z = 9.5; truckBody.box(2.3, 2.7, 5.8, x, 1.75, z); dark.box(2.2, 0.45, 5.6, x, 0.25, z); hatch.box(0.04, 0.95, 2.6, x - 1.17, 1.95, z); dark.box(0.6, 0.06, 2.8, x - 1.45, 1.4, z);
+      sign.box(0.05, 0.4, 2.6, x - 1.16, 2.75, z);
+      for (let k = 0; k < 6; k++) y.person(x - 2.2 - (k % 2) * 0.3, z - 1 - k * 0.65, -Math.PI / 2, 'guest'); }   // the queue
+    { const x = -11.8, z = 8.5; for (const [dx, dz] of [[-1.6, -2.4], [1.6, -2.4], [-1.6, 2.4], [1.6, 2.4]]) tube.box(0.06, 2.6, 0.06, x + dx, 1.3, z + dz); canvas.box(3.6, 0.08, 5.2, x, 2.65, z); canvas.box(3.6, 0.5, 0.04, x, 2.4, z - 2.6); canvas.box(3.6, 0.5, 0.04, x, 2.4, z + 2.6);
+      dark.box(0.7, 1.05, 4.2, x + 1.0, 0.53, z); wood.box(0.8, 0.04, 4.3, x + 1.0, 1.07, z); hatch.box(0.02, 0.03, 4.2, x + 1.36, 0.95, z);
+      y.person(x + 0.1, z - 0.9, Math.PI / 2, 'staff'); y.person(x + 0.1, z + 1.0, Math.PI / 2, 'staff');
+      for (let k = 0; k < 4; k++) y.person(x + 2.05, z - 1.5 + k * 1.0, -Math.PI / 2, 'guest'); }
     // strings of bulbs from the hall to masts at the back of the terrace
     for (const x of [-12, -4, 4, 12]) {
       tube.box(0.08, 4.2, 0.08, x, 2.1, T - 0.4);
@@ -129,7 +139,7 @@ export function buildFacilities(L, ctx) {
       for (const k of [-0.6, -0.2, 0.2, 0.6]) { heads.box(0.4, 0.32, 0.18, x + k, 10.1, z, -0.6); lamp.box(0.34, 0.26, 0.04, x + k, 10.03, z - 0.1, -0.6); }   // turned towards the hall and down
     }
     for (const part of [mast, base, heads, lamp]) part.done();
-    for (const part of [wire, tube, blocks, wood, dark, bulbs, floods, glass, cabs]) part.done();
+    for (const part of [wire, tube, blocks, wood, dark, bulbs, floods, glass, cabs, embers, hatch, sign, truckBody, canvas]) part.done();
   }
 
   const BUILD = {

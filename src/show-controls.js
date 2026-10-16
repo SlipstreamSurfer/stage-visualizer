@@ -28,6 +28,7 @@ export function normalizeControls(value) {
     timeOfDay: choice(input.timeOfDay, ['night', 'day', 'sunset'], 'night'), door: input.door === true,
     // how much of the crowd is there (an older false: none), and which layers of the venue show
     crowd: input.crowd === false ? 0 : [1, 0.5, 0.25, 0].includes(input.crowd) ? input.crowd : 1,
+    djClock: { mode: choice(object(input.djClock).mode, ['time', 'timer'], 'time'), minutes: numberIn(object(input.djClock).minutes, 60, 1, 600) },
     layers: Object.fromEntries(['crew', 'pa', 'terrace', 'towers'].map(k => [k, object(input.layers)[k] !== false])) };
 }
 export function normalizeLook(value) {

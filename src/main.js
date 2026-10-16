@@ -195,7 +195,7 @@ function frame(now) {
 }
 
 // ----- the show's own controls -----
-for (const id of ['showTheme', 'lookPace', 'lookPreset', 'timeOfDay', 'crowd']) segmented($(id));
+for (const id of ['showTheme', 'lookPace', 'lookPreset', 'timeOfDay', 'crowd', 'djClockMode']) segmented($(id));
 segmented($('audioSource'), $('startSource'));
 groups($('venue'), KINDS.map(kind => [kind, Object.entries(VENUES).filter(([, v]) => (v.kind || 'Halls') === kind).map(([k, v]) => [k, v.name])]), venueKey in VENUES ? venueKey : 'hangar');
 function fillVenuePanel(moodKey, cameraValue = 'auto') {
@@ -241,7 +241,7 @@ function refreshTheme() {
   $('showTheme').value = controls.showTheme;
   $('lightChoreography').value = controls.lightChoreography;
   $('cameraFollowsLight').checked = controls.cameraFollowsLight;
-  $('timeOfDay').value = controls.timeOfDay; $('hangarDoor').checked = controls.door; $('crowd').value = String(controls.crowd); for (const k in controls.layers) $('layer-' + k).checked = controls.layers[k];
+  $('timeOfDay').value = controls.timeOfDay; $('hangarDoor').checked = controls.door; $('djClockMode').value = controls.djClock.mode; $('djClockMinutes').value = controls.djClock.minutes; $('djTimer').hidden = controls.djClock.mode !== 'timer'; $('crowd').value = String(controls.crowd); for (const k in controls.layers) $('layer-' + k).checked = controls.layers[k];
   $('hangarDoor').closest('label').hidden = !world.layout.shell.opening;   // only a place with a door that opens
   $('choreographyHint').textContent = CHOREOGRAPHIES[controls.lightChoreography].description;
   $('showTheme').disabled = venueKey !== 'hangar';
@@ -258,6 +258,9 @@ $('lightChoreography').onchange = () => { controls.lightChoreography = $('lightC
 $('cameraFollowsLight').onchange = () => { controls.cameraFollowsLight = $('cameraFollowsLight').checked; persistControls(); };
 $('timeOfDay').onchange = () => { controls.timeOfDay = $('timeOfDay').value; persistControls(); };
 $('hangarDoor').onchange = () => { controls.door = $('hangarDoor').checked; persistControls(); };
+$('djClockMode').onchange = () => { controls.djClock.mode = $('djClockMode').value; $('djTimer').hidden = controls.djClock.mode !== 'timer'; persistControls(); };
+$('djClockMinutes').onchange = () => { controls.djClock.minutes = Math.max(1, Math.min(600, +$('djClockMinutes').value || 60)); persistControls(); };
+$('djClockStart').onclick = () => { look.clockStart = Date.now(); $('djClockStart').textContent = 'Restart'; };
 $('crowd').onchange = () => { controls.crowd = +$('crowd').value; persistControls(); };
 for (const k of ['crew', 'pa', 'terrace', 'towers']) $('layer-' + k).onchange = () => { controls.layers[k] = $('layer-' + k).checked; persistControls(); };
 const LOOK_SLIDERS = [['lookLight', 'light'], ['lookBloom', 'bloom'], ['lookHaze', 'haze'], ['lookHall', 'hall']];

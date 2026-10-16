@@ -79,7 +79,15 @@ let particleCount = WEBGL ? 0 : +(params.get('n') || kept('particles', 0));
 const makeParticles = (world, scene) => particleCount ? buildParticles({ renderer, add: o => (scene.add(o), o), count: particleCount, room: world.layout.plan, stage: world.layout.stage, lights: world.lights, solids: [[world.layout.focus[0], world.layout.stage.height + 1.3, world.layout.focus[2] - 0.5, 0.9], ...(world.layout.shell.pillars || []).flatMap(([x, z]) => [[x, 2.6, z, 0.55], [x, 1.2, z, 0.55]])] }) : null;
 let particles = makeParticles(world, scene);
 await particles?.ready;
-await warmScene(renderer, scene, camera);   // behind the start screen, before the first frame: nothing stalls later
+// Draws a scene once into the scene pass, as a frame does, without showing it (warmScene in resources.js). A frame
+// draws the scene pass one level down, inside the glow and finish, and three r186 keeps what it compiled per level:
+// so this draws one level down too, or every program would be made again in the frame that first shows it.
+const drawOnce = target => {
+  const shown = scenePass.scene; scenePass.scene = target; renderer._callDepth++;
+  try { scenePass.updateBefore({ renderer }); } finally { renderer._callDepth--; scenePass.scene = shown; }
+};
+post.render();   // the first frame, as it is: it sets the scene pass up the way every frame has it, which the warm-up must match
+await warmScene(renderer, scene, camera, { draw: drawOnce });   // behind the start screen: nothing stalls later
 let cams = new CameraDirector(shots(world.layout, world.shots));
 // what is off unless the viewer switches it on: with everything at once the show is too much
 let controls = normalizeControls(parseStored(kept('controls', '{}')));
@@ -358,7 +366,7 @@ async function replaceVenue(key, { force = false, nextQuality = qualityKey } = {
     nextWorld.update(0, timer.getElapsed(), nextDirector, signals, look);
     nextParticles = makeParticles(nextWorld, nextScene);
     await nextParticles?.ready;
-    compileQueue = compileQueue.catch(() => {}).then(() => request === venueRequest ? warmScene(renderer, nextScene, camera) : undefined);
+    compileQueue = compileQueue.catch(() => {}).then(() => request === venueRequest ? warmScene(renderer, nextScene, camera, { draw: drawOnce, target: scenePass.renderTarget, background: true }) : undefined);
     await compileQueue;
     if (request !== venueRequest) { nextParticles?.dispose(); disposeScene(nextScene, [world.env.media]); return; }
     // A mood or manual effect may have changed while shaders compiled.

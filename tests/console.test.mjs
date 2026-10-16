@@ -150,8 +150,11 @@ test('one choice says how you play, and the settings show its setup for this com
 
 test('a sunset with the hangar door open: the light changes over seconds, the door slides open and the outside shows', { timeout: 150000 }, async () => {
   await withPage(renderFlags(), async ({ send, evaluate, until, errors, port }) => {
+    // every shader program the card links, so the test can say none is made while the show plays (each is a stall)
+    await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__linked = 0; if (window.WebGL2RenderingContext) { const link = WebGL2RenderingContext.prototype.linkProgram; WebGL2RenderingContext.prototype.linkProgram = function (p) { window.__linked++; return link.call(this, p); }; }` });
     await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=hangar&quality=low` });
     await until('!!window.__show?.ready', 'The Hangar did not start');
+    const linked = await evaluate('window.__linked');
     assert.equal(await evaluate('window.__show.world.env.day + window.__show.world.env.sunset + window.__show.world.env.door'), 0, 'night with the door shut unless asked');
     await evaluate(`(() => { document.getElementById('openSettings').click(); document.getElementById('tabShow').click();
       [...document.querySelectorAll('#timeOfDay + .seg button')].find(b => b.dataset.value === 'sunset').click();
@@ -162,6 +165,7 @@ test('a sunset with the hangar door open: the light changes over seconds, the do
     assert.ok(halfway > 0 && halfway < 1, `the door opens slowly (${halfway})`);
     await until('window.__show.world.env.door > 0.99', 'the door did not open', 40000);
     assert.equal(await evaluate(`(() => { let outside = false; window.__show.world.env.scene.traverse(o => { if (o.isMesh && o.geometry?.parameters?.radius === 700) outside = o.parent.visible; }); return outside; })()`), true, 'the sky outside shows through the door');
+    assert.equal(await evaluate('window.__linked') - linked, 0, 'the sun, the door and the outside were compiled before the show began');
     assert.deepEqual(errors, []);
   });
 });

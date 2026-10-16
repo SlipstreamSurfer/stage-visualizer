@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.35.0
+
+- Every kind of music uses the Hangar's rig its own way: which looks the heads take, which formations the trusses go
+  to, how fast things change and how many heads are lit. Hypnotic and deep techno leave a few slow beams in the haze
+  under high trusses; hard techno and hard dance bring the trusses down over the crowd and change fast; trance opens
+  up into the roof; house, melodic, bass and open format each have their own set.
+- Settings → Picture: the crowd at full, half, a quarter or an empty hall, and layers to switch off on their own:
+  security and crew, the PA, the terrace outside and the light towers.
+- A note in the show (✎ or I): a bug or an idea, saved with a link to the spot and a picture in `rec/notes.md`.
+- A clock on the DJ's table: the time, or a set's countdown that blinks red in its last five minutes (Settings → Show).
+- People: more shirts, hair (grey, a cap, shaven), trousers, heights and builds, and one in three holds a drink.
+- In the back half of the hall people walk to the bars, the toilets and the water, which are there now; security or
+  crew walk the round now and then, and very seldom a medic helps someone along.
+- Four security posts, two in the pit and two at the lanes' gates, instead of a row of them.
+- The terrace outside: smokers by the door, a food truck with a queue and a bar under a tent.
+- With a crowd the floor shows the night: gaffer tape, a forklift's tracks, spills and trodden cups. An empty hall
+  (a rehearsal) is clean.
+- Materials: the beams glint on aluminium truss, steel, the barriers, the stage deck and the sealed concrete floor,
+  and metal mirrors the hall. The chain hoists are black, with their chain bags; the crowd barriers dark and matt.
+
 ## 0.34.0
 
 - Walk round yourself: W (or Camera → Walk round yourself) puts the camera on your own two feet, at eye height.

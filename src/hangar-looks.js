@@ -162,3 +162,33 @@ export const PACE = {
   normal: { head: 40, truss: 120, track: 30 },
   lively: { head: 20, truss: 60, track: 15 },
 };
+
+// How each kind of music uses the Hangar's rig: which looks the heads take (in order of preference), which formations
+// the trusses go to, how quickly things change (pace: a multiple of the chosen pace's times) and what share of the
+// hall heads is lit outside a drop (lit). Hypnotic techno lets a few beams hang in the haze and turns slowly; hard
+// techno brings the trusses down over the crowd and changes fast; trance opens up into the roof. A mood without a
+// style of its own takes its family's.
+const L = (...keys) => keys;
+const T = (...names) => names;
+export const STYLES = {
+  techno: { looks: L('floor', 'curtains', 'cross', 'fan', 'circles', 'ripple', 'rakeBack', 'crossTrusses', 'converge', 'pillars', 'snake', 'skyCircles'), trusses: T('High', 'Low', 'Tilted', 'Zigzag', 'Valley', 'Rising to the back', 'Twisted', 'Front low'), pace: 1, lit: 0.9 },
+  raw: { looks: L('pillars', 'cross', 'floor', 'ripple', 'crossTrusses', 'scatter', 'walls', 'converge'), trusses: T('Low', 'Canopy', 'Tilted', 'Twisted', 'Front low'), pace: 0.9, lit: 0.75 },
+  deep: { looks: L('softCurtains', 'rakeStage', 'snake', 'walls', 'softFans', 'tunnel', 'sky', 'pillars'), trusses: T('High', 'Rising to the back', 'Arch', 'Falling to the back', 'Middle low'), pace: 1.8, lit: 0.6 },
+  hypnotic: { looks: L('softCurtains', 'curtains', 'tunnel', 'snake', 'rakeStage', 'sky', 'walls', 'spiral', 'softFans'), trusses: T('High', 'Arch', 'Rising to the back', 'Falling to the back', 'Valley'), pace: 2.2, lit: 0.5 },
+  electro: { looks: L('scatter', 'eights', 'panWave', 'cross', 'turningFans', 'ripple', 'ballyhoo'), trusses: T('Zigzag', 'Twin valleys', 'Tilted', 'Twisted'), pace: 0.8, lit: 0.9 },
+  hard: { looks: L('scatter', 'ballyhoo', 'crossTrusses', 'convergePulse', 'circles', 'eights', 'cross', 'turningFans', 'converge'), trusses: T('Low', 'Canopy', 'Zigzag', 'Twin valleys', 'Front low', 'Tilted'), pace: 0.5, lit: 1 },
+  harddance: { looks: L('ballyhoo', 'scatter', 'turningFans', 'eights', 'spiral', 'convergePulse', 'circles'), trusses: T('Canopy', 'Zigzag', 'Low', 'Twisted', 'Twin valleys'), pace: 0.45, lit: 1 },
+  trance: { looks: L('sky', 'skyCircles', 'fan', 'tunnel', 'spiral', 'converge', 'softFans', 'turningFans', 'curtains'), trusses: T('Arch', 'Valley', 'High', 'Twin valleys', 'Rising to the back'), pace: 0.9, lit: 1 },
+  trancedeep: { looks: L('softCurtains', 'tunnel', 'sky', 'softFans', 'spiral', 'rakeStage'), trusses: T('High', 'Arch', 'Valley'), pace: 1.6, lit: 0.65 },
+  psytrance: { looks: L('spiral', 'turningFans', 'circles', 'eights', 'skyCircles', 'scatter', 'ballyhoo'), trusses: T('Twisted', 'Zigzag', 'Arch', 'Tilted'), pace: 0.7, lit: 0.95 },
+  House: { looks: L('fan', 'softFans', 'circles', 'eights', 'panWave', 'curtains', 'rakeStage', 'sky', 'floor'), trusses: T('High', 'Arch', 'Valley', 'Rising to the back', 'Middle low'), pace: 1.1, lit: 0.85 },
+  melodic: { looks: L('sky', 'softCurtains', 'tunnel', 'fan', 'softFans', 'converge', 'skyCircles'), trusses: T('Arch', 'High', 'Valley', 'Falling to the back'), pace: 1.5, lit: 0.75 },
+  progressive: { looks: L('sky', 'curtains', 'tunnel', 'fan', 'converge', 'softFans'), trusses: T('Arch', 'High', 'Rising to the back'), pace: 1.4, lit: 0.8 },
+  organic: { looks: L('softCurtains', 'softFans', 'rakeStage', 'walls', 'snake'), trusses: T('High', 'Arch', 'Middle low'), pace: 2, lit: 0.55 },
+  mainstage: { looks: L('ballyhoo', 'converge', 'sky', 'turningFans', 'crossTrusses', 'fan', 'spiral', 'circles'), trusses: T('Arch', 'Valley', 'Twin valleys', 'High', 'Zigzag'), pace: 0.7, lit: 1 },
+  Bass: { looks: L('scatter', 'eights', 'cross', 'turningFans', 'ripple', 'converge', 'circles'), trusses: T('Low', 'Zigzag', 'Tilted', 'Front low', 'Twin valleys'), pace: 0.7, lit: 0.9 },
+  deepdubstep: { looks: L('pillars', 'walls', 'rakeStage', 'snake', 'tunnel'), trusses: T('Low', 'Canopy', 'Middle low'), pace: 1.6, lit: 0.5 },
+  'Open format': { looks: L('fan', 'circles', 'eights', 'panWave', 'softFans', 'curtains', 'floor'), trusses: T('High', 'Arch', 'Valley', 'Rising to the back'), pace: 1.2, lit: 0.85 },
+  'Concert & ambient': { looks: L('softCurtains', 'rakeStage', 'walls', 'softFans'), trusses: T('High', 'Arch'), pace: 2.5, lit: 0.45 },
+};
+export const styleOf = (moodKey, family) => STYLES[moodKey] || STYLES[family] || STYLES.techno;

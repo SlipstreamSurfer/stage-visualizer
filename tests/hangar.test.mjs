@@ -208,3 +208,14 @@ test('time of day and the hangar door are show settings: kept with presets, anyt
   assert.equal(odd.timeOfDay, 'night'); assert.equal(odd.door, false);
   assert.equal(normalizePresets([{ id: 'a', name: 'Sunset set', venue: 'hangar', mood: 'organic', controls: kept }])[0].controls.timeOfDay, 'sunset');
 });
+
+test('every genre style names looks and formations that exist, and differs from the others', async () => {
+  const { STYLES, styleOf, HEAD_LOOKS: looks, TRUSS_LOOKS: trusses } = await import('../src/hangar-looks.js');
+  for (const [key, st] of Object.entries(STYLES)) {
+    for (const l of st.looks) assert.ok(looks[l], `${key}: look ${l}`);
+    for (const t of st.trusses) assert.ok(trusses.some(x => x.name === t), `${key}: formation ${t}`);
+    assert.ok(st.pace > 0 && st.lit > 0 && st.lit <= 1, key);
+  }
+  assert.ok(styleOf('hypnotic', 'Techno').lit < styleOf('hard', 'Hard').lit && styleOf('hypnotic', 'Techno').pace > styleOf('hard', 'Hard').pace, 'hypnotic is sparse and slow, hard is full and fast');
+  assert.equal(styleOf('deephouse', 'House'), STYLES.House, 'a mood without its own style takes its family\'s');
+});

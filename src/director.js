@@ -10,7 +10,7 @@
 
 import { PALETTES, RING_NAMES } from './show-controls.js';
 import { SHOW_THEMES } from './show-themes.js';
-import { HEAD_LOOKS, HEAD_TIERS, TRUSS_LOOKS, DEEPEST, PACE, POSITIONS, MOVES, GATES, GATE_GAIN, COLOURS, BEAMS, floorTarget } from './hangar-looks.js';
+import { HEAD_LOOKS, HEAD_TIERS, TRUSS_LOOKS, DEEPEST, PACE, POSITIONS, MOVES, GATES, GATE_GAIN, COLOURS, BEAMS, floorTarget, styleOf } from './hangar-looks.js';
 import { LightChoreography, CHOREOGRAPHIES } from './light-choreography.js';
 
 const TAU = Math.PI * 2;
@@ -210,11 +210,13 @@ export class Director {
   // the last one had, and the show moves between them at scene cues. The viewer can pin a look or a formation and
   // set the pace.
   hangarLooks(t, tier, brk, controls) {
-    const pace = PACE[controls?.lookPace] || PACE.normal, track = this.palette !== this.headPalette, cue = this.scene !== this.headScene;
-    if (track) {
+    const style = styleOf(this.moodKey, this.mood.family), chosen = PACE[controls?.lookPace] || PACE.normal;
+    const pace = { head: chosen.head * style.pace, truss: chosen.truss * style.pace, track: chosen.track * style.pace }, track = this.palette !== this.headPalette, cue = this.scene !== this.headScene;
+    if (this.styleKey !== this.moodKey) { this.styleKey = this.moodKey; this.headPalette = -1; }   // another kind of music: its own looks straight away
+    if (track || this.headPalette === -1) {
       this.headPalette = this.palette; this.headFresh = true;
       for (const part of ['calm', 'mid', 'big']) {
-        const list = HEAD_TIERS[part];
+        const own = style.looks.filter(key => HEAD_LOOKS[key]?.tiers.includes(part)), list = own.length >= 2 ? own : HEAD_TIERS[part];   // the genre's looks for this part of a track
         this.headSet[part] = [0, 1].map(i => list[(this.headTurn[part] + i) % list.length]); this.headTurn[part] += 2;
       }
     }
@@ -232,7 +234,9 @@ export class Director {
     if (pinned >= 0) this.trussLook = pinned;
     else if (!brk && trussCue && t - this.trussAt >= (this.trussTrack ? pace.track : pace.truss)) {
       let next = (this.trussLook + (this.trussTrack ? 3 : 1)) % TRUSS_LOOKS.length;   // a new track skips ahead for a bigger change
-      while (!TRUSS_LOOKS[next].tiers.includes(tier)) next = (next + 1) % TRUSS_LOOKS.length;
+      const fits = i => TRUSS_LOOKS[i].tiers.includes(tier), mine = i => style.trusses.includes(TRUSS_LOOKS[i].name);
+      const any = TRUSS_LOOKS.some((x, i) => fits(i) && mine(i));
+      while (!fits(next) || (any && !mine(next))) next = (next + 1) % TRUSS_LOOKS.length;   // the genre's formations, where it has one for this part
       this.trussLook = next; this.trussAt = t; this.trussTrack = false;
     }
     this.headName = HEAD_LOOKS[this.headLook].name; this.trussName = TRUSS_LOOKS[this.trussLook].name;
@@ -415,6 +419,9 @@ export class Director {
         // Give the centre, sides and stage turns in the foreground; a drop opens the full rig.
         const bank = role === 'stage' ? 2 : Math.abs(f.pos[0]) > 18 ? 1 : 0;
         if (!brk && Math.floor((sig.beats || 0) / 2) % 3 === bank) I += sig.accent * 0.18 * master;
+        // the genre's share of lit heads: the rest stay dark outside a drop (hypnotic: a few beams in the haze)
+        const lit = styleOf(this.moodKey, this.mood.family).lit;
+        if (!brk && lit < 1 && ((f.row * 7.31 + f.u * 13.7) % 1) > lit) I *= clamp(sig.drop) * 0.9;
         const foreground = brk ? bank === 2 : bank === this.scene % 3;
         const level = foreground ? 1 : calm || brk ? 0.28 : 0.45;
         f.hangarLevel = (f.hangarLevel ?? 1) + (level - (f.hangarLevel ?? 1)) * ease(1.8);

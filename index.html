@@ -105,6 +105,7 @@
   #elsewhere { position: fixed; z-index: 15; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; padding: 18px 26px; border-radius: 14px; font-size: 15px; cursor: pointer; }
   #elsewhere span { color: var(--dim); font-size: 12px; }
   #openPanel { position: fixed; z-index: 4; left: 16px; bottom: 16px; padding: 10px 14px; border-radius: 12px; font-size: 12px; cursor: pointer; }
+  .layers { display: flex; flex-wrap: wrap; gap: 4px 14px; }
   #walkHud { position: fixed; z-index: 12; top: 16px; left: 16px; display: grid; gap: 7px; max-width: min(430px, calc(100vw - 32px)); padding: 11px 14px; border-radius: 12px; font-size: 12px; }
   #walkHud[hidden], #walkAim[hidden] { display: none; }
   #walkHud strong { font-size: 13px; } #walkHud .keys, #walkWhere, #walkCopied { color: var(--dim); }
@@ -321,7 +322,8 @@
     <div class="setting"><label for="quality">Quality</label><select id="quality" class="ctl"></select></div>
     <div class="setting"><span></span><div><div id="qualityNote" class="panel-note" role="status"></div><div id="fps"></div></div></div>
     <label class="check"><input id="steadyPicture" type="checkbox" checked>Keep the picture smooth: draw fewer pixels while frames take too long</label>
-    <label class="check"><input id="crowd" type="checkbox" checked>People in the hall: the crowd, security and crew (off for an empty hall and a lighter picture)</label>
+    <div class="setting"><label for="crowd">Crowd</label><select id="crowd" class="segmented"><option value="1">Full</option><option value="0.5">Half</option><option value="0.25">A quarter</option><option value="0">Empty hall</option></select></div>
+    <div class="setting"><label>Layers</label><div class="layers"><label class="check"><input id="layer-crew" type="checkbox" checked>Security and crew</label><label class="check"><input id="layer-pa" type="checkbox" checked>PA</label><label class="check"><input id="layer-terrace" type="checkbox" checked>Terrace outside</label><label class="check"><input id="layer-towers" type="checkbox" checked>Light towers</label></div></div>
     <div class="setting"><label for="particles">Extra smoke (heavy)</label><select id="particles" class="ctl"><option value="0">Off</option><option value="300000">Light</option><option value="600000">Dense</option><option value="1200000">Very dense</option></select></div>
     <h2>Screen content</h2>
     <div class="row"><button id="wallPick" class="ctl" type="button">Picture or video</button><button id="wallClear" class="ctl" type="button">Clear</button></div>

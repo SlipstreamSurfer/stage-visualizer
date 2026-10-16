@@ -195,7 +195,7 @@ function frame(now) {
 }
 
 // ----- the show's own controls -----
-for (const id of ['showTheme', 'lookPace', 'lookPreset', 'timeOfDay']) segmented($(id));
+for (const id of ['showTheme', 'lookPace', 'lookPreset', 'timeOfDay', 'crowd']) segmented($(id));
 segmented($('audioSource'), $('startSource'));
 groups($('venue'), KINDS.map(kind => [kind, Object.entries(VENUES).filter(([, v]) => (v.kind || 'Halls') === kind).map(([k, v]) => [k, v.name])]), venueKey in VENUES ? venueKey : 'hangar');
 function fillVenuePanel(moodKey, cameraValue = 'auto') {
@@ -241,7 +241,7 @@ function refreshTheme() {
   $('showTheme').value = controls.showTheme;
   $('lightChoreography').value = controls.lightChoreography;
   $('cameraFollowsLight').checked = controls.cameraFollowsLight;
-  $('timeOfDay').value = controls.timeOfDay; $('hangarDoor').checked = controls.door; $('crowd').checked = controls.crowd;
+  $('timeOfDay').value = controls.timeOfDay; $('hangarDoor').checked = controls.door; $('crowd').value = String(controls.crowd); for (const k in controls.layers) $('layer-' + k).checked = controls.layers[k];
   $('hangarDoor').closest('label').hidden = !world.layout.shell.opening;   // only a place with a door that opens
   $('choreographyHint').textContent = CHOREOGRAPHIES[controls.lightChoreography].description;
   $('showTheme').disabled = venueKey !== 'hangar';
@@ -258,7 +258,8 @@ $('lightChoreography').onchange = () => { controls.lightChoreography = $('lightC
 $('cameraFollowsLight').onchange = () => { controls.cameraFollowsLight = $('cameraFollowsLight').checked; persistControls(); };
 $('timeOfDay').onchange = () => { controls.timeOfDay = $('timeOfDay').value; persistControls(); };
 $('hangarDoor').onchange = () => { controls.door = $('hangarDoor').checked; persistControls(); };
-$('crowd').onchange = () => { controls.crowd = $('crowd').checked; persistControls(); };
+$('crowd').onchange = () => { controls.crowd = +$('crowd').value; persistControls(); };
+for (const k of ['crew', 'pa', 'terrace', 'towers']) $('layer-' + k).onchange = () => { controls.layers[k] = $('layer-' + k).checked; persistControls(); };
 const LOOK_SLIDERS = [['lookLight', 'light'], ['lookBloom', 'bloom'], ['lookHaze', 'haze'], ['lookHall', 'hall']];
 const LOOK_PRESETS = { standard: { light: 1, bloom: 1, haze: 1, hall: 1 }, calm: { light: 0.8, bloom: 0.6, haze: 0.65, hall: 1.15 }, cinematic: { light: 0.9, bloom: 1.15, haze: 1.3, hall: 0.65 }, energetic: { light: 1.2, bloom: 1.3, haze: 1.15, hall: 0.85 } };
 function refreshLookPreset() {

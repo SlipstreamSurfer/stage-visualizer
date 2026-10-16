@@ -23,11 +23,12 @@ export function buildStage(L, ctx) {
   const { add, put, surface, plain, black } = ctx, st = L.stage, { W, H } = L.plan, open = !!L.shell.open;
   const deck = st.floor ? surface(st.floor, { gain: 2 }) : plain(0x1d1d20, { roughness: 0.35, metalness: 0.1, gain: 2.2, shine: 0.4 });   // a stage floor is dark, not a hole, and the lights shine on it
   if (st.height > 0.02) put(deck, st.round ? post(st.width / 2, st.height, 0, st.z, 0, 48) : box(Math.min(W - 0.2, st.width), st.height, st.depth, 0, st.height / 2, st.z));
-  const pa = st.pa ?? (st.kind === 'centre' ? 'none' : H > 8 || open ? 'arrays' : 'stacks');
+  const paKind = st.pa ?? (st.kind === 'centre' ? 'none' : H > 8 || open ? 'arrays' : 'stacks');
   // The PA: flown line arrays in large rooms, compact stacks in small ones. A hall for thousands has what a touring
   // system brings: a long main hang either side, flown subwoofers beside it, a side hang turned out to the sides of
   // the room (and subwoofers and front fills on the floor, facilities.js).
-  if (pa === 'arrays') {
+  let pa = null;
+  if (paKind === 'arrays') {
     // painted black wood, a grey steel grille that catches the light, and bright steel rigging
     const body = plain(0x18191c, { roughness: 0.6, metalness: 0.1, gain: 1.8, shine: 0.1 }), grille = plain(0x33363c, { roughness: 0.72, metalness: 0.15, gain: 1.6, shine: 0.15 }), rigging = plain(0x5a5e66, { roughness: 0.4, metalness: 0.5, gain: 1.4, shine: 0.5 });
     const big = H >= 12 && W >= 30, roof = open ? null : H, parts = { body: [], grille: [], rig: [] };
@@ -40,9 +41,9 @@ export function buildStage(L, ctx) {
       hang({ top: [x + s * 1.75, y, st.front - 0.7], n: 8, w: 1.34, h: 0.55, d: 0.9 });   // the subwoofers, straight down
       hang({ top: [s * Math.min(W / 2 - 3.2, Math.abs(x) + 4.2), H * 0.75, st.front + 0.4], n: 10, w: 0.74, h: 0.25, d: 0.48, turn: s * 0.6, splay: i => [0, 1, 1, 2, 2, 3, 4, 5, 6, 8][i] });   // the side hang, turned out
     }
-    put(body, parts.body); put(grille, parts.grille); put(rigging, parts.rig);
+    pa = add(new THREE.Group()); for (const [mat, list] of [[body, parts.body], [grille, parts.grille], [rigging, parts.rig]]) pa.add(new THREE.Mesh(mergeGeometries(list), mat));   // a group, to switch it off
   }
-  if (pa === 'stacks') for (const s of [-1, 1]) { const x = s * Math.min(W / 2 - 1.2, st.width / 2 + 1.6); for (let j = 0; j < 3; j++) put(black, box(0.75, 0.6, 0.7, x, 0.3 + j * 0.62, st.front + 0.5)); }
+  if (paKind === 'stacks') for (const s of [-1, 1]) { const x = s * Math.min(W / 2 - 1.2, st.width / 2 + 1.6); for (let j = 0; j < 3; j++) put(black, box(0.75, 0.6, 0.7, x, 0.3 + j * 0.62, st.front + 0.5)); }
   const who = typeof st.performer === 'object' ? st.performer : { beat: st.performer || 'dj', flow: st.performer || 'dj' }, acts = {};
   for (const kind of new Set([who.beat, who.flow])) {
     if (!PERFORMERS[kind]) throw new Error(`the venue ${L.name} asks for a performer "${kind}" that does not exist`);
@@ -50,6 +51,7 @@ export function buildStage(L, ctx) {
     acts[kind] = { group, ...PERFORMERS[kind]({ ...ctx, L, st, deck, group, own: o => (group.add(o), o) }) };
   }
   return {
+    pa,
     // flow: the music has no beat to it (see the director's moods)
     update(t, dt, signals, director, look, flow) {
       const on = flow ? who.flow : who.beat;

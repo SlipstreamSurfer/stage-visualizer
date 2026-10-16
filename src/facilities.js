@@ -30,12 +30,14 @@ function sign(text, bg, fg, wide = 4) {
 // L: the layout (fence: true for a fence round an open field); ctx: { add, lit, black, steel, env } from the world
 export function buildFacilities(L, ctx) {
   const { W, D, H } = L.plan, st = L.stage, { add, lit, black, steel, env } = ctx, open = !!L.shell.open;
-  const keepOut = [], people = [], shots = [], lamps = [], pois = [], updates = [], solids = [];   // solids: [x0, z0, x1, z1], lines nobody walks through
+  const keepOut = [], people = [], shots = [], lamps = [], pois = [], updates = [], solids = [], layers = { terrace: new THREE.Group(), towers: new THREE.Group() };   // solids: [x0, z0, x1, z1], lines nobody walks through
   // the lane along the side walls, when the venue has one: the barrier in front of the stage stops where it begins
   const lane = L.facilities.find(f => f.type === 'corridor'), laneWidth = lane ? lane.width : 0, pitZ = st.front + (L.facilities.find(f => f.type === 'barrier')?.pit ?? 1.6);
   const red = lit(new THREE.MeshStandardMaterial({ color: 0x8a0c0c, roughness: 0.5 }), 1.4);
   const grey = lit(new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.6, metalness: 0.5 }), 1.5, 0.2);
-  const alu = lit(new THREE.MeshStandardMaterial({ color: 0x9a9da3, roughness: 0.4, metalness: 0.7 }), 1.3, 0.6);   // barriers: the beams glint on them
+  const alu = lit(new THREE.MeshStandardMaterial({ color: 0x9a9da3, roughness: 0.4, metalness: 0.7 }), 1.3, 0.6);
+  // crowd barriers: dark matt paint, so they do not catch the eye; the top rail a shade lighter to read the line
+  const barrierPaint = lit(new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.75, metalness: 0.2 }), 1.3, 0.15), barrierRail = lit(new THREE.MeshStandardMaterial({ color: 0x4a4d53, roughness: 0.55, metalness: 0.4 }), 1.3, 0.3);
   const white = lit(new THREE.MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.8 }), 1.2);
   const glow = (r, g, b) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), fog: false });
   const SIGN = { exit: sign('EXIT', '#0a7a36', '#ffffff', 3), bar: sign('BAR', '#1a0f04', '#ffb45a', 3), cloak: sign('CLOAKROOM', '#06101c', '#9fc4ff', 6), aid: sign('FIRST AID  +', '#0a7a36', '#ffffff', 6),
@@ -70,8 +72,9 @@ export function buildFacilities(L, ctx) {
   // that brought it, the band's nightliner, a generator, cases waiting, and mobile light towers that light the apron
   // (their pools of light are drawn on it, daylight.js). Drawn only while the door is open.
   function yard(f) {
-    const y = place([f.at, D / 2, 0]), g = y.group, wire = y.parts(fence), tube = y.parts(alu), blocks = y.parts(grey), wood = y.parts(timber), dark = y.parts(black), bulbs = y.parts(glow(2.2, 1.4, 0.6)), floods = y.parts(glow(3.2, 3.0, 2.6)), glass = y.parts(windows), cabs = y.parts(cab);
-    if (env) updates.push(() => { g.visible = env.door > 0.005; });
+    const y = place([f.at, D / 2, 0]), g = y.group, tw = place([f.at, D / 2, 0]), towerGroup = tw.group, mast = tw.parts(alu), base = tw.parts(grey), heads = tw.parts(black), lamp = tw.parts(glow(3.2, 3.0, 2.6)), wire = y.parts(fence), tube = y.parts(alu), blocks = y.parts(grey), wood = y.parts(timber), dark = y.parts(black), bulbs = y.parts(glow(2.2, 1.4, 0.6)), floods = y.parts(glow(3.2, 3.0, 2.6)), glass = y.parts(windows), cabs = y.parts(cab);
+    if (env) updates.push(() => { g.visible = towerGroup.visible = env.door > 0.005; });
+    layers.terrace = g; layers.towers = towerGroup;
     // the terrace: building fence (a mesh panel in a tube frame on concrete feet) round three sides, a gate at the back
     const panel = (x0, z0, x1, z1) => {
       const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 3.5)), ry = Math.atan2(x1 - x0, z1 - z0);
@@ -122,9 +125,10 @@ export function buildFacilities(L, ctx) {
     for (let k = 0; k < 7; k++) dark.box(1.2, 0.62 * (1 + k % 2), 0.62, 17 + (k % 4) * 1.25, 0.31 * (1 + k % 2), 2 + (k > 3 ? 0.8 : 0));   // cases waiting by the wall
     // light towers: a trailer, a mast and four floods turned down at the apron
     for (const [x, z] of LIGHT_TOWERS) {
-      blocks.box(1.4, 1.1, 3.4, x, 0.75, z); tube.box(0.16, 9, 0.16, x, 5.5, z); tube.box(1.6, 0.1, 0.12, x, 9.9, z);
-      for (const k of [-0.6, -0.2, 0.2, 0.6]) { dark.box(0.4, 0.32, 0.18, x + k, 10.1, z, -0.6); floods.box(0.34, 0.26, 0.04, x + k, 10.03, z - 0.1, -0.6); }   // turned towards the hall and down
+      base.box(1.4, 1.1, 3.4, x, 0.75, z); mast.box(0.16, 9, 0.16, x, 5.5, z); mast.box(1.6, 0.1, 0.12, x, 9.9, z);
+      for (const k of [-0.6, -0.2, 0.2, 0.6]) { heads.box(0.4, 0.32, 0.18, x + k, 10.1, z, -0.6); lamp.box(0.34, 0.26, 0.04, x + k, 10.03, z - 0.1, -0.6); }   // turned towards the hall and down
     }
+    for (const part of [mast, base, heads, lamp]) part.done();
     for (const part of [wire, tube, blocks, wood, dark, bulbs, floods, glass, cabs]) part.done();
   }
 
@@ -373,9 +377,11 @@ export function buildFacilities(L, ctx) {
     // of the stage for the front rows, who stand under the main arrays
     barrier(f) {
       const z = st.front + (f.pit || 2.6), p = place([0, z, 0]), across = laneWidth ? W - 2 * laneWidth : W - 1, n = Math.floor(across / 2.4);
-      for (let i = 0; i < n; i++) { const x = (i - (n - 1) / 2) * 2.4; p.box(2.34, 1.15, 0.06, x, 0.6, 0, alu); p.box(2.34, 0.05, 1.1, x, 0.03, -0.5, alu); p.box(2.34, 0.05, 0.3, x, 0.35, 0.2, alu); }
+      const panel = p.parts(barrierPaint), rail = p.parts(barrierRail);
+      for (let i = 0; i < n; i++) { const x = (i - (n - 1) / 2) * 2.4; panel.box(2.34, 1.15, 0.06, x, 0.6, 0); rail.box(2.34, 0.05, 0.12, x, 1.18, 0); panel.box(2.34, 0.05, 1.1, x, 0.03, -0.5); panel.box(2.34, 0.05, 0.3, x, 0.35, 0.2); }
+      panel.done(); rail.done();
       p.solid(-n * 1.2, 0, n * 1.2, 0);
-      for (let x = -n * 1.2 + 2; x < n * 1.2 - 1; x += 3.6) p.person(x, -0.9, 0, 'security');
+      for (const k of [-0.4, 0.4]) p.person(k * n * 1.2, -0.9, 0, 'security');   // two in the pit; with the two at the lanes' gates, four in all
       const subs = f.subs || 0, span = Math.min(st.width, W - 4);
       for (let i = 0; i < subs; i++) {
         const x = (i - (subs - 1) / 2) * span / subs, front = st.front + 0.6 - z + 0.48;
@@ -434,24 +440,24 @@ export function buildFacilities(L, ctx) {
     // front barrier. The crowd stands up against it. Where an emergency exit is, a gate stands open, with security.
     //   width: from the wall; to: where along the wall it ends (just past its door); gates: [z, ...] of the exits in it
     corridor(f) {
-      const z0 = pitZ, z1 = f.to, w = f.width, gates = f.gates || [], m = place([0, 0, 0]), metal = m.parts(alu);
+      const z0 = pitZ, z1 = f.to, w = f.width, gates = f.gates || [], m = place([0, 0, 0]), metal = m.parts(barrierPaint), rail = m.parts(barrierRail);
       for (const s of [-1, 1]) {
         const x = s * (W / 2 - w);
         // panels of 2.4 m, leaving a gate of 3 m open at every exit
         for (let a = z0 + 1.2; a < z1 - 0.6; a += 2.4) {
           if (gates.some(g => Math.abs(g - a) < 2.7)) continue;
-          metal.box(0.06, 1.15, 2.34, x, 0.6, a); metal.box(0.12, 0.05, 2.34, x, 1.18, a);
+          metal.box(0.06, 1.15, 2.34, x, 0.6, a); rail.box(0.12, 0.05, 2.34, x, 1.18, a);
           metal.box(0.9, 0.05, 2.34, x + s * 0.48, 0.03, a); metal.box(0.6, 0.05, 0.05, x + s * 0.24, 0.55, a - 0.9, 0, 0, -s * 0.9);   // its foot on the lane side, and a brace
           m.solid(x, a - 1.2, x, a + 1.2);
         }
-        for (const g of gates) { m.person(x + s * 0.8, g, -s * Math.PI / 2, 'security'); metal.box(0.08, 1.2, 0.08, x, 0.6, g - 1.5); metal.box(0.08, 1.2, 0.08, x, 0.6, g + 1.5); }
+        for (const g of gates) { metal.box(0.08, 1.2, 0.08, x, 0.6, g - 1.5); metal.box(0.08, 1.2, 0.08, x, 0.6, g + 1.5); }
         // the end: a gate across the lane, shut, with someone minding it
         metal.box(w, 1.15, 0.06, s * (W / 2 - w / 2), 0.6, z1); m.solid(x, z1, s * W / 2, z1);
         m.person(s * (W / 2 - w / 2), z1 - 0.8, 0, 'security');
         m.person(s * (W / 2 - w * 0.6), z0 + 3, Math.PI, 'medic');   // first aid near the front, where it is needed
         m.free(Math.min(x - s * 0.45, s * W / 2), Math.max(x - s * 0.45, s * W / 2), z0 - 0.5, z1 + 0.6);
       }
-      metal.done();
+      metal.done(); rail.done();
     },
   };
   const fence = lit(new THREE.MeshStandardMaterial({ color: 0x9a9da3, roughness: 0.5, metalness: 0.7, transparent: true, opacity: 0.35 }), 1.3);
@@ -478,5 +484,5 @@ export function buildFacilities(L, ctx) {
     if (!BUILD[f.type]) throw new Error(`the venue ${L.name} asks for a facility "${f.type}" that does not exist`);
     BUILD[f.type](f);
   }
-  return { keepOut, people, shots, lamps, pois, solids, update: dt => { for (const f of updates) f(dt); } };
+  return { keepOut, people, shots, lamps, pois, solids, layers, update: dt => { for (const f of updates) f(dt); } };
 }

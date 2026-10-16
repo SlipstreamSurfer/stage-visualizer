@@ -289,6 +289,20 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
 
   const walking = [], updateWalkers = route && buildWalkers({ add: o => (walking.push(o), add(o)), light: lights.light, U, path: route, pois: fac.pois, count: Math.round(L.walkers * quality.crowd) });
   const everyone = [crowd.mesh, blobs, ...walking];   // what the switch for people in the hall takes away (the DJ stays)
+  // Who shows: a share of the crowd (the first of a shuffled crowd, so a random half or quarter), security and crew
+  // as a layer of their own, and the people on the terrace outside with the terrace. Someone left out is folded to
+  // a point (their size 0), so nothing is built again.
+  const STAFF = new Set(['security', 'staff', 'crew', 'medic']), sizes = Array.from({ length: n }, (_, i) => crowd.data[i * 16 + 7]), shadows = Array.from({ length: n }, (_, i) => { const m = new THREE.Matrix4(); blobs.getMatrixAt(i, m); return m; });
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  let peopleKey = '';
+  function showPeople(share, crew, terrace) {
+    const key = [share, crew, terrace].join(); if (key === peopleKey) return; peopleKey = key;
+    for (let i = 0; i < n; i++) {
+      const [, z, , , kind] = spots[i], show = i < dancers ? i < dancers * share : STAFF.has(kind) ? crew : z > D / 2 ? terrace : share > 0;
+      crowd.data[i * 16 + 7] = show ? sizes[i] : 0; blobs.setMatrixAt(i, show ? shadows[i] : zero);
+    }
+    crowd.moved(); blobs.instanceMatrix.needsUpdate = true;
+  }
   let hands = 0, filming = 0, cheer = 0;
 
   // ----- light that is not a fixture: what the place has of its own, and what the show throws on it -----
@@ -455,9 +469,12 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       // what metal mirrors is as bright as the hall is: little in a blackout or a quiet part, more when the rig is up
       const mirror = director.manual.blackout ? 0.04 : (0.12 + Math.min(1, director.room.level) * 0.45 + env.day * 0.5 + (look.work ? 0.5 : 0)) * look.light;
       for (const m of lights.metals) m.envMapIntensity = mirror;
-      const crowded = look.controls?.crowd !== false;
+      const share = look.controls?.crowd ?? 1, layers = look.controls?.layers || {}, crowded = share > 0 || layers.crew !== false;
       for (const o of everyone) o.visible = crowded;
-      phones.visible = torches.visible = crowded && filming > 0.05; phones.material.color.setRGB(0.6, 0.75, 1).multiplyScalar(filming * 1.5);
+      showPeople(share, layers.crew !== false, layers.terrace !== false);
+      for (const w of walking) w.visible = share > 0;
+      fac.layers.terrace.visible = layers.terrace !== false; fac.layers.towers.visible = layers.towers !== false; if (stage.pa) stage.pa.visible = layers.pa !== false;
+      phones.visible = torches.visible = share > 0 && filming > 0.05; phones.material.color.setRGB(0.6, 0.75, 1).multiplyScalar(filming * 1.5);
       torches.material.color.setRGB(3.2, 3.1, 2.9).multiplyScalar(filming * (brk ? 1 : 0.35));   // the torches mostly in the quiet
       const room = director.room, spill = look.hall < 1 ? look.hall : 1 + (look.hall - 1) * 1.5;
       hall.color.setRGB(...room.color); hall.intensity = (spill * room.level * (hangarRig ? 0.26 : 0.42) + 0.4 * Math.pow(look.hall, 3)) * size;

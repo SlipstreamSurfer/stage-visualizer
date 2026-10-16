@@ -95,12 +95,12 @@ if (params.has('time') || params.has('door')) controls = normalizeControls({ ...
 const look = { ...normalizeLook({ light: +kept('light', 1), bloom: +kept('bloom', 1), haze: +kept('haze', 1), hall: +kept('hall', 1), off: params.has('all') ? Object.fromEntries(Object.keys(DEFAULT_OFF).map(role => [role, false])) : parseStored(kept('off', JSON.stringify(DEFAULT_OFF))) }), controls };
 let cameraFrozen = false, cameraTime = 0, cameraAge = 0, cameraIndex = -1;
 const audio = new Audio(() => { signals.reset(); director.reset(timer.getElapsed()); });
-const timer = new THREE.Timer();   // the show's clock, moved on once a frame
+const timer = new THREE.Timer();   // the show's clock, moved on once a frame (frame)
 let readDemo = demo(signals, director.mood.demoBpm, director.mood.flow), statusAt = 0, exposure = 1, frames = 0;
 const SKIP = +(params.get('skip') || 0);   // ?skip=24: the demo track starts that many seconds in, for a picture of its peak
 // for looking in from the console; view = [x, y, z, lookAtX, lookAtY, lookAtZ] puts the camera anywhere
 let changing = false, changeMessage = '';
-const show = window.__show = { signals, director, world, cams, look, audio, renderer, camera, post, quality: qualityKey, changing: false, view: null, heard: [], webgl: WEBGL, fps: 0 };   // heard: what the listener found in live sound, [{ t, what }] with t on the sound's clock
+const show = window.__show = { signals, director, world, cams, look, audio, renderer, camera, post, steady, quality: qualityKey, changing: false, view: null, heard: [], webgl: WEBGL, fps: 0 };   // heard: what the listener found in live sound, [{ t, what }] with t on the sound's clock
 const effects = mountEffects({ show: () => ({ director, world, look }), now: () => timer.getElapsed() });
 const sound = mountSound(audio);
 const ui = mountControls({ release: () => effects.release() });
@@ -115,11 +115,13 @@ const playHere = () => { elsewhere = false; $('elsewhere').hidden = true; others
 if (others) others.onmessage = e => { if (e.data === 'playing') { elsewhere = true; $('elsewhere').hidden = false; effects.release(); } };
 $('elsewhere').onclick = playHere;
 
-function frame() {
+// now: when the browser began this frame, in step with the screen. Moving the show on by that, and not by the moment
+// the code happens to run, keeps every movement even, and a frame the screen missed shows as one refresh too long.
+function frame(now) {
   requestAnimationFrame(frame);
   if (elsewhere) return;
-  timer.update();
-  const raw = timer.getDelta(), dt = Math.min(raw, 0.05), t = timer.getElapsed();
+  timer.update(now);
+  const raw = Math.max(0, timer.getDelta()), dt = Math.min(raw, 0.05), t = timer.getElapsed();
   signals.decay = director.mood.decay;
   if (audio.live) {   // every step of sound that has come in since the last frame, then let the pulses fall away
     const sens = +$('sens').value;
@@ -505,4 +507,4 @@ if (!navigator.webdriver && (location.hostname === '127.0.0.1' || location.hostn
   setInterval(async () => { try { const now = await (await fetch('/__changed')).text(); if (seen !== null && now !== seen) location.reload(); seen = now; } catch {} }, 1500);
 }
 playHere();
-frame();
+requestAnimationFrame(frame);

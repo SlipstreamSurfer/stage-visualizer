@@ -6,10 +6,11 @@ import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { attribute, varying, positionGeometry, positionWorld, normalWorld, cameraPosition, uniform, float, vec2, vec3, vec4, sin, cos, fract, step, mix, smoothstep, select, max, dot, normalize, sign, abs, pow, clamp, length } from 'three/tsl';
 
-const SHIRT = 0, SKIN = 1, TROUSERS = 2, HAIR = 3, SHOES = 4, SLEEVE = 5;   // SLEEVE: the forearm, bare or covered
+const SHIRT = 0, SKIN = 1, TROUSERS = 2, HAIR = 3, SHOES = 4, SLEEVE = 5, CUP = 6;   // SLEEVE: the forearm, bare or covered; CUP: a drink in the hand
 const SHOULDER_X = 0.245, SHOULDER_Y = 1.38, UPPER_ARM = 0.3;
 // mostly black, as at any techno night, with the odd white or coloured shirt
-export const SHIRTS = [0x101013, 0x101013, 0x101013, 0x121216, 0x16161a, 0x1c1c22, 0x1c1c22, 0x221f1e, 0x2a2a30, 0x33302d, 0x45454a, 0x606060, 0x8a8a8a, 0xc8c8c8, 0x4a1414, 0x14203c, 0x1c3024];
+export const SHIRTS = [0x101013, 0x101013, 0x101013, 0x121216, 0x16161a, 0x1c1c22, 0x1c1c22, 0x221f1e, 0x2a2a30, 0x33302d, 0x45454a, 0x606060, 0x8a8a8a, 0xc8c8c8, 0x4a1414, 0x14203c, 0x1c3024,
+  0x0e0e10, 0x3a2a1c, 0x2c3a2a, 0x5a4a3a, 0xe0ddd5, 0x7a1e1e, 0x1e3a5a, 0x4a3a5a, 0x2a4a4a, 0x8a6a2a, 0xb0b8c0];
 
 const va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 const at = (g, x, y, z) => (g.translate(x, y, z), g);
@@ -40,6 +41,7 @@ export function personGeo() {
       tag(between(sx, SHOULDER_Y - UPPER_ARM, 0, sx, SHOULDER_Y - UPPER_ARM * 2, 0, 0.042, 0.033), side, SLEEVE),
       tag(at(new THREE.SphereGeometry(0.048, 8, 5).scale(0.8, 1.25, 1), sx, SHOULDER_Y - UPPER_ARM * 2 - 0.045, 0), side, SKIN));
   }
+  parts.push(tag(at(new THREE.CylinderGeometry(0.036, 0.028, 0.115, 8), SHOULDER_X, SHOULDER_Y - UPPER_ARM * 2 - 0.06, -0.04), 1, CUP));   // a cup in the right hand (folded away for whoever has none)
   return mergeGeometries(parts);
 }
 
@@ -89,7 +91,9 @@ export function people(material, n, moving = false) {
 // light: the world's function for the light of the beams on a point; U: from peopleU; walking: true for walkers
 export function peopleMaterial({ light, U, walking = false }) {
   const aArm = attribute('aArm', 'float'), aPart = attribute('aPart', 'float'), aSeed = attribute('aSeed', 'vec4'), aDense = attribute('aDense', 'float'), aPlace = attribute('aPlace', 'vec4'), aBuild = attribute('aBuild', 'float'), aShirt = attribute('aShirt', 'vec3'), aWalk = attribute('aWalk', 'vec2'), aKit = attribute('aKit', 'float');
-  const pos = positionGeometry, h = pos.y;
+  // who holds a drink: about one in three; for the rest the cup is folded into the hand
+  const drink = step(rnd(aSeed.y.add(21)), 0.32), cupPart = step(5.5, aPart);
+  const pos = mix(positionGeometry, vec3(SX, SY - UPPER * 2 - 0.05, 0), cupPart.mul(drink.oneMinus())), h = pos.y;
   const isArm = aArm.notEqual(0), side = sign(aArm), shoulder = vec3(side.mul(SX), SY, 0), p0 = pos.sub(shoulder), q0 = p0.add(vec3(0, UPPER, 0)), forearm = p0.y.lessThan(-(UPPER + 0.01));
   let moved, open;
   if (walking) {
@@ -142,10 +146,11 @@ export function peopleMaterial({ light, U, walking = false }) {
 
   // what each part of the figure is made of: shirt from the person's own colour, the rest from a few random numbers
   const skin = mix(vec3(0.62, 0.44, 0.35), vec3(0.2, 0.13, 0.1), rnd(aSeed.x.add(1))), hairPick = rnd(aSeed.y.add(2));
-  const hair = select(hairPick.lessThan(0.45), vec3(0.015, 0.012, 0.01), select(hairPick.lessThan(0.75), vec3(0.07, 0.04, 0.025), select(hairPick.lessThan(0.88), vec3(0.3, 0.22, 0.11), select(hairPick.lessThan(0.92), vec3(0.2, 0.05, 0.03), skin))));
-  const trousers = select(rnd(aSeed.x.add(3)).lessThan(0.6), vec3(0.012, 0.012, 0.015), vec3(0.035, 0.05, 0.09));
+  const hair = select(hairPick.lessThan(0.38), vec3(0.015, 0.012, 0.01), select(hairPick.lessThan(0.62), vec3(0.07, 0.04, 0.025), select(hairPick.lessThan(0.74), vec3(0.3, 0.22, 0.11), select(hairPick.lessThan(0.78), vec3(0.2, 0.05, 0.03), select(hairPick.lessThan(0.83), vec3(0.35, 0.34, 0.33), select(hairPick.lessThan(0.9), vec3(0.02, 0.02, 0.025), skin))))));   // black, brown, blond, red, grey, a black cap, shaven
+  const tPick = rnd(aSeed.x.add(3)), trousers = select(tPick.lessThan(0.5), vec3(0.012, 0.012, 0.015), select(tPick.lessThan(0.75), vec3(0.035, 0.05, 0.09), select(tPick.lessThan(0.85), vec3(0.09, 0.08, 0.06), vec3(0.06, 0.06, 0.065))));   // black, jeans, khaki, grey
+  const cPick = rnd(aSeed.x.add(22)), cup = select(cPick.lessThan(0.6), vec3(0.75, 0.5, 0.12), select(cPick.lessThan(0.8), vec3(0.08, 0.04, 0.03), vec3(0.6, 0.65, 0.7)));   // beer, cola, water
   const shoes = select(rnd(aSeed.y.add(4)).lessThan(0.75), vec3(0.02), vec3(0.55)), bare = step(0.35, rnd(aSeed.x.add(5)));
-  const part = varying(select(aPart.lessThan(0.5), vec4(0), select(aPart.lessThan(1.5), vec4(skin, 1), select(aPart.lessThan(2.5), vec4(trousers, 1), select(aPart.lessThan(3.5), vec4(hair, 1), select(aPart.lessThan(4.5), vec4(shoes, 1), vec4(skin, bare)))))));
+  const part = varying(select(aPart.lessThan(0.5), vec4(0), select(aPart.lessThan(1.5), vec4(skin, 1), select(aPart.lessThan(2.5), vec4(trousers, 1), select(aPart.lessThan(3.5), vec4(hair, 1), select(aPart.lessThan(4.5), vec4(shoes, 1), select(aPart.lessThan(5.5), vec4(skin, bare), vec4(cup, 1))))))));
   const openTo = varying(open), shirt = varying(aShirt);
   // a face: eyes, brows and a mouth, enough to read as one from the pit
   const f = varying(positionGeometry);

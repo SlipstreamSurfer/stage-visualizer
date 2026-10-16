@@ -255,7 +255,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   const KIND = { staff: 0x0c0c0e, crew: 0x0c0c0e, security: 0x0c0c0e, medic: 0xb8c0b8 };
   for (let i = 0; i < n; i++) {
     const [x, z, turned, still, kind, y = 0, seated = false] = spots[i];
-    const s = 0.9 + Math.random() * 0.25, build = 0.88 + Math.random() * 0.26;
+    const s = 0.86 + Math.random() * 0.32, build = 0.82 + Math.random() * 0.4;   // short and tall, slight and broad
     // Where someone stands says how they dance: in the middle up front the most, along the walls and at the back the
     // least, and along the walls some stand turned to each other, talking (zone: 1 up front in the middle, 0 at the edges)
     const wall = centre ? 0 : Math.max(0, Math.abs(x) / (W / 2) - 0.55) / 0.45, zone = i < dancers ? Math.max(0, 1 - Math.min(1, away(x, z)) * 0.8 - wall * 0.7) : 0.5;

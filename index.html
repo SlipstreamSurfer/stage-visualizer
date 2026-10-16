@@ -165,7 +165,10 @@
   #hint { color: #b8bdc8; font-size: 12px; line-height: 1.9; }
   #panel a { color: #a8c8ff; font-size: 12px; }
   #shortcutHelp { background: #14161c; color: #eee; border: 1px solid #555; border-radius: 14px; max-width: min(420px, 85vw); line-height: 1.8; }
-  #shortcutHelp::backdrop { background: #0009; }
+  #shortcutHelp::backdrop, #noteDialog::backdrop { background: #0009; }
+  #noteDialog { background: #14161c; color: #eee; border: 1px solid #555; border-radius: 14px; width: min(440px, 88vw); }
+  #noteDialog textarea { width: 100%; box-sizing: border-box; background: #0c0d11; color: #eee; border: 1px solid #444; border-radius: 8px; padding: 8px; font: inherit; margin: 8px 0; }
+  #noteDialog .row { display: flex; gap: 8px; justify-content: flex-end; } #noteSaid { color: var(--dim); font-size: 12px; min-height: 1em; }
 
   /* below the width of the full console it folds onto two rows; on a phone it is a sheet that scrolls */
   @media (max-width: 600px) {
@@ -257,6 +260,7 @@
   </section>
   <div class="deck-tools">
     <button id="openSettings" type="button" aria-controls="panel" aria-expanded="false" title="Settings (S)" aria-label="Settings"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    <button id="noteButton" type="button" title="Note a bug or an idea, with the spot and a picture (I)" aria-label="Note a bug or an idea">✎</button>
     <button id="helpButton" type="button" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
     <button id="fullscreenPanel" type="button" title="Fullscreen (F)" aria-label="Toggle fullscreen"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
     <button id="hidePanel" type="button" title="Hide controls (H)" aria-label="Hide controls"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
@@ -368,10 +372,15 @@
   </section>
   <section id="pageKeys" class="panel-page" role="tabpanel" aria-labelledby="tabKeys" hidden>
     <h2>Keyboard shortcuts</h2>
-    <div id="hint">H = hide controls &middot; S = settings &middot; F = fullscreen<br>W = walk round (W A S D, mouse, E/Q up and down, Esc to stop) &middot; L = work lights<br>? = shortcuts &middot; P = freeze camera &middot; N = next scene<br>G = good moment &middot; X = wrong moment &middot; T = unrated moment<br>Space = strobe &middot; B = blinders<br>C = CO2 &middot; V = pyro &middot; K = confetti<br>1&ndash;9 = camera &middot; 0 = automatic &middot; M = mood<br>Double-click a fader to restore its default.</div>
+    <div id="hint">H = hide controls &middot; S = settings &middot; F = fullscreen<br>W = walk round (W A S D, mouse, E/Q up and down, Esc to stop) &middot; L = work lights &middot; I = note a bug or an idea<br>? = shortcuts &middot; P = freeze camera &middot; N = next scene<br>G = good moment &middot; X = wrong moment &middot; T = unrated moment<br>Space = strobe &middot; B = blinders<br>C = CO2 &middot; V = pyro &middot; K = confetti<br>1&ndash;9 = camera &middot; 0 = automatic &middot; M = mood<br>Double-click a fader to restore its default.</div>
   </section>
   </div>
 </div>
+<dialog id="noteDialog" aria-labelledby="noteTitle"><form method="dialog"><h2 id="noteTitle">Note a bug or an idea</h2>
+  <div class="setting"><select id="noteKind" class="ctl"><option value="bug">Bug</option><option value="idea">Idea</option></select></div>
+  <textarea id="noteText" rows="4" placeholder="What do you see, or what would you like?"></textarea>
+  <p id="noteSaid" aria-live="polite"></p>
+  <div class="row"><button id="noteSave" type="submit" value="save">Save with the spot and a picture</button><button type="submit" value="cancel">Cancel</button></div></form></dialog>
 <dialog id="shortcutHelp" aria-labelledby="shortcutHelpTitle"><h2 id="shortcutHelpTitle">Keyboard shortcuts</h2><div id="shortcutHelpContent"></div><form method="dialog"><button type="submit">Close · Esc</button></form></dialog>
 <script type="module" src="src/main.js"></script>
 </body>

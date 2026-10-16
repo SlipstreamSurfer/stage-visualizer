@@ -80,6 +80,23 @@ export function serve(port = 8765, { rekordbox = null } = {}) {
       });
       return;
     }
+    if (name === '/__note' && req.method === 'POST') {   // a bug or an idea noted in the show: text, the spot, and a picture, in rec/notes/
+      if (!ours) { res.writeHead(403).end(); return; }
+      let body = ''; req.setEncoding('utf8');
+      req.on('data', d => { if (body.length < 8 * 1024 * 1024) body += d; });
+      req.on('end', () => {
+        try {
+          const n = JSON.parse(body), stamp = new Date().toISOString().replace(/[:.]/g, '-'), dir = path.join(root, 'rec', 'notes');
+          fs.mkdirSync(dir, { recursive: true });
+          const shot = typeof n.picture === 'string' && n.picture.startsWith('data:image/jpeg;base64,') ? n.picture.slice(23) : null;
+          if (shot) fs.writeFileSync(path.join(dir, stamp + '.jpg'), Buffer.from(shot, 'base64'));
+          const line = `- ${new Date().toLocaleString('nl-NL')} · ${n.kind === 'bug' ? 'BUG' : 'IDEA'} · ${String(n.text || '').slice(0, 2000).replace(/\n/g, ' ')}${n.link ? ` · [spot](${n.link})` : ''}${shot ? ` · notes/${stamp}.jpg` : ''}\n`;
+          fs.appendFileSync(path.join(root, 'rec', 'notes.md'), line);
+          res.writeHead(204).end();
+        } catch { res.writeHead(400).end(); }
+      });
+      return;
+    }
     if (name === '/__log' && req.method === 'POST') {   // the page's own account of what the show did, kept next to the recordings
       if (!ours) { res.writeHead(403).end(); return; }
       let body = ''; req.setEncoding('utf8');

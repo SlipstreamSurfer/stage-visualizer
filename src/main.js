@@ -160,6 +160,7 @@ function frame(now) {
   renderer.toneMappingExposure = exposure;
   grainAt.value = t % 1;
   post.render();
+  if (pictureWanted) { pictureWanted(renderer.domElement.toDataURL('image/jpeg', 0.82)); pictureWanted = null; }   // straight after drawing, while the picture is there
   frames++;
 
   $('mBass').style.width = signals.bass * 100 + '%'; $('mMid').style.width = signals.mid * 100 + '%'; $('mHigh').style.width = signals.treble * 100 + '%';
@@ -476,7 +477,7 @@ $('wallFile').onchange = e => {
 $('wallClear').onclick = () => setWallMedia(null);
 renderer.domElement.addEventListener('dblclick', ui.fullscreen);
 addEventListener('keydown', e => {
-  if (e.ctrlKey || e.metaKey || e.altKey || $('shortcutHelp').open || !started()) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || $("shortcutHelp").open || $("noteDialog").open || !started()) return;
   const key = e.key.toLowerCase(), at = e.target;
   if (key === 'escape' && ui.settingsOpen()) { ui.setSettingsOpen(false); return; }
   // a text field or a list keeps every key; a button, a switch or the player keeps Space and Enter (ui.js)
@@ -486,6 +487,7 @@ addEventListener('keydown', e => {
   if (key === 'escape' && walk.on && performance.now() - unlockedAt > 300) { setCam(walkedFrom); return; }   // (the Escape that let go of the mouse does not count)
   if (key === 'w' && !e.repeat) { setCam('walk'); return; }
   if (key === 'l' && !e.repeat) { setWorkLights(!look.work); return; }
+  if (key === 'i' && !e.repeat) { openNote(); e.preventDefault(); return; }
   if (e.code === 'Space') { effects.setHeld('strobe', 'key', true); e.preventDefault(); }
   if (key === 'b') effects.setHeld('blinder', 'key', true);
   if (e.repeat) return;
@@ -512,17 +514,31 @@ canvas.addEventListener('pointerdown', e => { dragging = walk.on && e.button ===
 addEventListener('pointerup', () => { dragging = false; });
 addEventListener('mousemove', e => { if (walk.on && (document.pointerLockElement === canvas || dragging)) walk.look(e.movementX, e.movementY); });
 document.addEventListener('pointerlockchange', () => { $('walkAim').hidden = document.pointerLockElement !== canvas; if (!document.pointerLockElement) unlockedAt = performance.now(); });
+// A note: a bug or an idea, saved by the local server in rec/notes.md with a link to this spot and a picture of it
+let pictureWanted = null;
+const linkHere = () => {
+  const url = new URL(location.origin + location.pathname), at = walk.on ? walk.at : [camera.position.x, camera.position.y, camera.position.z, ...(() => { const e = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ'); return [e.y, e.x]; })()].map(v => +v.toFixed(2));
+  url.searchParams.set('at', at.join(','));
+  if (controls.timeOfDay !== 'night') url.searchParams.set('time', controls.timeOfDay);
+  if (controls.door) url.searchParams.set('door', '');
+  return url.href;
+};
+function openNote() { effects.release(); $('noteSaid').textContent = ''; $('noteText').value = ''; $('noteDialog').showModal(); $('noteText').focus(); }
+$('noteButton').onclick = openNote;
+$('noteDialog').addEventListener('close', async () => {
+  if ($('noteDialog').returnValue !== 'save' || !$('noteText').value.trim()) return;
+  const picture = await new Promise(resolve => { pictureWanted = resolve; });
+  const note = { kind: $('noteKind').value, text: $('noteText').value.trim(), link: linkHere(), picture };
+  const flash = mark => { $('noteButton').textContent = mark; setTimeout(() => { $('noteButton').textContent = '✎'; }, 2500); };
+  fetch('/__note', { method: 'POST', body: JSON.stringify(note) }).then(r => flash(r.ok ? '✓' : '✗'), () => flash('✗'));   // a tick: saved in rec/notes.md
+});
 // the work lights: the hall lit evenly, to see how everything is built
 function setWorkLights(on) { look.work = on; $('walkWork').setAttribute('aria-pressed', String(on)); }
 $('walkWork').onclick = () => setWorkLights(!look.work);
 // a link to this spot, as it is now (the time of day and the door with it), to send to someone or to come back to
 $('walkLink').onclick = () => {
-  const url = new URL(location.origin + location.pathname);
-  url.searchParams.set('at', walk.at.join(','));
-  if (controls.timeOfDay !== 'night') url.searchParams.set('time', controls.timeOfDay);
-  if (controls.door) url.searchParams.set('door', '');
-  const say = text => { $('walkCopied').textContent = text; };
-  (navigator.clipboard?.writeText(url.href) ?? Promise.reject()).then(() => say('Copied'), () => say(url.href));
+  const say = text => { $('walkCopied').textContent = text; }, href = linkHere();
+  (navigator.clipboard?.writeText(href) ?? Promise.reject()).then(() => say('Copied'), () => say(href));
 };
 // While working on the show: the page keeps a log of what the show decides with live sound (a line a second, and one
 // for every break, drop, lift, silence and change of part or program), so it can be held against the recording

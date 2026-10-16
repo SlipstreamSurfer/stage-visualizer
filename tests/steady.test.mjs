@@ -39,3 +39,18 @@ test('a hidden tab, a venue change or the switch turned off are not measured', (
   for (const options of [{ visible: false }, { ready: false }, { enabled: false }]) assert.deepEqual(run(steady, 10, () => 0.05, options), []);
   assert.equal(steady.scale, 1);
 });
+
+test('a picture that stutters lowers the resolution even when the typical frame keeps the pace', () => {
+  // one frame in five misses the refresh of a 60 Hz screen: the median is on time, the picture is not
+  const steady = new SteadyResolution(); let n = 0;
+  const changes = run(steady, 6, scale => scale > 0.97 && ++n % 5 === 0 ? 2 / 60 : 1 / 60);
+  assert.deepEqual(changes, [0.95], 'one step down, and it holds once the stutter is gone');
+});
+
+test('a lone slow frame now and then is not a stutter', () => {
+  const steady = new SteadyResolution(); let n = 0;
+  assert.deepEqual(run(steady, 20, () => ++n % 60 === 0 ? 3 / 60 : 1 / 60), []);
+  steady.scale = 0.9; n = 0;
+  run(steady, 30, () => ++n % 60 === 0 ? 3 / 60 : 1 / 60);
+  assert.equal(steady.scale, 1, 'and does not keep the resolution down');
+});

@@ -21,6 +21,7 @@ export function mountSound(audio) {
   addEventListener('pointerdown', wake); addEventListener('keydown', wake);
   const source = () => $('audioSource').value;
   let rekordbox = null, polling = false, signal = { state: 'demo' };   // what the rekordbox receiver last said; the sound as last measured
+  let shown = '';   // what the setup steps say now: they are built again only when that changes, not twice a second
 
   // this computer, as the browser says, unless chosen otherwise
   $('platform').value = ['macos', 'windows', 'linux'].includes(kept('platform', '')) ? kept('platform', '') : platformOf();
@@ -119,9 +120,11 @@ export function mountSound(audio) {
   }
   function render() {
     $('setupSource').textContent = NAME[source()];
-    $('setupSteps').replaceChildren(...guideOf(source(), $('platform').value).map(step => {
-      const li = document.createElement('li'); li.textContent = step.text;
-      const seen = step.check && state(step.check);
+    const steps = guideOf(source(), $('platform').value).map(step => [step.text, step.check && state(step.check)]), now = JSON.stringify(steps);
+    if (now === shown) return;
+    shown = now;
+    $('setupSteps').replaceChildren(...steps.map(([text, seen]) => {
+      const li = document.createElement('li'); li.textContent = text;
       if (seen) { const chip = document.createElement('span'); chip.className = 'state'; chip.dataset.ok = String(seen[0]); chip.textContent = seen[1]; li.append(chip); }
       return li;
     }));

@@ -12,6 +12,8 @@ import { startRekordboxReceiver } from './rekordbox-bridge.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.md': 'text/markdown; charset=utf-8', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.flac': 'audio/flac' };
 
+const LOG_POST = 256 * 1024, LOG_KEEP = 20 * 1024 * 1024;   // the show log: what one post may hold, and the size at which it starts afresh (the one before is kept as show.old.log)
+
 // when the page or its code last changed, so an open page can reload itself after an edit
 function changed() {
   let last = fs.statSync(path.join(root, 'index.html')).mtimeMs;
@@ -39,7 +41,9 @@ async function nowPlaying() {
 
 export function serve(port = 8765, { rekordbox = null } = {}) {
   const server = http.createServer((req, res) => {
-    const name = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    let name;
+    try { name = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { res.writeHead(400).end(); return; }   // a broken address is refused, not the end of the server
+    const ours = !req.headers.origin || req.headers.origin === `http://${req.headers.host}`;   // a write from the show's own page, not from another site
     if (name === '/__rekordbox') {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(rekordbox?.snapshot() || { enabled: false, connected: false, decks: {} }));
       return;
@@ -47,7 +51,7 @@ export function serve(port = 8765, { rekordbox = null } = {}) {
     if (name === '/__feedback' && req.method === 'POST') {
       // Listening feedback goes directly into the local project, including notes
       // restored from the browser. The filename is derived, never supplied.
-      if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) { res.writeHead(403).end(); return; }
+      if (!ours) { res.writeHead(403).end(); return; }
       req.setEncoding('utf8');
       let body = '', oversized = false;
       req.on('data', data => {
@@ -77,7 +81,16 @@ export function serve(port = 8765, { rekordbox = null } = {}) {
       return;
     }
     if (name === '/__log' && req.method === 'POST') {   // the page's own account of what the show did, kept next to the recordings
-      let body = ''; req.on('data', d => { body += d; }); req.on('end', () => { fs.mkdirSync(path.join(root, 'rec'), { recursive: true }); fs.appendFile(path.join(root, 'rec', 'show.log'), body, () => {}); res.writeHead(204).end(); });
+      if (!ours) { res.writeHead(403).end(); return; }
+      let body = ''; req.setEncoding('utf8');
+      req.on('data', d => { if (body.length < LOG_POST) body += d; });
+      req.on('end', () => {
+        if (body.length >= LOG_POST) { res.writeHead(413).end(); return; }
+        const log = path.join(root, 'rec', 'show.log');
+        fs.mkdirSync(path.dirname(log), { recursive: true });
+        try { if (fs.statSync(log).size > LOG_KEEP) fs.renameSync(log, log.replace(/\.log$/, '.old.log')); } catch {}   // the last weeks, not everything ever
+        fs.appendFile(log, body, () => {}); res.writeHead(204).end();
+      });
       return;
     }
     if (name === '/__track') { nowPlaying().then(now => res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(now)), () => res.writeHead(200).end('{}')); return; }

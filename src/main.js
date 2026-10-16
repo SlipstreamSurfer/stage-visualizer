@@ -20,7 +20,7 @@ import { SteadyResolution } from './steady.js';
 import { djEye } from './dj-eye.js';
 import { disposeScene, warmScene } from './resources.js';
 import { DEFAULT_OFF, LIGHT_ROLES, PALETTES, RING_NAMES, COIL_MODES, parseStored, normalizeControls, normalizeLook, normalizePresets } from './show-controls.js';
-import { $, keep, kept, started, fill, groups, sliderValue, segmented, syncSegments, mountControls, mountStart } from './ui.js';
+import { $, keep, kept, started, fill, groups, sliderValue, segmented, syncSegments, typing, pressable, mountControls, mountStart } from './ui.js';
 import { mountSound } from './sound-ui.js';
 import { mountEffects } from './effects-ui.js';
 import { mountPresets } from './presets-ui.js';
@@ -86,14 +86,14 @@ let controls = normalizeControls(parseStored(kept('controls', '{}')));
 if (params.has('time') || params.has('door')) controls = normalizeControls({ ...controls, timeOfDay: params.get('time') ?? controls.timeOfDay, door: params.has('door') || controls.door });   // ?time=day&door: for a picture
 const look = { ...normalizeLook({ light: +kept('light', 1), bloom: +kept('bloom', 1), haze: +kept('haze', 1), hall: +kept('hall', 1), off: params.has('all') ? Object.fromEntries(Object.keys(DEFAULT_OFF).map(role => [role, false])) : parseStored(kept('off', JSON.stringify(DEFAULT_OFF))) }), controls };
 let cameraFrozen = false, cameraTime = 0, cameraAge = 0, cameraIndex = -1;
-const audio = new Audio(() => { signals.reset(); director.reset(clock.elapsedTime); });
-const clock = new THREE.Clock();
+const audio = new Audio(() => { signals.reset(); director.reset(timer.getElapsed()); });
+const timer = new THREE.Timer();   // the show's clock, moved on once a frame
 let readDemo = demo(signals, director.mood.demoBpm, director.mood.flow), statusAt = 0, exposure = 1, frames = 0;
 const SKIP = +(params.get('skip') || 0);   // ?skip=24: the demo track starts that many seconds in, for a picture of its peak
 // for looking in from the console; view = [x, y, z, lookAtX, lookAtY, lookAtZ] puts the camera anywhere
 let changing = false, changeMessage = '';
 const show = window.__show = { signals, director, world, cams, look, audio, renderer, camera, post, quality: qualityKey, changing: false, view: null, heard: [], webgl: WEBGL, fps: 0 };   // heard: what the listener found in live sound, [{ t, what }] with t on the sound's clock
-const effects = mountEffects({ show: () => ({ director, world, look }), now: () => clock.elapsedTime });
+const effects = mountEffects({ show: () => ({ director, world, look }), now: () => timer.getElapsed() });
 const sound = mountSound(audio);
 const ui = mountControls({ release: () => effects.release() });
 const start = mountStart({ wake: sound.wake, connect: () => $('playFile').click() });
@@ -110,7 +110,8 @@ $('elsewhere').onclick = playHere;
 function frame() {
   requestAnimationFrame(frame);
   if (elsewhere) return;
-  const raw = clock.getDelta(), dt = Math.min(raw, 0.05), t = clock.elapsedTime;
+  timer.update();
+  const raw = timer.getDelta(), dt = Math.min(raw, 0.05), t = timer.getElapsed();
   signals.decay = director.mood.decay;
   if (audio.live) {   // every step of sound that has come in since the last frame, then let the pulses fall away
     const sens = +$('sens').value;
@@ -120,7 +121,7 @@ function frame() {
     signals.flow(dt);
   } else signals.update(readDemo(t + SKIP), t, dt, { live: false });
   director.update(signals, t, dt, look);
-  logShow.dt = raw; logShow(t);
+  logShow(t, raw);
   world.env.uPointScale.value = renderer.domElement.height * 0.5 / Math.tan(camera.fov * Math.PI / 360); world.env.cam.copy(camera.position);
   world.update(dt, t, director, signals, look);
   particles?.update(t, director.room.color, director.manual.blackout ? 0 : director.room.level * look.light, world.env.haze * look.haze);
@@ -194,7 +195,7 @@ const setCam = value => {
   if (value !== 'auto' && (!Number.isInteger(+value) || +value < 0 || +value >= cams.list.length)) value = 'auto';
   setCameraFrozen(false); cameraAge = 0; cameraIndex = -1;
   $('cam').value = value; keep('cam', value); cams.auto = value === 'auto';
-  if (!cams.auto) cams.cut(+value, clock.elapsedTime);
+  if (!cams.auto) cams.cut(+value, timer.getElapsed());
 };
 $('venue').onchange = e => replaceVenue(e.target.value).catch(changeFailed);
 $('mood').onchange = e => {
@@ -290,7 +291,7 @@ function persistControls() { keep('controls', JSON.stringify(controls)); }
 const ICON = { pause: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="currentColor" stroke="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>', play: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="currentColor" stroke="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5v14l12-7z"/></svg>' };
 function setCameraFrozen(frozen) {
   cameraFrozen = frozen;
-  if (!frozen) { cams.pending = null; cams.lastCut = clock.elapsedTime; cams.fadeIn = -10; cams.fade = 1; }
+  if (!frozen) { cams.pending = null; cams.lastCut = timer.getElapsed(); cams.fadeIn = -10; cams.fade = 1; }
   $('freezeCamera').setAttribute('aria-pressed', String(frozen));
   $('freezeCamera').innerHTML = frozen ? ICON.play : ICON.pause; $('freezeCamera').title = frozen ? 'Resume camera (P)' : 'Freeze this view (P)'; $('freezeCamera').setAttribute('aria-label', frozen ? 'Resume camera' : 'Freeze this view');
 }
@@ -351,10 +352,10 @@ async function replaceVenue(key, { force = false, nextQuality = qualityKey } = {
     const chooseMood = selected => moodLocked || key === venueKey || nextWorld.layout.genres.includes(selected) ? selected : nextWorld.layout.mood || 'techno';
     let nextMood = chooseMood(currentMood);
     const nextDirector = new Director(nextWorld.groups, nextMood, { venue: key });
-    nextDirector.manual = { ...director.manual }; nextDirector.reset(clock.elapsedTime);
-    nextDirector.update(signals, clock.elapsedTime, 0, look);
+    nextDirector.manual = { ...director.manual }; nextDirector.reset(timer.getElapsed());
+    nextDirector.update(signals, timer.getElapsed(), 0, look);
     nextWorld.env.media = world.env.media;
-    nextWorld.update(0, clock.elapsedTime, nextDirector, signals, look);
+    nextWorld.update(0, timer.getElapsed(), nextDirector, signals, look);
     nextParticles = makeParticles(nextWorld, nextScene);
     await nextParticles?.ready;
     compileQueue = compileQueue.catch(() => {}).then(() => request === venueRequest ? warmScene(renderer, nextScene, camera) : undefined);
@@ -367,7 +368,7 @@ async function replaceVenue(key, { force = false, nextQuality = qualityKey } = {
     const oldScene = scene, oldParticles = particles, cameraValue = $('cam').value;
     nextWorld.env.media = world.env.media;
     scene = nextScene; world = nextWorld; director = nextDirector; particles = nextParticles;
-    cams = new CameraDirector(shots(world.layout, world.shots), clock.elapsedTime);
+    cams = new CameraDirector(shots(world.layout, world.shots), timer.getElapsed());
     scenePass.scene = scene;
     if (nextQuality !== qualityKey) { steady.scale = 1; steady.reset(); }   // another quality: find the resolution again
     venueKey = key; qualityKey = nextQuality; quality = nextSettings;
@@ -416,61 +417,74 @@ $('resetShow').onclick = () => {
   $('sens').value = 1; $('sens').oninput(); setCam('auto'); show.view = null;
   moodLocked = false; $('moodLock').checked = false; keep('moodLock', 'false');
   $('mood').value = world.layout.mood in MOODS ? world.layout.mood : 'techno'; $('mood').onchange({ target: $('mood') });
-  director.resetRingLook(clock.elapsedTime);
+  director.resetRingLook(timer.getElapsed());
   fillSwitches(); refreshControlPanel(); effects.refresh();
   presets.clear('Balanced starting point restored. Saved presets kept.');
 };
 
-// a picture or a video for the LED walls
+// a picture or a video for the LED walls; the one before it is let go, so a video does not play on unseen
+function setWallMedia(media) {
+  const old = world.env.media, video = old?.image instanceof HTMLVideoElement ? old.image : null;
+  world.env.media = media;
+  if (!old) return;
+  if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
+  URL.revokeObjectURL(old.userData.url); old.dispose();
+}
 $('wallPick').onclick = () => $('wallFile').click();
 $('wallFile').onchange = e => {
   const file = e.target.files[0]; e.target.value = '';
   if (!file) return;
   const url = URL.createObjectURL(file);
-  if (file.type.startsWith('video/')) { const video = Object.assign(document.createElement('video'), { src: url, loop: true, muted: true, playsInline: true }); video.play(); world.env.media = new THREE.VideoTexture(video); }
-  else world.env.media = new THREE.TextureLoader().load(url);
-  world.env.media.colorSpace = THREE.SRGBColorSpace;
+  let media;
+  if (file.type.startsWith('video/')) { const video = Object.assign(document.createElement('video'), { src: url, loop: true, muted: true, playsInline: true }); video.play().catch(() => {}); media = new THREE.VideoTexture(video); }
+  else media = new THREE.TextureLoader().load(url);
+  media.colorSpace = THREE.SRGBColorSpace; media.userData.url = url;
+  setWallMedia(media);
 };
-$('wallClear').onclick = () => { world.env.media = null; };
+$('wallClear').onclick = () => setWallMedia(null);
 renderer.domElement.addEventListener('dblclick', ui.fullscreen);
 addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey || $('shortcutHelp').open || !started()) return;
-  const key = e.key.toLowerCase();
-  if (key === 'escape' && ui.settingsOpen()) { ui.setSettingsOpen(false); $('openSettings').focus(); return; }
-  if (key === 'h' && !e.repeat && !['SELECT', 'INPUT', 'TEXTAREA'].includes(e.target.tagName) && !e.target.isContentEditable) { ui.setConsoleVisible(!ui.consoleVisible()); return; }
-  if (!e.repeat && !['SELECT', 'INPUT', 'TEXTAREA', 'AUDIO', 'VIDEO'].includes(e.target.tagName) && !e.target.isContentEditable) {
-    if (key === '?') { ui.showShortcutHelp(); return; }
-    if (key === 's') { ui.setSettingsOpen(!ui.settingsOpen()); return; }
-    if (key === 'p') { setCameraFrozen(!cameraFrozen); return; }
-    if (key === 'n' && !changing) { director.next(clock.elapsedTime, signals.m.section); return; }
-  }
-  if (['SELECT', 'INPUT', 'BUTTON', 'SUMMARY', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
-  if (['t', 'g', 'x'].includes(e.key.toLowerCase()) && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { playback.markMoment({ t: 'unrated', g: 'good', x: 'wrong' }[e.key.toLowerCase()]); return; }
-  if (['AUDIO', 'VIDEO'].includes(e.target.tagName)) return;   // keep the player's native keyboard controls
+  const key = e.key.toLowerCase(), at = e.target;
+  if (key === 'escape' && ui.settingsOpen()) { ui.setSettingsOpen(false); return; }
+  // a text field or a list keeps every key; a button, a switch or the player keeps Space and Enter (ui.js)
+  if (typing(at) || (pressable(at) && (e.code === 'Space' || key === 'enter'))) return;
   if (e.code === 'Space') { effects.setHeld('strobe', 'key', true); e.preventDefault(); }
   if (key === 'b') effects.setHeld('blinder', 'key', true);
   if (e.repeat) return;
+  if (key === 'h') ui.setConsoleVisible(!ui.consoleVisible());
+  if (key === '?') ui.showShortcutHelp();
+  if (key === 's') ui.setSettingsOpen(!ui.settingsOpen());
+  if (key === 'p') setCameraFrozen(!cameraFrozen);
+  if (key === 'n' && !changing) director.next(timer.getElapsed(), signals.m.section);
+  if (['t', 'g', 'x'].includes(key)) playback.markMoment({ t: 'unrated', g: 'good', x: 'wrong' }[key]);
   if (key === 'c') $('btnCo2').click();
   if (key === 'v') effects.pyro();
   if (key === 'k') $('btnConfetti').click();
   if (key === 'f') ui.fullscreen();
   if (key === 'm') { const m = $('mood'); m.selectedIndex = (m.selectedIndex + 1) % m.options.length; m.dispatchEvent(new Event('change')); }
-  if (e.key >= '0' && e.key <= '9') { $('cam').value = e.key === '0' ? 'auto' : String(e.key - 1); $('cam').dispatchEvent(new Event('change')); }
+  if (/^[0-9]$/.test(e.key)) { $('cam').value = e.key === '0' ? 'auto' : String(e.key - 1); $('cam').dispatchEvent(new Event('change')); }
 });
 addEventListener('keyup', e => { if (e.code === 'Space') effects.setHeld('strobe', 'key', false); if (e.key.toLowerCase() === 'b') effects.setHeld('blinder', 'key', false); });
 // While working on the show: the page keeps a log of what the show decides with live sound (a line a second, and one
-// for every break, drop, lift and change of part or program), so it can be held against the recording afterwards.
+// for every break, drop, lift, silence and change of part or program), so it can be held against the recording
+// afterwards. fps: the frames drawn in that second; slowest: the longest of them, in milliseconds.
 const logLines = [JSON.stringify({ w: Date.now(), what: 'page loaded' })];
 let logAt = 0, lastStatus = '';
-function logShow(t) {
-  if (!audio.live) return;
+logShow.frames = logShow.slowest = 0;
+function logShow(t, raw) {
+  if (!audio.live) { logAt = t; logShow.frames = logShow.slowest = 0; return; }   // the count starts with the sound
+  logShow.frames++; logShow.slowest = Math.max(logShow.slowest, raw);
   const m = signals.m, ev = signals.ev, w = Date.now(), note = what => { logLines.push(JSON.stringify({ w, what, bpm: m.bpm, section: m.section })); };
-  if (ev.drop) note('drop'); if (ev.broke) note('break'); if (ev.lift) note('lift'); if (ev.silent && !logShow.silent) note('silence'); logShow.silent = ev.silent;
+  if (ev.drop) note('drop'); if (ev.broke) note('break'); if (ev.lift) note('lift');
+  const silent = m.silentFor > 2.5;   // once per silence: ev.silent is only there in a frame that heard sound
+  if (silent && !logShow.silent) note('silence'); logShow.silent = silent;
   if (ev.kick && signals.m.phase === 'groove' && logShow.phase === 'break' && !ev.drop) note('kick comes in'); logShow.phase = m.phase;
   if (director.status !== lastStatus) { lastStatus = director.status; note('show: ' + director.status); }
   if (t - logAt >= 1) {
-    logAt = t;
-    logLines.push(JSON.stringify({ w, bpm: m.bpm, phase: m.phase, section: m.section, build: +m.build.toFixed(2), energy: +signals.energy.toFixed(2), fps: Math.round(1 / Math.max(0.001, logShow.dt)), cam: cams.list[cams.index].name }));
+    const fps = Math.round(logShow.frames / (t - logAt)), slowest = Math.round(logShow.slowest * 1000);
+    logAt = t; logShow.frames = 0; logShow.slowest = 0;
+    logLines.push(JSON.stringify({ w, bpm: m.bpm, phase: m.phase, section: m.section, build: +m.build.toFixed(2), energy: +signals.energy.toFixed(2), fps, slowest, res: show.resolution, cam: cams.list[cams.index].name }));
     const lines = logLines.splice(0).join('\n') + '\n';
     if (location.hostname === '127.0.0.1' && !navigator.webdriver && !/Headless/.test(navigator.userAgent)) fetch('/__log', { method: 'POST', body: lines, keepalive: true }).catch(() => {});   // not from a test browser
   }

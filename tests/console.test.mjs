@@ -65,6 +65,41 @@ test('the console keeps the show controls in one place, settings open apart and 
   });
 });
 
+test('a click with the mouse leaves the keys with the show; a text field keeps them', { timeout: 120000 }, async () => {
+  await withPage(renderFlags(), async ({ send, evaluate, until, errors, port }) => {
+    await send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
+    await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=hangar&quality=low` });
+    await until('!!window.__show?.ready', 'The Hangar did not start');
+    // real input, as the browser gets it: where a click lands decides where the focus goes
+    const click = async selector => {
+      const [x, y] = await evaluate(`(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
+      for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 });
+    };
+    const code = { ' ': 'Space', Escape: 'Escape' }, vk = { ' ': 32, Escape: 27 };
+    const down = key => send('Input.dispatchKeyEvent', { type: 'keyDown', key, code: code[key] || (/[0-9]/.test(key) ? 'Digit' + key : 'Key' + key.toUpperCase()), text: key.length === 1 ? key : undefined, windowsVirtualKeyCode: vk[key] || key.toUpperCase().charCodeAt(0) });
+    const up = key => send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: code[key] || (/[0-9]/.test(key) ? 'Digit' + key : 'Key' + key.toUpperCase()), windowsVirtualKeyCode: vk[key] || key.toUpperCase().charCodeAt(0) });
+    const press = async key => { await down(key); await up(key); };
+    await click('#showTheme + .seg button:nth-child(2)');
+    await press('3');
+    assert.equal(await evaluate(`document.getElementById('cam').value`), '2', 'a camera key after a click on the console');
+    await down(' ');
+    assert.equal(await evaluate('window.__show.director.manual.strobe'), true, 'Space is the strobe, not the button clicked before');
+    await up(' ');
+    await click('#fixture-laser');
+    await down(' ');
+    assert.equal(await evaluate('window.__show.director.manual.strobe && window.__show.look.off.laser === false'), true, 'also after a switch');
+    await up(' ');
+    await click('#openSettings'); await click('#closeSettings');
+    await press('s'); await press('Escape');
+    await press('4');
+    assert.equal(await evaluate(`document.getElementById('cam').value + ' ' + document.activeElement.tagName`), '3 BODY', 'the settings give the keys back');
+    await press('s'); await evaluate(`document.getElementById('tabPresets').click(); document.getElementById('presetName').focus()`);
+    for (const key of 'hm2') await press(key);
+    assert.equal(await evaluate(`[document.getElementById('presetName').value, document.getElementById('cam').value, document.getElementById('console').classList.contains('hidden')].join()`), 'hm2,3,false', 'a name is typed, not played');
+    assert.deepEqual(errors, []);
+  });
+});
+
 test('?hide shows the venue alone and keeps drawing', { timeout: 120000 }, async () => {
   await withPage(renderFlags(), async ({ send, evaluate, until, errors, port }) => {
     await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=hangar&quality=low&hide` });

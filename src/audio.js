@@ -34,8 +34,8 @@ export class Audio {
     this.analyser = this.ctx.createAnalyser(); this.analyser.fftSize = 32768;
     this.source = node; node.connect(this.analyser);
     this.wave = new Float32Array(this.analyser.fftSize); this.ear = new Ear(this.ctx.sampleRate); this.heardTo = this.ctx.currentTime;
-    this.blocks = [];
-    if (this.tapped) { this.tap = new AudioWorkletNode(this.ctx, 'tap', { numberOfOutputs: 0 }); this.tap.port.onmessage = e => this.blocks.push(e.data); node.connect(this.tap); }
+    this.blocks = []; this.dropped = 0;
+    if (this.tapped) { this.tap = new AudioWorkletNode(this.ctx, 'tap', { numberOfOutputs: 0 }); this.tap.port.onmessage = e => this.take(e.data); node.connect(this.tap); }
     this.live = true; this.message = ''; this.label = label;
     this.onSource(label);
   }
@@ -97,7 +97,7 @@ export class Audio {
       this.player.onseeking = () => {
         if (this.source !== this.playerNode) return;
         // A seek is a new listening segment, not a break or drop in the music.
-        this.ear = new Ear(this.ctx.sampleRate); this.blocks = []; this.heardTo = this.ctx.currentTime;
+        this.ear = new Ear(this.ctx.sampleRate); this.blocks = []; this.dropped = 0; this.heardTo = this.ctx.currentTime;
         this.segmentStart = this.player.currentTime;
         this.message = ''; this.onSource(this.label);
       };
@@ -110,18 +110,22 @@ export class Audio {
     this.playerNode.connect(this.ctx.destination);
     await this.player.play();
   }
+  // A block of sound from the tap. Only the last two seconds are kept: while no frame takes them (a hidden tab, or a
+  // show waiting while another one plays) the rest is counted as missed instead of filling the memory.
+  take(block) {
+    this.blocks.push(block);
+    if (this.blocks.length > Math.ceil(this.ctx.sampleRate * 2 / 128)) this.dropped += this.blocks.shift().length;
+  }
   // Hands the sound that has come in since the last call to the Ear, which calls step(bands, rms) for every step
   // of it. Returns how many seconds were missed, when the page was away for longer than the buffer holds.
   pump(step) {
     const rate = this.ctx.sampleRate;
     if (this.source === this.playerNode && (this.player.paused || this.player.seeking)) {
-      this.blocks = []; this.heardTo = this.ctx.currentTime;
+      this.blocks = []; this.dropped = 0; this.heardTo = this.ctx.currentTime;
       return 0;   // pausing the file must not invent a musical break
     }
-    if (this.tap) {   // every block the tap has passed on, in order
-      let missed = 0;
-      const max = Math.ceil(rate * 2 / 128);   // after more than two seconds away, only the last two are listened to
-      if (this.blocks.length > max) { const drop = this.blocks.splice(0, this.blocks.length - max); missed = drop.reduce((n, b) => n + b.length, 0) / rate; }
+    if (this.tap) {   // every block the tap has passed on, in order; after more than two seconds away only the last two
+      const missed = this.dropped / rate; this.dropped = 0;
       for (const b of this.blocks.splice(0)) this.ear.push(b, 0, b.length, step);
       return missed;
     }

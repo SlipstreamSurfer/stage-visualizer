@@ -185,19 +185,25 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
 
   // ----- what a venue lists besides its stage and lights: parked unless asked for, but for what is structure -----
   const details = !!quality.details;
-  const fac = buildFacilities({ ...L, fence: details, facilities: L.facilities.filter(f => details || STRUCTURE.has(f.type) || (hangarRig && ['barrier', 'corridor', 'wear', 'foh', 'delays', 'hangarDoor'].includes(f.type))) }, { add, lit, black, steel, env });
+  const fac = buildFacilities({ ...L, fence: details, facilities: L.facilities.filter(f => details || STRUCTURE.has(f.type) || (hangarRig && ['barrier', 'corridor', 'wear', 'foh', 'delays', 'hangarDoor', 'bar', 'toilets', 'water'].includes(f.type))) }, { add, lit, black, steel, env });
   const hasDoor = !!sh.opening && L.facilities.some(f => f.type === 'hangarDoor');   // a door that can open (Hangar's)
   // aisles: a venue with people walking keeps a lane free down both sides and across the back, behind the lanes
   // along the walls when it has those (in front of them the crowd stands shoulder to shoulder, nobody walks there)
   const sideLane = L.facilities.find(f => f.type === 'corridor');
-  const lane = details && L.walkers && !L.walkPath ? { x: W / 2 - 6.6, z0: sideLane ? sideLane.to + 3 : st.front + 5, z1: D / 2 - 7.2 } : null;
+  // In the Hangar, people go to the bars, the toilets and the water in the back half of the hall, past the bars along
+  // the side walls and across the back; in front of that the crowd stands, and only the crew's lanes run there.
+  const walks = (details || hangarRig) && L.walkers;
+  const lane = walks && !L.walkPath ? hangarRig && sideLane ? { x: W / 2 - 5.4, z0: sideLane.to + 2, z1: D / 2 - 4.5, narrow: true } : { x: W / 2 - 6.6, z0: sideLane ? sideLane.to + 3 : st.front + 5, z1: D / 2 - 7.2 } : null;
   // where people walk: the venue's own route, or the aisles; the crowd keeps a strip free along every stretch of it
-  const route = details && L.walkers ? L.walkPath || (lane && [[-lane.x, lane.z0], [-lane.x, lane.z1], [lane.x, lane.z1], [lane.x, lane.z0]]) : null;
+  const route = walks ? L.walkPath || (lane && [[-lane.x, lane.z0], [-lane.x, lane.z1], [lane.x, lane.z1], [lane.x, lane.z0]]) : null;
   const rect = (x0, x1, z0, z1) => (x, z) => x > x0 && x < x1 && z > z0 && z < z1;
   for (const r of fac.keepOut) keepOut.push(rect(r.x0, r.x1, r.z0, r.z1));
   if (route && L.walkPath) for (let i = 0; i + 1 < route.length; i++) { const [ax, az] = route[i], [bx, bz] = route[i + 1]; keepOut.push(rect(Math.min(ax, bx) - 1.1, Math.max(ax, bx) + 1.1, Math.min(az, bz) - 1.1, Math.max(az, bz) + 1.1)); }
   if (lane) {
-    keepOut.push(rect(-lane.x - 1.2, -lane.x + 1.2, lane.z0 - 1, lane.z1 + 1.2), rect(lane.x - 1.2, lane.x + 1.2, lane.z0 - 1, lane.z1 + 1.2), rect(-lane.x - 1.2, lane.x + 1.2, lane.z1 - 1.2, lane.z1 + 1.2));
+    const e = lane.narrow ? 0.7 : 1.2;   // a narrow way past the bars, where a crowd is thin anyway, or a marked aisle
+    keepOut.push(rect(-lane.x - e, -lane.x + e, lane.z0 - 1, lane.z1 + e), rect(lane.x - e, lane.x + e, lane.z0 - 1, lane.z1 + e), rect(-lane.x - e, lane.x + e, lane.z1 - e, lane.z1 + e));
+  }
+  if (lane && !lane.narrow) {
     // the aisles are marked on the floor, as walkways in a working hall are
     const lines = [], line = (x0, z0, x1, z1) => lines.push(new THREE.PlaneGeometry(Math.abs(x1 - x0) + 0.1, Math.abs(z1 - z0) + 0.1).rotateX(-Math.PI / 2).translate((x0 + x1) / 2, 0.012, (z0 + z1) / 2));
     for (const sx of [-1, 1]) for (const e of [-1.15, 1.15]) line(sx * lane.x + e, lane.z0, sx * lane.x + e, lane.z1 + (e * sx > 0 ? 1.15 : -1.15));
@@ -287,7 +293,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
     crowd.dense(i, spots[i][6] ? 0.3 : Math.min(1, (near - 1) / 8));
   }
 
-  const walking = [], updateWalkers = route && buildWalkers({ add: o => (walking.push(o), add(o)), light: lights.light, U, path: route, pois: fac.pois, count: Math.round(L.walkers * quality.crowd) });
+  const walking = [], updateWalkers = route && buildWalkers({ add: o => (walking.push(o), add(o)), light: lights.light, U, path: route, pois: fac.pois, count: Math.round((hangarRig && !details ? 32 : L.walkers) * quality.crowd), special: hangarRig });
   const everyone = [crowd.mesh, blobs, ...walking];   // what the switch for people in the hall takes away (the DJ stays)
   // Who shows: a share of the crowd (the first of a shuffled crowd, so a random half or quarter), security and crew
   // as a layer of their own, and the people on the terrace outside with the terrace. Someone left out is folded to

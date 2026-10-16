@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.34.0
+
+- Walk round yourself: W (or Camera → Walk round yourself) puts the camera on your own two feet, at eye height.
+  W A S D or the arrows walk, a click on the picture and then the mouse look round, Shift goes faster, E takes you up
+  into the air and Q back down, Escape stops. You walk up onto the stage, but not through barriers, fences or walls;
+  with the hangar door open you walk out onto the terrace. L switches the hall's work lights on and off, to see how
+  everything is built. "Copy a link to this spot" gives a link that opens the show walking, exactly there, with the
+  time of day and the door as they are: to show someone what you see (`?at=x,y,z,yaw,pitch`).
+- People in the hall can be switched off, under Settings → Picture → Performance: the crowd, security, crew and the
+  people outside go, the DJ stays. The crowd is nineteen of every twenty triangles the card draws, so an empty hall
+  is a much lighter picture.
+- The hangar door comes down to the floor, as a hangar door does: open, the whole hall looks out onto the apron.
+  Outside is a terrace fenced off with building fence, with beer benches, standing tables, strings of bulbs and people
+  out for air; beyond it the production's yard with the trucks that brought the show, the nightliner, a generator,
+  cases by the wall, and mobile light towers whose light lies in pools on the concrete at night. The apron has its
+  slabs and joints. The door's leaves are painted steel with stiles, its rails are in the floor, and the hall's walls
+  are seen from outside too.
+- Security wear their high-visibility vest as part of the figure: yellow over a black shirt, with two reflecting
+  bands and the word on the back, moving with them. First aid wear green. (It was a separate shape that floated
+  over the figures.)
+- A PA for a hall of 4,200: on either side a main hang of fourteen line array cabinets curving like a J, flown
+  subwoofers beside it and a side hang turned out to the sides of the room, all on a frame with chain hoists to the
+  roof. The delays further down the hall are line arrays of eight.
+- Beside the stage, pipe and drape: black molton hanging in folds from a crossbar on uprights, instead of two solid
+  black slabs that looked like containers.
+- The cables from front of house to the stage run under a black rubber cable bridge, module after module, to the
+  barrier and on through the pit; people stand on it. (It was a yellow strip.)
+- No more aisles through the crowd that everyone kept to either side of. Along each side wall runs a lane from the pit
+  to a door in the side wall, behind a barrier like the one in front of the stage: for security, first aid and
+  crew. The crowd stands up against it, a gate stands open with security at every emergency exit, and the stage's
+  wings are open to it. (With `?details`, people walking still have their aisles in the back half of the hall.)
+
 ## 0.33.0
 
 Bug fixes.

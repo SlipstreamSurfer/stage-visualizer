@@ -8,7 +8,7 @@
 //   look(dx, dy)   the mouse moved that many pixels
 //   update(dt, world, camera)   moves and places the camera; world: { layout, solids, env }
 //   at         where you are, [x, y, z, yaw, pitch], for a link that brings someone else to the same spot
-import * as THREE from 'three/webgpu';
+// Plain numbers only, so the tests can walk round without a browser.
 
 const EYE = 1.68, WALK = 1.5, FLY = 6, RUN = 2.6, BODY = 0.28;   // metres, and metres a second
 const MOVES = { KeyW: [0, -1], ArrowUp: [0, -1], KeyS: [0, 1], ArrowDown: [0, 1], KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
@@ -21,13 +21,14 @@ function away(px, pz, [x0, z0, x1, z1]) {
 }
 
 export class Walk {
-  constructor() { this.on = false; this.flying = false; this.pos = new THREE.Vector3(); this.vel = new THREE.Vector3(); this.yaw = 0; this.pitch = 0; this.held = new Set(); }
-  // start from where the camera is: on the floor if it is low, in the air if it is high
+  constructor() { this.on = false; this.flying = false; this.pos = { x: 0, y: 0, z: 0 }; this.vel = { x: 0, y: 0, z: 0 }; this.yaw = 0; this.pitch = 0; this.held = new Set(); }
+  // start from where the camera is (its position and the way it looks, a quaternion), on the floor if it is low and in
+  // the air if it is high; or from a spot, at
   enter(camera, world, at = null) {
-    const e = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
-    this.on = true; this.vel.set(0, 0, 0); this.held.clear();
-    if (at) { this.pos.set(at[0], at[1], at[2]); this.yaw = at[3]; this.pitch = at[4]; }
-    else { this.pos.copy(camera.position); this.yaw = e.y; this.pitch = Math.max(-0.6, Math.min(0.4, e.x)); }
+    const { x: qx, y: qy, z: qz, w: qw } = camera.quaternion, fx = -2 * (qx * qz + qw * qy), fy = -2 * (qy * qz - qw * qx), fz = -(1 - 2 * (qx * qx + qy * qy));   // where it looks
+    this.on = true; this.vel = { x: 0, y: 0, z: 0 }; this.held.clear();
+    if (at) { this.pos = { x: at[0], y: at[1], z: at[2] }; this.yaw = at[3]; this.pitch = at[4]; }
+    else { this.pos = { x: camera.position.x, y: camera.position.y, z: camera.position.z }; this.yaw = Math.atan2(-fx, -fz); this.pitch = Math.max(-0.6, Math.min(0.4, Math.asin(Math.max(-1, Math.min(1, fy))))); }
     if (!this.free(this.pos.x, this.pos.z, world) && !at) {   // a camera on a truss or behind a wall: down to a free spot near it
       const L = world.layout;
       this.pos.x = Math.max(-L.plan.W / 2 + 1, Math.min(L.plan.W / 2 - 1, this.pos.x)); this.pos.z = Math.max(-L.plan.D / 2 + 1, Math.min(L.plan.D / 2 - 1, this.pos.z));
@@ -87,7 +88,7 @@ export class Walk {
       this.pos.y += (ground - this.pos.y) * (1 - Math.exp(-dt / 0.18));   // a step up onto the stage is a short climb
       if (Math.abs(ground - this.pos.y) < 0.002) this.pos.y = ground;
     }
-    camera.position.copy(this.pos);
+    camera.position.set(this.pos.x, this.pos.y, this.pos.z);
     camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
     if (camera.fov !== 70) { camera.fov = 70; camera.updateProjectionMatrix(); }
   }

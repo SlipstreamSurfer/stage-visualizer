@@ -60,7 +60,7 @@ export function buildFacilities(L, ctx) {
       solid(x0, z0, x1, z1) { solids.push([...toWorld(x0, z0), ...toWorld(x1, z1)]); },
       group: g,
       // many small parts of one material as one mesh: a desk full of faders is one draw, not hundreds
-      parts(mat) { const list = []; return { box: (w, h, d, x, y, z, rx = 0, ry = 0) => list.push(new THREE.BoxGeometry(w, h, d).rotateX(rx).rotateY(ry).translate(x, y, z)), cyl: (r, h, x, y, z, rx = 0) => list.push(new THREE.CylinderGeometry(r, r, h, 8).rotateX(rx).translate(x, y, z)), done() { if (list.length) g.add(new THREE.Mesh(mergeGeometries(list.map(q => q.toNonIndexed())), mat)); } }; },
+      parts(mat) { const list = []; return { box: (w, h, d, x, y, z, rx = 0, ry = 0, rz = 0) => list.push(new THREE.BoxGeometry(w, h, d).rotateZ(rz).rotateX(rx).rotateY(ry).translate(x, y, z)), cyl: (r, h, x, y, z, rx = 0) => list.push(new THREE.CylinderGeometry(r, r, h, 8).rotateX(rx).translate(x, y, z)), done() { if (list.length) g.add(new THREE.Mesh(mergeGeometries(list.map(q => q.toNonIndexed())), mat)); } }; },
       toWorld,
     };
   }
@@ -434,23 +434,24 @@ export function buildFacilities(L, ctx) {
     // front barrier. The crowd stands up against it. Where an emergency exit is, a gate stands open, with security.
     //   width: from the wall; to: where along the wall it ends (just past its door); gates: [z, ...] of the exits in it
     corridor(f) {
-      const z0 = pitZ, z1 = f.to, w = f.width, gates = f.gates || [], m = place([0, 0, 0]);
+      const z0 = pitZ, z1 = f.to, w = f.width, gates = f.gates || [], m = place([0, 0, 0]), metal = m.parts(alu);
       for (const s of [-1, 1]) {
-        const x = s * (W / 2 - w), stretch = [];
+        const x = s * (W / 2 - w);
         // panels of 2.4 m, leaving a gate of 3 m open at every exit
-        for (let a = z0 + 1.2; a < z1 - 0.6; a += 2.4) if (!gates.some(g => Math.abs(g - a) < 2.7)) stretch.push(a);
-        for (const a of stretch) {
-          m.box(0.06, 1.15, 2.34, x, 0.6, a, alu); m.box(0.12, 0.05, 2.34, x, 1.18, a, alu);
-          m.box(0.9, 0.05, 2.34, x + s * 0.48, 0.03, a, alu); m.box(0.5, 0.05, 0.05, x + s * 0.26, 0.55, a - 0.9, alu).rotation.z = s * 0.9;   // its foot on the lane side, and a brace
+        for (let a = z0 + 1.2; a < z1 - 0.6; a += 2.4) {
+          if (gates.some(g => Math.abs(g - a) < 2.7)) continue;
+          metal.box(0.06, 1.15, 2.34, x, 0.6, a); metal.box(0.12, 0.05, 2.34, x, 1.18, a);
+          metal.box(0.9, 0.05, 2.34, x + s * 0.48, 0.03, a); metal.box(0.6, 0.05, 0.05, x + s * 0.24, 0.55, a - 0.9, 0, 0, -s * 0.9);   // its foot on the lane side, and a brace
           m.solid(x, a - 1.2, x, a + 1.2);
         }
-        for (const g of gates) { m.person(x + s * 0.8, g, -s * Math.PI / 2, 'security'); m.box(0.08, 1.2, 0.08, x, 0.6, g - 1.5, alu); m.box(0.08, 1.2, 0.08, x, 0.6, g + 1.5, alu); }
+        for (const g of gates) { m.person(x + s * 0.8, g, -s * Math.PI / 2, 'security'); metal.box(0.08, 1.2, 0.08, x, 0.6, g - 1.5); metal.box(0.08, 1.2, 0.08, x, 0.6, g + 1.5); }
         // the end: a gate across the lane, shut, with someone minding it
-        m.box(w, 1.15, 0.06, s * (W / 2 - w / 2), 0.6, z1, alu); m.solid(x, z1, s * W / 2, z1);
+        metal.box(w, 1.15, 0.06, s * (W / 2 - w / 2), 0.6, z1); m.solid(x, z1, s * W / 2, z1);
         m.person(s * (W / 2 - w / 2), z1 - 0.8, 0, 'security');
         m.person(s * (W / 2 - w * 0.6), z0 + 3, Math.PI, 'medic');   // first aid near the front, where it is needed
         m.free(Math.min(x - s * 0.45, s * W / 2), Math.max(x - s * 0.45, s * W / 2), z0 - 0.5, z1 + 0.6);
       }
+      metal.done();
     },
   };
   const fence = lit(new THREE.MeshStandardMaterial({ color: 0x9a9da3, roughness: 0.5, metalness: 0.7, transparent: true, opacity: 0.35 }), 1.3);

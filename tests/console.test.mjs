@@ -100,6 +100,32 @@ test('a click with the mouse leaves the keys with the show; a text field keeps t
   });
 });
 
+test('walking round with W, the work lights with L, and the people in the hall switched off and on', { timeout: 120000 }, async () => {
+  await withPage(renderFlags(), async ({ send, evaluate, until, errors, port }) => {
+    await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=hangar&quality=low` });
+    await until('!!window.__show?.ready', 'The Hangar did not start');
+    const key = async (k, code) => { for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key: k, code, windowsVirtualKeyCode: k.length === 1 ? k.toUpperCase().charCodeAt(0) : 27 }); };
+    await key('w', 'KeyW');
+    assert.equal(await evaluate(`document.getElementById('cam').value + ' ' + !document.getElementById('walkHud').hidden`), 'walk true');
+    const before = await evaluate('window.__show.camera.position.z');
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 's', code: 'KeyS', windowsVirtualKeyCode: 83 });
+    await evaluate('new Promise(r => setTimeout(r, 800))');
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 's', code: 'KeyS', windowsVirtualKeyCode: 83 });
+    assert.notEqual(await evaluate('window.__show.camera.position.z'), before, 'S walks back');
+    assert.equal(await evaluate(`document.getElementById('panel').classList.contains('hidden')`), true, 'and does not open the settings while walking');
+    await key('l', 'KeyL');
+    assert.equal(await evaluate('window.__show.look.work'), true);
+    await key('Escape', 'Escape');
+    assert.equal(await evaluate(`document.getElementById('cam').value + ' ' + document.getElementById('walkHud').hidden`), 'auto true');
+    const people = () => evaluate(`(() => { let shown = 0; window.__show.world.env.scene.traverse(o => { if (o.isInstancedMesh && o.geometry.attributes.aKit) shown += o.visible ? 1 : 0; }); return shown; })()`);
+    assert.ok(await people() > 0);
+    await evaluate(`(() => { const c = document.getElementById('crowd'); c.checked = false; c.dispatchEvent(new Event('change')); })()`);
+    await until(`(() => { let shown = 0; window.__show.world.env.scene.traverse(o => { if (o.isInstancedMesh && o.geometry.attributes.aKit) shown += o.visible ? 1 : 0; }); return shown === 0; })()`, 'the people did not go');
+    assert.equal(JSON.parse(await evaluate(`localStorage.getItem('sv.controls')`)).crowd, false, 'remembered');
+    assert.deepEqual(errors, []);
+  });
+});
+
 test('?hide shows the venue alone and keeps drawing', { timeout: 120000 }, async () => {
   await withPage(renderFlags(), async ({ send, evaluate, until, errors, port }) => {
     await send('Page.navigate', { url: `http://127.0.0.1:${port}/?venue=hangar&quality=low&hide` });

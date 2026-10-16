@@ -116,6 +116,9 @@ Browser presets save your preferred settings. **Restore a balanced starting poin
 Hold **Space** for strobe and **B** for blinders. **K** triggers confetti,
 **C** CO2 and **V** pyro where enabled. **H** hides the console, **S** opens the settings and **Esc** closes them; **F** toggles
 fullscreen; **1–9** select cameras and **0** selects automatic cameras.
+**W** lets you walk round yourself: W A S D to walk, the mouse to look (click the picture first), **E** and **Q** up
+and down, Shift to go faster, **L** for the work lights, **Esc** to stop; the walking panel copies a link to the spot
+you stand on. Settings → Picture can switch the people in the hall off for a lighter picture.
 Effects unavailable in a venue are marked. Releasing a hold or leaving the
 window releases held effects.
 

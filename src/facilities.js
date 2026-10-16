@@ -30,7 +30,7 @@ function sign(text, bg, fg, wide = 4) {
 // L: the layout (fence: true for a fence round an open field); ctx: { add, lit, black, steel, env } from the world
 export function buildFacilities(L, ctx) {
   const { W, D, H } = L.plan, st = L.stage, { add, lit, black, steel, env } = ctx, open = !!L.shell.open;
-  const keepOut = [], people = [], shots = [], lamps = [], pois = [], updates = [], solids = [], layers = { terrace: new THREE.Group(), towers: new THREE.Group() };   // solids: [x0, z0, x1, z1], lines nobody walks through
+  const keepOut = [], people = [], shots = [], lamps = [], pois = [], updates = [], solids = [], layers = { terrace: new THREE.Group(), towers: new THREE.Group(), wear: new THREE.Group() };   // solids: [x0, z0, x1, z1], lines nobody walks through
   // the lane along the side walls, when the venue has one: the barrier in front of the stage stops where it begins
   const lane = L.facilities.find(f => f.type === 'corridor'), laneWidth = lane ? lane.width : 0, pitZ = st.front + (L.facilities.find(f => f.type === 'barrier')?.pit ?? 1.6);
   const red = lit(new THREE.MeshStandardMaterial({ color: 0x8a0c0c, roughness: 0.5 }), 1.4);
@@ -427,6 +427,19 @@ export function buildFacilities(L, ctx) {
         for (let k = 0; k < n; k++) { const a = k / n * 6.28 + Math.random() * 0.4, d = table ? 0.85 : 0.62; p.person(Math.sin(a) * d, Math.cos(a) * d, a + Math.PI, 'guest'); }
         p.free(-1.15, 1.15, -1.15, 1.15); i++;
       }
+    },
+    // What a night leaves on a hall's floor, only while there is a crowd (layers.wear): gaffer tape where cables and
+    // marks were, the tracks of the forklifts that built the show, cable ramps' scuffs, sticky patches and a few
+    // trodden cups. In an empty hall (a rehearsal) the floor is clean.
+    wear() {
+      const w = place([0, 0, 0]), g = w.group, tape = w.parts(lit(new THREE.MeshStandardMaterial({ color: 0x55575c, roughness: 0.5, metalness: 0.3 }), 1.2)), black = w.parts(lit(new THREE.MeshStandardMaterial({ color: 0x0b0b0c, roughness: 0.7 }), 1.2)), tracks = w.parts(new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false, fog: false })), stains = w.parts(new THREE.MeshBasicMaterial({ color: 0x0a0806, transparent: true, opacity: 0.45, depthWrite: false, fog: false })), cups = w.parts(lit(new THREE.MeshStandardMaterial({ color: 0xc8c2b0, roughness: 0.6 }), 1.4));
+      layers.wear = g;
+      const r = () => Math.random(), on = (x, z) => x > -W / 2 + 2.5 && x < W / 2 - 2.5 && z > pitZ + 0.6 && z < D / 2 - 1;
+      for (let i = 0; i < 140; i++) { const x = (r() - 0.5) * W * 0.9, z = pitZ + 1 + r() * (D / 2 - pitZ - 2); if (!on(x, z)) continue; (r() < 0.7 ? tape : black).box(0.05, 0.002, 0.2 + r() * 1.1, x, 0.002, z, 0, r() < 0.5 ? 0 : Math.PI / 2 + (r() - 0.5) * 0.3); }   // tape
+      for (const x of [-6, 5.5]) for (const k of [-0.7, 0.7]) tracks.box(0.32, 0.001, D * 0.7, x + k, 0.003, 4, 0, 0.02 * Math.sign(x));   // a forklift's tracks, down the hall
+      for (let i = 0; i < 60; i++) { const x = (r() - 0.5) * W * 0.85, z = pitZ + 2 + r() * (D / 2 - pitZ - 4); if (on(x, z)) stains.box(0.2 + r() * 0.6, 0.001, 0.2 + r() * 0.5, x, 0.004, z, 0, r() * 3); }   // where drinks were spilled
+      for (let i = 0; i < 70; i++) { const x = (r() - 0.5) * W * 0.85, z = pitZ + 3 + r() * (D / 2 - pitZ - 5); if (on(x, z)) cups.box(0.07, 0.03, 0.11, x, 0.015, z, 0, r() * 3, Math.PI / 2 * 0.15); }   // trodden cups
+      for (const part of [tape, black, tracks, stains, cups]) part.done();
     },
     // speakers hung further down the hall, so the back hears the top end as clearly as the front: a line array on
     // either side, on chain hoists like the main hangs

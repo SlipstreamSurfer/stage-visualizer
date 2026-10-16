@@ -185,7 +185,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
 
   // ----- what a venue lists besides its stage and lights: parked unless asked for, but for what is structure -----
   const details = !!quality.details;
-  const fac = buildFacilities({ ...L, fence: details, facilities: L.facilities.filter(f => details || STRUCTURE.has(f.type) || (hangarRig && ['barrier', 'corridor', 'foh', 'delays', 'hangarDoor'].includes(f.type))) }, { add, lit, black, steel, env });
+  const fac = buildFacilities({ ...L, fence: details, facilities: L.facilities.filter(f => details || STRUCTURE.has(f.type) || (hangarRig && ['barrier', 'corridor', 'wear', 'foh', 'delays', 'hangarDoor'].includes(f.type))) }, { add, lit, black, steel, env });
   const hasDoor = !!sh.opening && L.facilities.some(f => f.type === 'hangarDoor');   // a door that can open (Hangar's)
   // aisles: a venue with people walking keeps a lane free down both sides and across the back, behind the lanes
   // along the walls when it has those (in front of them the crowd stands shoulder to shoulder, nobody walks there)
@@ -473,7 +473,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       for (const o of everyone) o.visible = crowded;
       showPeople(share, layers.crew !== false, layers.terrace !== false);
       for (const w of walking) w.visible = share > 0;
-      fac.layers.terrace.visible = layers.terrace !== false; fac.layers.towers.visible = layers.towers !== false; if (stage.pa) stage.pa.visible = layers.pa !== false;
+      fac.layers.wear.visible = share > 0; fac.layers.terrace.visible = layers.terrace !== false; fac.layers.towers.visible = layers.towers !== false; if (stage.pa) stage.pa.visible = layers.pa !== false;
       phones.visible = torches.visible = share > 0 && filming > 0.05; phones.material.color.setRGB(0.6, 0.75, 1).multiplyScalar(filming * 1.5);
       torches.material.color.setRGB(3.2, 3.1, 2.9).multiplyScalar(filming * (brk ? 1 : 0.35));   // the torches mostly in the quiet
       const room = director.room, spill = look.hall < 1 ? look.hall : 1 + (look.hall - 1) * 1.5;

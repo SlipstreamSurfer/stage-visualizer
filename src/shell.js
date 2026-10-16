@@ -123,8 +123,13 @@ function walls(c) {
     const o = sh.opening?.wall === side ? sh.opening : null;   // a door that opens: the wall round its opening
     const plane = sh.rough ? rough(w + 6, h + 4, sh.rough, side.length).translate(0, h / 2, 0) : o ? mergeGeometries([[-w / 2, o.x0, 0, h], [o.x1, w / 2, 0, h], [o.x0, o.x1, 0, o.y0], [o.x0, o.x1, o.y1, h]]
       .map(([x0, x1, y0, y1]) => new THREE.PlaneGeometry(x1 - x0, y1 - y0).translate((x0 + x1) / 2, (y0 + y1) / 2, 0))) : new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0);
-    put(surface(kind, { tint: sh.tint }), plane.rotateY(ry).translate(x, 0, z));
-    if (sh.plinth) put(surface('concrete'), new THREE.PlaneGeometry(w, sh.plinth).translate(0, 0, 0.03).rotateY(ry).translate(x, sh.plinth / 2, z));   // a concrete base under the steel
+    // a hall with a door to the outside is seen from outside as well: its walls have two sides
+    const faces = sh.opening ? THREE.DoubleSide : THREE.FrontSide;
+    put(surface(kind, { tint: sh.tint, side: faces }), plane.rotateY(ry).translate(x, 0, z));
+    if (sh.plinth) {   // a concrete base under the steel, round the door where one comes down to the floor
+      const base = o && o.y0 < sh.plinth ? [[-w / 2, o.x0], [o.x1, w / 2]] : [[-w / 2, w / 2]];
+      put(surface('concrete', { side: faces }), mergeGeometries(base.map(([x0, x1]) => new THREE.PlaneGeometry(x1 - x0, sh.plinth).translate((x0 + x1) / 2, 0, 0.03))).rotateY(ry).translate(x, sh.plinth / 2, z));
+    }
   }
 }
 

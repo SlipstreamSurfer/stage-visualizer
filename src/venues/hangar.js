@@ -26,23 +26,24 @@ rig.push(one('ledWall', 'wall', [0, deck + 0.6 + 4.2, -D / 2 + 0.5], { width: 22
 rig.push({ line: across(-D / 2 + 0.8, deck + 9.9, 11), hang: [{ type: 'strobe', count: 8, role: 'strobe' }] });
 for (const s of [-1, 1]) rig.push(one('hazer', 'hazer', [s * (W / 2 - 2), 0.3, front - 3]));
 
-// What an event in a hall like this is laid out with (parked for now; see facilities.js). Exits: a double door is
+// What an event in a hall like this is laid out with (parked for now, but for the barrier, the lanes along the walls,
+// front of house, the delays and the door; see facilities.js). The entrance is the hangar door's middle. Exits: a double door is
 // 2.4 m; as a rule of thumb a hall needs a metre of door for every 135 people, so 4,200 people need 31 m. Ten doors
 // and the 8 m entrance give 32 m.
 const facilities = [
-  { type: 'barrier', pit: 2.6, subs: 14 }, { type: 'wings' }, { type: 'foh', z: front + 28 }, { type: 'platform', x: 8.6, z: front + 28.5 }, { type: 'delays', x: 15.5, z: [front + 32] },
+  { type: 'barrier', pit: 2.6, subs: 14 }, { type: 'corridor', width: 2.2, to: 6, gates: [-24, -10] }, { type: 'wings' }, { type: 'foh', z: front + 28 }, { type: 'platform', x: 8.6, z: front + 28.5 }, { type: 'delays', x: 15.5, z: [front + 32] },
   ...[-24, -10, 4, 30].flatMap(z => [{ type: 'exit', wall: 'left', at: z }, { type: 'exit', wall: 'right', at: z }]),
   { type: 'exit', wall: 'back', at: -15.5 }, { type: 'exit', wall: 'back', at: 15.5 }, { type: 'entrance', wall: 'back', at: 0, width: 8 },
-  { type: 'hangarDoor', wall: 'back', at: 0, width: 27, bottom: 4.4, top: 12.6, number: '4' },
+  { type: 'hangarDoor', wall: 'back', at: 0, width: 27, bottom: 0, top: 12.6, number: '4', yard: true },
   { type: 'bar', wall: 'right', from: 8.5, to: 25 }, { type: 'bar', wall: 'left', from: 8.5, to: 25 },
-  { type: 'cloakroom', wall: 'back', from: -12.8, to: -5.6 }, { type: 'firstAid', wall: 'back', at: 9.2 }, { type: 'water', wall: 'left', at: 34.6 }, { type: 'toilets', wall: 'right', at: 34.6 },
+  { type: 'cloakroom', wall: 'back', from: -21.6, to: -17.2 }, { type: 'firstAid', wall: 'back', at: 19.4 }, { type: 'water', wall: 'left', at: 34.6 }, { type: 'toilets', wall: 'right', at: 34.6 },
   { type: 'social', region: { x0: -13, x1: 13, z0: front + 44, z1: front + 58 }, tables: 7, groups: 10 },
 ];
 
 export default {
   name: 'Hangar', kind: 'Halls', genres: ['techno', 'mainstage', 'hard', 'trance', 'melodic'], capacity: 4200,
   plan: { width: W, depth: D, height: H },
-  shell: { walls: 'steel', floor: 'concrete', frames: 9.5, plinth: 2.9, services: true, opening: { wall: 'back', x0: -13.5, x1: 13.5, y0: 4.4, y1: 12.6, stack: 4.5 } },   // the hangar door's opening; its leaves stack 4.5 m deep at either end   // a steel portal frame every 9.5 metres, a concrete base, ducts and sprinklers under the roof
+  shell: { walls: 'steel', floor: 'concrete', frames: 9.5, plinth: 2.9, services: true, opening: { wall: 'back', x0: -13.5, x1: 13.5, y0: 0, y1: 12.6, stack: 4.5 } },   // the hangar door's opening, from the floor; its leaves stack 4.5 m deep at either end   // a steel portal frame every 9.5 metres, a concrete base, ducts and sprinklers under the roof
   stage: STAGE, rig, facilities, walkers: 80,
   crowd: { count: 2600 },
 };

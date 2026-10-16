@@ -7,6 +7,8 @@
 //   wall: 'left' (x = -W/2), 'right' or 'back' (the wall opposite the stage); at / from / to: metres along that wall
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { lineArray } from './shapes.js';
+import { LIGHT_TOWERS } from './daylight.js';
 
 const EXIT_WIDTH = 2.4;   // a double emergency door
 
@@ -28,7 +30,9 @@ function sign(text, bg, fg, wide = 4) {
 // L: the layout (fence: true for a fence round an open field); ctx: { add, lit, black, steel, env } from the world
 export function buildFacilities(L, ctx) {
   const { W, D, H } = L.plan, st = L.stage, { add, lit, black, steel, env } = ctx, open = !!L.shell.open;
-  const keepOut = [], people = [], shots = [], lamps = [], pois = [], updates = [];
+  const keepOut = [], people = [], shots = [], lamps = [], pois = [], updates = [], solids = [];   // solids: [x0, z0, x1, z1], lines nobody walks through
+  // the lane along the side walls, when the venue has one: the barrier in front of the stage stops where it begins
+  const lane = L.facilities.find(f => f.type === 'corridor'), laneWidth = lane ? lane.width : 0, pitZ = st.front + (L.facilities.find(f => f.type === 'barrier')?.pit ?? 1.6);
   const red = lit(new THREE.MeshStandardMaterial({ color: 0x8a0c0c, roughness: 0.5 }), 1.4);
   const grey = lit(new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.6, metalness: 0.5 }), 1.5);
   const alu = lit(new THREE.MeshStandardMaterial({ color: 0x9a9da3, roughness: 0.45, metalness: 0.7 }), 1.3);
@@ -52,10 +56,76 @@ export function buildFacilities(L, ctx) {
       free(x0, x1, z0, z1) { const c = [toWorld(x0, z0), toWorld(x1, z0), toWorld(x0, z1), toWorld(x1, z1)]; keepOut.push({ x0: Math.min(...c.map(p => p[0])), x1: Math.max(...c.map(p => p[0])), z0: Math.min(...c.map(p => p[1])), z1: Math.max(...c.map(p => p[1])) }); },
       // somewhere people walk to, and stand facing the wall
       poi(x, z) { const [wx, wz] = toWorld(x, z); pois.push({ x: wx, z: wz, ry: f.ry + Math.PI }); },
+      // a line nobody walks through (a barrier, a fence), from one point to another
+      solid(x0, z0, x1, z1) { solids.push([...toWorld(x0, z0), ...toWorld(x1, z1)]); },
+      group: g,
       // many small parts of one material as one mesh: a desk full of faders is one draw, not hundreds
-      parts(mat) { const list = []; return { box: (w, h, d, x, y, z, rx = 0) => list.push(new THREE.BoxGeometry(w, h, d).rotateX(rx).translate(x, y, z)), cyl: (r, h, x, y, z, rx = 0) => list.push(new THREE.CylinderGeometry(r, r, h, 8).rotateX(rx).translate(x, y, z)), done() { if (list.length) g.add(new THREE.Mesh(mergeGeometries(list.map(q => q.toNonIndexed())), mat)); } }; },
+      parts(mat) { const list = []; return { box: (w, h, d, x, y, z, rx = 0, ry = 0) => list.push(new THREE.BoxGeometry(w, h, d).rotateX(rx).rotateY(ry).translate(x, y, z)), cyl: (r, h, x, y, z, rx = 0) => list.push(new THREE.CylinderGeometry(r, r, h, 8).rotateX(rx).translate(x, y, z)), done() { if (list.length) g.add(new THREE.Mesh(mergeGeometries(list.map(q => q.toNonIndexed())), mat)); } }; },
       toWorld,
     };
+  }
+
+  // Outside the open hangar door (f.yard): a terrace fenced off on the apron, with beer benches, standing tables and
+  // strings of bulbs, people out for air; beyond it the production's yard as at any show in a hangar: the trucks
+  // that brought it, the band's nightliner, a generator, cases waiting, and mobile light towers that light the apron
+  // (their pools of light are drawn on it, daylight.js). Drawn only while the door is open.
+  function yard(f) {
+    const y = place([f.at, D / 2, 0]), g = y.group, wire = y.parts(fence), tube = y.parts(alu), blocks = y.parts(grey), wood = y.parts(timber), dark = y.parts(black), bulbs = y.parts(glow(2.2, 1.4, 0.6)), floods = y.parts(glow(3.2, 3.0, 2.6)), glass = y.parts(windows), cabs = y.parts(cab);
+    if (env) updates.push(() => { g.visible = env.door > 0.005; });
+    // the terrace: building fence (a mesh panel in a tube frame on concrete feet) round three sides, a gate at the back
+    const panel = (x0, z0, x1, z1) => {
+      const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 3.5)), ry = Math.atan2(x1 - x0, z1 - z0);
+      const across = Math.abs(x1 - x0) > Math.abs(z1 - z0), dims = (a, h, b) => across ? [a, h, b] : [b, h, a];   // a fence line runs along x or along z
+      for (let i = 0; i < n; i++) {
+        const t = (i + 0.5) / n, x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t, l = len / n - 0.08;
+        wire.box(...dims(l, 1.9, 0.01), x, 1.05, z); tube.box(...dims(l, 0.04, 0.04), x, 2.0, z); tube.box(...dims(l, 0.04, 0.04), x, 0.1, z);
+        for (const k of [-l / 2, l / 2]) { tube.box(0.04, 2, 0.04, x + Math.sin(ry) * k, 1.0, z + Math.cos(ry) * k); blocks.box(...dims(0.62, 0.14, 0.22), x + Math.sin(ry) * k, 0.07, z + Math.cos(ry) * k); }
+      }
+      y.solid(x0, z0, x1, z1);
+    };
+    const T = 14;   // how deep the terrace is
+    for (const s of [-1, 1]) panel(s * 15, 0.4, s * 15, T);
+    panel(-15, T, 7, T); panel(10.5, T, 15, T);   // the gate between 7 and 10.5 stands open for the crew
+    for (const [x, z, ry] of [[-9, 5, 0.1], [-4, 9.5, -0.05], [3, 5.5, 0.08], [9.5, 9, 0], [-11, 11, 0.2]]) {   // beer benches: a table and two benches
+      const c = Math.cos(ry), sn = Math.sin(ry), at = (dx, dz) => [x + dx * c + dz * sn, z - dx * sn + dz * c];
+      for (const [dz, top, wdt] of [[0, 0.76, 0.5], [-0.62, 0.46, 0.25], [0.62, 0.46, 0.25]]) { const [px, pz] = at(0, dz); wood.box(2.2, 0.035, wdt, px, top, pz); for (const e of [-0.9, 0.9]) { const [lx, lz] = at(e, dz); dark.box(0.04, top, wdt * 0.8, lx, top / 2, lz); } }
+      const n = 3 + (Math.random() * 3 | 0);
+      for (let k = 0; k < n; k++) { const side = k % 2 ? 1 : -1, [px, pz] = at(-0.8 + k * 0.45, side * 0.95); y.person(px, pz, side > 0 ? Math.PI : 0, 'guest'); }
+    }
+    for (const [x, z] of [[-1, 2.5], [7, 2.2], [12.5, 4.5]]) {   // standing tables, with people round them
+      tube.box(0.06, 1.1, 0.06, x, 0.55, z); wood.box(0.7, 0.03, 0.7, x, 1.1, z); blocks.box(0.5, 0.03, 0.5, x, 0.015, z);
+      for (let k = 0, n = 3 + (Math.random() * 2 | 0); k < n; k++) { const a = k / n * 6.28 + Math.random() * 0.3; y.person(x + Math.sin(a) * 0.7, z + Math.cos(a) * 0.7, a + Math.PI, 'guest'); }
+    }
+    for (let k = 0; k < 9; k++) { const a = Math.random() * 6.28, x = -13 + Math.random() * 26, z = 1.5 + Math.random() * 11; y.person(x, z, a, 'guest'); }   // and some just standing, talking, with a drink
+    // strings of bulbs from the hall to masts at the back of the terrace
+    for (const x of [-12, -4, 4, 12]) {
+      tube.box(0.08, 4.2, 0.08, x, 2.1, T - 0.4);
+      for (let t = 0.03; t < 1; t += 0.055) bulbs.box(0.09, 0.09, 0.09, x, 4.4 - t * 0.5 - Math.sin(t * Math.PI) * 0.7, 0.4 + t * (T - 0.8));
+    }
+    // the production yard
+    const truck = (x, z, ry, colour) => {
+      const c = Math.cos(ry), sn = Math.sin(ry), at = (dx, dz) => [x + dx * c + dz * sn, z - dx * sn + dz * c], body = y.parts(lit(new THREE.MeshStandardMaterial({ color: colour, roughness: 0.6, metalness: 0.3 }), 1.3));
+      const piece = (parts, w, h, l, dx, py, dz) => { const [px, pz] = at(dx, dz); parts.box(w, h, l, px, py, pz, 0, ry); };
+      piece(body, 2.5, 2.9, 13.6, 0, 2.55, 0); piece(dark, 2.3, 0.4, 13.2, 0, 0.95, 0);   // the trailer and its frame
+      for (const dz of [-4.3, -5.6, -6.9]) for (const s of [-1, 1]) piece(dark, 0.3, 0.95, 0.95, s * 1.05, 0.48, dz);   // wheels
+      piece(cabs, 2.5, 2.7, 2.3, 0, 2.05, 8.3); piece(dark, 2.3, 0.7, 3.4, 0, 0.75, 7.9); piece(glass, 2.3, 0.9, 0.04, 0, 2.6, 9.47);   // the tractor
+      for (const dz of [7.6, 8.9]) for (const s of [-1, 1]) piece(dark, 0.3, 1.0, 1.0, s * 1.05, 0.5, dz);
+      body.done();
+    };
+    truck(-27, 28, 0.35, 0xd5d8dc); truck(-37, 22, 0.3, 0xc9ccd0); truck(31, 40, -0.45, 0xd0d2d6);
+    { const ry = -0.2, c = Math.cos(ry), sn = Math.sin(ry), at = (dx, dz) => [44 + dx * c + dz * sn, 20 - dx * sn + dz * c];   // the nightliner
+      const [bx, bz] = at(0, 0);
+      const bus = y.parts(lit(new THREE.MeshStandardMaterial({ color: 0x24272c, roughness: 0.4, metalness: 0.5 }), 1.3));
+      bus.box(2.55, 3.4, 13.7, bx, 2.0, bz, 0, ry); bus.done();
+      for (const s of [-1, 1]) { const [wx, wz] = at(s * 1.285, 0); glass.box(0.02, 0.9, 12.5, wx, 2.6, wz, 0, ry); } }
+    blocks.box(6.06, 2.6, 2.44, -18, 1.3, 30); dark.box(0.2, 1.2, 0.2, -16, 3.2, 30); bulbs.box(0.25, 0.12, 0.12, -18, 2.45, 28.7);   // the generator, a lamp over its door
+    for (let k = 0; k < 7; k++) dark.box(1.2, 0.62 * (1 + k % 2), 0.62, 17 + (k % 4) * 1.25, 0.31 * (1 + k % 2), 2 + (k > 3 ? 0.8 : 0));   // cases waiting by the wall
+    // light towers: a trailer, a mast and four floods turned down at the apron
+    for (const [x, z] of LIGHT_TOWERS) {
+      blocks.box(1.4, 1.1, 3.4, x, 0.75, z); tube.box(0.16, 9, 0.16, x, 5.5, z); tube.box(1.6, 0.1, 0.12, x, 9.9, z);
+      for (const k of [-0.6, -0.2, 0.2, 0.6]) { dark.box(0.4, 0.32, 0.18, x + k, 10.1, z, -0.6); floods.box(0.34, 0.26, 0.04, x + k, 10.03, z - 0.1, -0.6); }   // turned towards the hall and down
+    }
+    for (const part of [wire, tube, blocks, wood, dark, bulbs, floods, glass, cabs]) part.done();
   }
 
   const BUILD = {
@@ -85,8 +155,9 @@ export function buildFacilities(L, ctx) {
         p.free(-w / 2 - 1.5, w / 2 + 1.5, 0, 7.5);
         return;
       }
-      p.box(w, 3.2, 0.1, 0, 1.6, 0.05, glow(0.012, 0.014, 0.02));   // the night outside
-      p.box(w + 0.6, 0.3, 0.25, 0, 3.35, 0.12, steel);
+      // through a wall: the night outside it, and a frame; through a hangar door, only the lanes, in front of its middle
+      const inDoor = L.facilities.some(q => q.type === 'hangarDoor' && q.wall === f.wall && Math.abs(q.at - f.at) < q.width / 2);
+      if (!inDoor) { p.box(w, 3.2, 0.1, 0, 1.6, 0.05, glow(0.012, 0.014, 0.02)); p.box(w + 0.6, 0.3, 0.25, 0, 3.35, 0.12, steel); }
       for (let i = 0, n = Math.round(w / 2); i <= n; i++) { const x = -w / 2 + w * i / n; p.box(0.12, 3.2, 0.25, x, 1.6, 0.12, steel); if (i < n) p.box(0.06, 2.6, 0.9, x + 0.08, 1.3, 0.55, grey); }
       p.plate(1.4, 0.46, 0, 3.75, 0.14, SIGN.exit);
       for (let i = 0; i < 3; i++) p.person(-w / 3 + i * w / 3, 1.9, 0, 'security');
@@ -96,17 +167,23 @@ export function buildFacilities(L, ctx) {
     },
     // the great sliding doors a hangar has: ribbed steel leaves on a rail, with the hall's number painted on them
     hangarDoor(f) {
-      // Six leaves on three tracks. Open, each half slides to its end of the opening, the three leaves stacked one
-      // behind the other, and the middle of the opening is free (env.door, 0 shut to 1 open; it takes its time).
+      // Six leaves on three tracks, from the floor up. Open, each half slides to its end of the opening, the three
+      // leaves stacked one behind the other, and the middle of the opening is free (env.door, 0 shut to 1 open; it
+      // takes its time). The rails are in the floor, the guides along the top.
       const p = place(f.wall, f.at), h = f.top - f.bottom, leaves = 6, w = f.width / leaves, track = i => i < 3 ? 2 - i : i - 3, leafOf = [];
+      const paint = lit(new THREE.MeshStandardMaterial({ color: 0x5d6168, roughness: 0.55, metalness: 0.6 }), 1.4);
       for (let i = 0; i < leaves; i++) {
-        const x = (i - (leaves - 1) / 2) * w, z = 0.06 + track(i) * 0.09, leaf = [p.box(w - 0.12, h, 0.06, x, f.bottom + h / 2, z, grey)];
+        const x = (i - (leaves - 1) / 2) * w, z = 0.06 + track(i) * 0.09, leaf = [p.box(w - 0.12, h, 0.06, x, f.bottom + h / 2, z, paint)];
         for (let y = f.bottom + 0.6; y < f.top; y += 1.15) leaf.push(p.box(w - 0.2, 0.09, 0.05, x, y, z + 0.05, steel));
+        leaf.push(p.box(0.08, h, 0.04, x - w / 2 + 0.1, f.bottom + h / 2, z + 0.05, steel), p.box(0.08, h, 0.04, x + w / 2 - 0.1, f.bottom + h / 2, z + 0.05, steel));   // the stiles
         leafOf.push({ leaf, shut: x, open: (i < 3 ? -1 : 1) * (f.width - w) / 2 });
       }
       if (env) updates.push(() => { for (const { leaf, shut, open } of leafOf) for (const m of leaf) m.position.x = shut + (open - shut) * env.door; });
-      p.box(f.width + 1, 0.3, 0.3, 0, f.top + 0.15, 0.15, steel); p.box(f.width + 1, 0.16, 0.3, 0, f.bottom - 0.08, 0.15, steel);
-      if (f.number) p.plate(h * 0.5, h * 0.5, f.width / 2 - w, f.bottom + h * 0.55, 0.2, new THREE.MeshBasicMaterial({ map: sign(f.number, 'rgba(0,0,0,0)', '#ffffff', 1).map, transparent: true, color: new THREE.Color(0.05, 0.05, 0.05), fog: false }));
+      p.box(f.width + 1, 0.3, 0.3, 0, f.top + 0.15, 0.15, steel);   // the guide along the top
+      for (const s of [-1, 1]) p.box(0.45, f.top + 0.3, 0.7, s * (f.width / 2 + 0.22), (f.top + 0.3) / 2, 0, steel);   // the columns either side, as deep as the wall is thick
+      for (const k of [0.06, 0.15, 0.24]) p.box(f.width + 1, 0.012, 0.05, 0, 0.006, k, steel);   // and the rails in the floor
+      if (f.number) p.plate(h * 0.4, h * 0.4, f.width / 2 - w, f.bottom + h * 0.6, 0.2, new THREE.MeshBasicMaterial({ map: sign(f.number, 'rgba(0,0,0,0)', '#ffffff', 1).map, transparent: true, color: new THREE.Color(0.05, 0.05, 0.05), fog: false }));
+      if (f.yard && env) yard(f);
     },
     // a bar along a wall: the counter, fridges behind it, staff, people ordering, and warm light over it
     // depth: how far the counter stands from the wall (2.6 m in a hall, less in a small room)
@@ -271,8 +348,13 @@ export function buildFacilities(L, ctx) {
       for (const part of [metal, dark, caps, leds, amber, blue]) part.done();
       for (const x of [sx - 0.3, lx, vx]) p.person(x, -0.4, Math.PI, 'crew');
       p.person(1.8, 1.0, Math.PI * 0.75, 'crew');   // someone standing back, watching the stage over their shoulders
-      for (const [bw, bd, x, z] of [[w + 0.8, 0.06, 0, d / 2 + 0.4], [w + 0.8, 0.06, 0, -d / 2 - 0.4], [0.06, d + 0.8, -w / 2 - 0.4, 0], [0.06, d + 0.8, w / 2 + 0.4, 0]]) { p.box(bw, 0.06, bd, x, 1.12, z, alu); p.box(bw, 0.9, bd, x, 0.5, z, alu).material = fence; }
-      p.box(0.7, 0.07, f.z - st.front - 6, 0, 0.035, -(f.z - st.front - 6) / 2 - d / 2 - 0.4, ramp);   // the cable ramp to the stage
+      for (const [bw, bd, x, z] of [[w + 0.8, 0.06, 0, d / 2 + 0.4], [w + 0.8, 0.06, 0, -d / 2 - 0.4], [0.06, d + 0.8, -w / 2 - 0.4, 0], [0.06, d + 0.8, w / 2 + 0.4, 0]]) { p.box(bw, 0.06, bd, x, 1.12, z, alu); p.box(bw, 0.9, bd, x, 0.5, z, alu).material = fence; p.solid(x - bw / 2, z - bd / 2, x + bw / 2, z + bd / 2); }
+      // the cables to the stage under a black rubber cable bridge, module after module, to the barrier and on
+      // through the pit; people stand on it as on the floor
+      const run = (from, to) => { const n = Math.max(1, Math.round((from - to) / 0.9)), len = (from - to) / n; for (let i = 0; i < n; i++) { const c = from - (i + 0.5) * len; bridges.push(cableBridge(len - 0.02).translate(0, 0, c)); for (const x of [-0.065, 0.065]) seams.push(new THREE.BoxGeometry(0.008, 0.003, len - 0.06).translate(x, 0.072, c)); } };
+      const bridges = [], seams = [];
+      run(-d / 2 - 0.5, pitZ + 0.45 - f.z); run(pitZ - 0.6 - f.z, st.front + 0.05 - f.z);
+      p.group.add(new THREE.Mesh(mergeGeometries(bridges), rubber), new THREE.Mesh(mergeGeometries(seams), rubberSeam));
       if (open) { for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) p.box(0.12, 4.4, 0.12, x * (w / 2 + 0.2), 2.2, z * (d / 2 + 0.2), steel); p.box(w + 1, 0.12, d + 1, 0, 4.45, 0, tent); }   // out of the rain
       p.free(-w / 2 - 0.9, w / 2 + 0.9, -d / 2 - 0.9, d / 2 + 0.9);
       shots.push({ name: 'Front of house desk', fov: 58, pos: t => [Math.sin(t * 0.05) * 1.2, 2.75, f.z + 1.6], look: [0, H * 0.4, -D / 2] });
@@ -290,9 +372,10 @@ export function buildFacilities(L, ctx) {
     // on the floor (one line across the front is how the low end is spread evenly), and small speakers on the edge
     // of the stage for the front rows, who stand under the main arrays
     barrier(f) {
-      const z = st.front + (f.pit || 2.6), p = place([0, z, 0]), n = Math.floor((W - 1) / 2.4);
+      const z = st.front + (f.pit || 2.6), p = place([0, z, 0]), across = laneWidth ? W - 2 * laneWidth : W - 1, n = Math.floor(across / 2.4);
       for (let i = 0; i < n; i++) { const x = (i - (n - 1) / 2) * 2.4; p.box(2.34, 1.15, 0.06, x, 0.6, 0, alu); p.box(2.34, 0.05, 1.1, x, 0.03, -0.5, alu); p.box(2.34, 0.05, 0.3, x, 0.35, 0.2, alu); }
-      for (let x = -W / 2 + 3; x < W / 2 - 2; x += 3.6) p.person(x, -0.9, 0, 'security');
+      p.solid(-n * 1.2, 0, n * 1.2, 0);
+      for (let x = -n * 1.2 + 2; x < n * 1.2 - 1; x += 3.6) p.person(x, -0.9, 0, 'security');
       const subs = f.subs || 0, span = Math.min(st.width, W - 4);
       for (let i = 0; i < subs; i++) {
         const x = (i - (subs - 1) / 2) * span / subs, front = st.front + 0.6 - z + 0.48;
@@ -312,9 +395,15 @@ export function buildFacilities(L, ctx) {
       if (wide < 2) return;
       for (const s of [-1, 1]) for (let k = 0; k < 6; k++) { const h = st.height * (6 - k) / 6.5; place([s * (st.width / 2 + 0.16 + k * 0.3), st.front - 2.2, 0]).box(0.3, h, 1.5, 0, h / 2, 0, grey); }   // steps up to the stage from the wings
       for (const s of [-1, 1]) {
-        const p = place([s * (st.width / 2 + wide / 2), st.front, 0]);
-        p.box(wide, 6.5, 0.12, 0, 3.25, 0, drape);
-        p.plate(1.6, 0.27, -s * (wide / 2 - 1.3), 2.3, 0.08, SIGN.crew);
+        const p = place([s * (st.width / 2 + wide / 2), st.front, 0]), cloth = wide - laneWidth;   // the lane by the wall stays open: the way backstage
+        // pipe and drape: black molton hanging in folds from a crossbar on uprights, as stages are masked
+        const folds = new THREE.PlaneGeometry(cloth, 4.55, Math.round(cloth / 0.06), 1), at = folds.attributes.position;
+        for (let i = 0; i < at.count; i++) at.setZ(i, Math.sin(at.getX(i) / 0.34 * Math.PI) * 0.07 + Math.sin(at.getX(i) * 1.7) * 0.025);
+        folds.computeVertexNormals();
+        const curtain = new THREE.Mesh(folds, drape); curtain.position.set(-s * laneWidth / 2, 2.32, 0); p.group.add(curtain);
+        p.box(cloth + 0.2, 0.05, 0.05, -s * laneWidth / 2, 4.62, 0, steel);
+        for (let k = 0, n = Math.ceil(cloth / 3); k <= n; k++) { const x = -s * laneWidth / 2 - cloth / 2 + cloth * k / n; p.box(0.05, 4.62, 0.05, x, 2.31, -0.1, steel); p.box(0.6, 0.02, 0.6, x, 0.01, -0.1, steel); }
+        p.plate(1.6, 0.27, -s * (wide / 2 - 1.3), 2.3, 0.12, SIGN.crew);
         for (let i = 0; i < 5; i++) for (let j = 0; j < 1 + (i % 3); j++) p.box(1.2, 0.62, 0.62, -wide / 2 + 0.9 + i * 1.35, 0.31 + j * 0.64, -1.4 - (i % 2) * 0.9, grey);   // flight cases
         for (let i = 0; i < 3; i++) { p.box(0.6, 1.9, 0.8, wide / 2 - 0.6 - i * 0.7, 0.95, -4.2, black); p.box(0.4, 0.02, 0.02, wide / 2 - 0.6 - i * 0.7, 1.5, -3.79, glow(0.2, 1.2, 0.3)); }   // dimmer racks
         p.person(0.5, -2.6, 0.6, 'crew'); p.person(-1.2, -3.4, Math.PI, 'crew');
@@ -333,25 +422,46 @@ export function buildFacilities(L, ctx) {
         p.free(-1.15, 1.15, -1.15, 1.15); i++;
       }
     },
-    // speakers hung further down the hall, so the back hears the top end as clearly as the front
+    // speakers hung further down the hall, so the back hears the top end as clearly as the front: a line array on
+    // either side, on chain hoists like the main hangs
     delays(f) {
-      for (const z of f.z) for (const s of [-1, 1]) {
-        const p = place([s * f.x, z, 0]);
-        for (let j = 0; j < 4; j++) {
-          const y = H * 0.66 - j * 0.42, tilt = 0.05 + j * 0.07;
-          p.box(1.1, 0.4, 0.7, 0, y, 0, speaker).rotation.x = tilt;
-          p.plate(0.94, 0.3, 0, y, 0.356, speakerGrille).rotation.x = tilt;
-          for (const x of [-0.27, 0.27]) p.disc(0.095, x, y, 0.364, speakerCone).rotation.x = tilt;
+      const parts = { body: [], grille: [], rig: [] };
+      for (const z of f.z) for (const s of [-1, 1]) { const g = lineArray({ top: [s * f.x, H * 0.7, z], n: 8, w: 0.74, h: 0.25, d: 0.48, roof: open ? null : H, splay: i => [0, 1, 1, 2, 2, 3, 4, 5][i] }); for (const k in parts) parts[k].push(...g[k]); }
+      for (const [k, mat] of [['body', speaker], ['grille', speakerGrille], ['rig', steel]]) add(new THREE.Mesh(mergeGeometries(parts[k]), mat));
+    },
+    // A lane along each side wall, from the pit in front of the stage to a door in the side wall, behind a barrier like
+    // the one in front of the stage: for security, first aid and crew, and the way out for whoever is lifted over the
+    // front barrier. The crowd stands up against it. Where an emergency exit is, a gate stands open, with security.
+    //   width: from the wall; to: where along the wall it ends (just past its door); gates: [z, ...] of the exits in it
+    corridor(f) {
+      const z0 = pitZ, z1 = f.to, w = f.width, gates = f.gates || [], m = place([0, 0, 0]);
+      for (const s of [-1, 1]) {
+        const x = s * (W / 2 - w), stretch = [];
+        // panels of 2.4 m, leaving a gate of 3 m open at every exit
+        for (let a = z0 + 1.2; a < z1 - 0.6; a += 2.4) if (!gates.some(g => Math.abs(g - a) < 2.7)) stretch.push(a);
+        for (const a of stretch) {
+          m.box(0.06, 1.15, 2.34, x, 0.6, a, alu); m.box(0.12, 0.05, 2.34, x, 1.18, a, alu);
+          m.box(0.9, 0.05, 2.34, x + s * 0.48, 0.03, a, alu); m.box(0.5, 0.05, 0.05, x + s * 0.26, 0.55, a - 0.9, alu).rotation.z = s * 0.9;   // its foot on the lane side, and a brace
+          m.solid(x, a - 1.2, x, a + 1.2);
         }
-        p.box(1.2, 0.08, 0.8, 0, H * 0.66 + 0.26, 0, steel); p.box(0.03, H * 0.34 - 0.4, 0.03, 0, H * 0.83 + 0.1, 0, steel);
+        for (const g of gates) { m.person(x + s * 0.8, g, -s * Math.PI / 2, 'security'); m.box(0.08, 1.2, 0.08, x, 0.6, g - 1.5, alu); m.box(0.08, 1.2, 0.08, x, 0.6, g + 1.5, alu); }
+        // the end: a gate across the lane, shut, with someone minding it
+        m.box(w, 1.15, 0.06, s * (W / 2 - w / 2), 0.6, z1, alu); m.solid(x, z1, s * W / 2, z1);
+        m.person(s * (W / 2 - w / 2), z1 - 0.8, 0, 'security');
+        m.person(s * (W / 2 - w * 0.6), z0 + 3, Math.PI, 'medic');   // first aid near the front, where it is needed
+        m.free(Math.min(x - s * 0.45, s * W / 2), Math.max(x - s * 0.45, s * W / 2), z0 - 0.5, z1 + 0.6);
       }
     },
   };
   const fence = lit(new THREE.MeshStandardMaterial({ color: 0x9a9da3, roughness: 0.5, metalness: 0.7, transparent: true, opacity: 0.35 }), 1.3);
   const tent = lit(new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 0.95, side: THREE.DoubleSide }), 1.2);
+  const timber = lit(new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.85 }), 1.3), cab = lit(new THREE.MeshStandardMaterial({ color: 0x1d2a42, roughness: 0.4, metalness: 0.5 }), 1.4);
+  const windows = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.02, 0.03, 0.045), fog: false });
   const cabin = lit(new THREE.MeshStandardMaterial({ color: 0x1c3a5c, roughness: 0.7 }), 1.4);
-  const drape = lit(new THREE.MeshStandardMaterial({ color: 0x060607, roughness: 1 }), 1);
-  const ramp = lit(new THREE.MeshStandardMaterial({ color: 0x8a7a10, roughness: 0.8 }), 1.2);
+  const drape = lit(new THREE.MeshStandardMaterial({ color: 0x0c0c0e, roughness: 0.82, side: THREE.DoubleSide }), 1.2);
+  const rubber = lit(new THREE.MeshStandardMaterial({ color: 0x0e0e10, roughness: 0.92 }), 1.3), rubberSeam = lit(new THREE.MeshStandardMaterial({ color: 0x26272b, roughness: 0.8 }), 1.3);
+  // a module of cable bridge: a flat top over the cable channels and a ramp either side, len metres long
+  const cableBridge = len => new THREE.ExtrudeGeometry(new THREE.Shape([[-0.27, 0], [-0.16, 0.07], [0.16, 0.07], [0.27, 0]].map(([x, y]) => new THREE.Vector2(x, y))), { depth: len, bevelEnabled: false }).translate(0, 0, -len / 2);
   const speaker = lit(new THREE.MeshStandardMaterial({ color: 0x0b0b0d, roughness: 0.6, metalness: 0.2 }), 2);
   const speakerGrille = new THREE.MeshBasicMaterial({ color: 0x17191e, fog: false });
   const speakerCone = new THREE.MeshBasicMaterial({ color: 0x0b0c0f, fog: false });
@@ -367,5 +477,5 @@ export function buildFacilities(L, ctx) {
     if (!BUILD[f.type]) throw new Error(`the venue ${L.name} asks for a facility "${f.type}" that does not exist`);
     BUILD[f.type](f);
   }
-  return { keepOut, people, shots, lamps, pois, update: dt => { for (const f of updates) f(dt); } };
+  return { keepOut, people, shots, lamps, pois, solids, update: dt => { for (const f of updates) f(dt); } };
 }

@@ -57,9 +57,13 @@ export const peopleU = () => ({ time: uniform(0), dance: uniform(0), hands: unif
 
 // What belongs to one person travels in one buffer (WebGPU allows eight vertex buffers a mesh): four random numbers
 // (phase, eagerness, bounce, freedom of the arms), where they stand (x, z, the way they face, their size), their
-// shirt, how broad they are, how packed it is around them, and two numbers more: for someone who walks their stride
-// and how much they are moving, for anyone else how high they are off the ground and whether they sit.
-const EACH = 16, FIELDS = [['aSeed', 4, 0], ['aPlace', 4, 4], ['aShirt', 3, 8], ['aBuild', 1, 11], ['aDense', 1, 12], ['aWalk', 2, 13]];
+// shirt, how broad they are, how packed it is around them, two numbers more: for someone who walks their stride
+// and how much they are moving, for anyone else how high they are off the ground and whether they sit; and what they
+// wear over the shirt (KIT).
+const EACH = 16, FIELDS = [['aSeed', 4, 0], ['aPlace', 4, 4], ['aShirt', 3, 8], ['aBuild', 1, 11], ['aDense', 1, 12], ['aWalk', 2, 13], ['aKit', 1, 15]];
+// over the shirt: nothing, or the high-visibility vest of security (yellow) or first aid (green), with two bands that
+// reflect and the word on the back. Part of the figure, so it moves with it.
+export const KIT = { none: 0, security: 1, medic: 2 };
 // A crowd of n figures drawn in one go. put(i, ...) places one; moving: they are placed again every frame.
 export function people(material, n, moving = false) {
   const geo = personGeo(); geo.deleteAttribute('uv');
@@ -71,6 +75,7 @@ export function people(material, n, moving = false) {
   return { mesh, data, buffer,
     seed(i, a, b, c, d) { data.set([a, b, c, d], i * EACH); },
     shirt(i, colour) { data.set([colour.r, colour.g, colour.b], i * EACH + 8); },
+    kit(i, kind) { data[i * EACH + 15] = kind; },
     dense(i, v) { data[i * EACH + 12] = v; },
     walk(i, stride, amount) { data[i * EACH + 13] = stride; data[i * EACH + 14] = amount; },
     sit(i, y, seated) { data[i * EACH + 13] = y; data[i * EACH + 14] = seated ? 1 : 0; },
@@ -83,7 +88,7 @@ export function people(material, n, moving = false) {
 
 // light: the world's function for the light of the beams on a point; U: from peopleU; walking: true for walkers
 export function peopleMaterial({ light, U, walking = false }) {
-  const aArm = attribute('aArm', 'float'), aPart = attribute('aPart', 'float'), aSeed = attribute('aSeed', 'vec4'), aDense = attribute('aDense', 'float'), aPlace = attribute('aPlace', 'vec4'), aBuild = attribute('aBuild', 'float'), aShirt = attribute('aShirt', 'vec3'), aWalk = attribute('aWalk', 'vec2');
+  const aArm = attribute('aArm', 'float'), aPart = attribute('aPart', 'float'), aSeed = attribute('aSeed', 'vec4'), aDense = attribute('aDense', 'float'), aPlace = attribute('aPlace', 'vec4'), aBuild = attribute('aBuild', 'float'), aShirt = attribute('aShirt', 'vec3'), aWalk = attribute('aWalk', 'vec2'), aKit = attribute('aKit', 'float');
   const pos = positionGeometry, h = pos.y;
   const isArm = aArm.notEqual(0), side = sign(aArm), shoulder = vec3(side.mul(SX), SY, 0), p0 = pos.sub(shoulder), q0 = p0.add(vec3(0, UPPER, 0)), forearm = p0.y.lessThan(-(UPPER + 0.01));
   let moved, open;
@@ -148,7 +153,13 @@ export function peopleMaterial({ light, U, walking = false }) {
   const brows = fall(0.006, 0.002, abs(f.y.sub(1.664))).mul(fall(0.052, 0.036, abs(f.x))).mul(step(0.012, abs(f.x)));
   const mouth = fall(0.007, 0.002, abs(f.y.sub(1.577))).mul(fall(0.03, 0.02, abs(f.x)));
   const face = step(f.z, -0.035).mul(step(1.5, f.y)).mul(part.a).mul(eyes.mul(0.8).add(brows.mul(0.5)).add(mouth.mul(0.55))).oneMinus();
-  const albedo = mix(shirt, part.rgb, part.a).mul(face);
+  // a vest: over the body from the hips to the shoulders, not over the sleeves; reflecting bands round the middle,
+  // and on the back, between the shoulder blades, the word in black
+  const kit = varying(aKit), armOf = varying(aArm), body = step(abs(armOf), 0.5).mul(step(0.95, f.y)).mul(step(f.y, 1.46)).mul(step(abs(f.x), 0.19));
+  const bands = step(0.5, fall(0.022, 0.016, abs(f.y.sub(1.06))).add(fall(0.022, 0.016, abs(f.y.sub(1.17))))), word = step(0, f.z).mul(step(1.27, f.y)).mul(step(f.y, 1.34)).mul(step(abs(f.x), 0.12));
+  const vestColour = mix(mix(vec3(0.8, 0.68, 0.03), vec3(0.08, 0.42, 0.14), step(1.5, kit)), vec3(0.62, 0.64, 0.66), bands).mul(word.mul(-0.94).add(1));
+  const clothes = mix(shirt, vestColour, body.mul(step(0.5, kit)));
+  const albedo = mix(clothes, part.rgb, part.a).mul(face);
 
   // A position node replaces what three worked out for the instance, so each person is put in their own place here.
   const wide = aPlace.w.mul(aBuild), [wx, wz] = turn(moved.x.mul(wide), moved.z.mul(wide), aPlace.z.negate());

@@ -18,6 +18,7 @@ import { mountPlayback } from './playback.js';
 import { QUALITY, AutoQuality } from './quality.js';
 import { SteadyResolution } from './steady.js';
 import { djEye } from './dj-eye.js';
+import { Walk } from './walk.js';
 import { disposeScene, warmScene } from './resources.js';
 import { DEFAULT_OFF, LIGHT_ROLES, PALETTES, RING_NAMES, COIL_MODES, parseStored, normalizeControls, normalizeLook, normalizePresets } from './show-controls.js';
 import { $, keep, kept, started, fill, groups, sliderValue, segmented, syncSegments, typing, pressable, mountControls, mountStart } from './ui.js';
@@ -94,6 +95,7 @@ let controls = normalizeControls(parseStored(kept('controls', '{}')));
 if (params.has('time') || params.has('door')) controls = normalizeControls({ ...controls, timeOfDay: params.get('time') ?? controls.timeOfDay, door: params.has('door') || controls.door });   // ?time=day&door: for a picture
 const look = { ...normalizeLook({ light: +kept('light', 1), bloom: +kept('bloom', 1), haze: +kept('haze', 1), hall: +kept('hall', 1), off: params.has('all') ? Object.fromEntries(Object.keys(DEFAULT_OFF).map(role => [role, false])) : parseStored(kept('off', JSON.stringify(DEFAULT_OFF))) }), controls };
 let cameraFrozen = false, cameraTime = 0, cameraAge = 0, cameraIndex = -1;
+const walk = new Walk();   // walking round the venue yourself (walk.js)
 const audio = new Audio(() => { signals.reset(); director.reset(timer.getElapsed()); });
 const timer = new THREE.Timer();   // the show's clock, moved on once a frame (frame)
 let readDemo = demo(signals, director.mood.demoBpm, director.mood.flow), statusAt = 0, exposure = 1, frames = 0;
@@ -136,7 +138,8 @@ function frame(now) {
   world.update(dt, t, director, signals, look);
   particles?.update(t, director.room.color, director.manual.blackout ? 0 : director.room.level * look.light, world.env.haze * look.haze);
 
-  if (!cameraFrozen) {
+  if (walk.on) walk.update(dt, world, camera);
+  else if (!cameraFrozen) {
     cameraTime += dt * controls.cameraSpeed;
     const shot = cams.update(signals, t, director.mood.camHold, controls.cameraFollowsLight ? director.lightCue : null);
     if (cameraIndex !== cams.index) { cameraAge = 0; cameraIndex = cams.index; }
@@ -147,8 +150,8 @@ function frame(now) {
     camera.rotateX(Math.sin(cameraTime * 1.7) * 0.002); camera.rotateZ(Math.sin(cameraTime * 0.5) * 0.004);
     camera.fov = shot.fov - signals.drop * 3 - signals.m.build * 4; camera.updateProjectionMatrix();
   }
-  djEye.inside = cams.list[cams.index]?.name === 'DJ view';
-  $('fade').style.opacity = cameraFrozen ? 0 : 1 - Math.max(0, Math.min(1, cams.fade));
+  djEye.inside = !walk.on && cams.list[cams.index]?.name === 'DJ view';
+  $('fade').style.opacity = cameraFrozen || walk.on ? 0 : 1 - Math.max(0, Math.min(1, cams.fade));
   if (glow) glow.strength.value = (0.7 + signals.kick * 0.35 + signals.accent * 0.08) * look.bloom;
   // the camera's exposure follows the light as an eye or a camera does: it closes fast when a strobe hits and opens
   // slowly in the dark, so a blackout is never just a black screen and a flash still hurts
@@ -177,7 +180,8 @@ function frame(now) {
     state.textContent = audio.message || changeMessage || `${audio.live ? 'Live: ' + audio.label + (audioNote ? ' · ' + audioNote : '') : 'Demo mode'} · ${audio.live && m.activity < 0.05 ? 'waiting for music' : director.status}`;
     if (sound.note && !audio.message && !changeMessage) state.textContent += ' · ' + sound.note;   // the deck rekordbox plays
     state.title = state.textContent; $('bpm').value = bpm;
-    $('miniStatus').textContent = state.textContent + ` · ${bpm} BPM` + (director.manual.blackout ? ' · BLACKOUT' : '') + (cameraFrozen ? ' · Camera paused' : '');
+    $('miniStatus').textContent = state.textContent + ` · ${bpm} BPM` + (director.manual.blackout ? ' · BLACKOUT' : '') + (cameraFrozen ? ' · Camera paused' : '') + (walk.on ? ' · Walking round' : '');
+    if (walk.on) { const [x, y, z] = walk.at; $('walkWhere').textContent = `${walk.flying ? 'flying' : 'on foot'} · x ${x.toFixed(1)} · z ${z.toFixed(1)} · eyes at ${y.toFixed(1)} m`; }
     sound.update(signal);
     if (!changing) $('loading')?.remove(); show.ready ||= Math.round(performance.now());   // how long the venue took to build, in milliseconds
     start.update(changing);
@@ -197,11 +201,24 @@ groups($('venue'), KINDS.map(kind => [kind, Object.entries(VENUES).filter(([, v]
 function fillVenuePanel(moodKey, cameraValue = 'auto') {
   const suits = world.layout.genres.filter(k => k in MOODS);
   groups($('mood'), [['Made for this venue', suits.map(k => [k, MOODS[k].name])], ...FAMILIES.map(f => [f, Object.entries(MOODS).filter(([k, v]) => v.family === f && !suits.includes(k)).map(([k, v]) => [k, v.name])])], moodKey);
-  fill($('cam'), [['auto', 'Switch automatically'], ...cams.list.map((s, i) => [i, `${i + 1} · ${s.name}`])], cameraValue);
+  fill($('cam'), [['auto', 'Switch automatically'], ...cams.list.map((s, i) => [i, `${i + 1} · ${s.name}`]), ['walk', 'Walk round yourself · W']], cameraValue);
   setCam($('cam').value || 'auto');
   fillSwitches(); refreshControlPanel();
 }
+// Walking round: from where the camera is now (or a spot from a link, at), until another camera is chosen or Escape
+let walkedFrom = 'auto';
+function startWalk(at = null) {
+  if (!walk.on) { walkedFrom = $('cam').value === 'walk' ? walkedFrom : $('cam').value; walk.enter(camera, world, at); }
+  setCameraFrozen(false); cams.auto = false;
+  $('cam').value = 'walk'; $('walkHud').hidden = false;
+}
+function stopWalk() {
+  walk.leave(); $('walkHud').hidden = $('walkAim').hidden = true;
+  if (document.pointerLockElement) document.exitPointerLock();
+}
 const setCam = value => {
+  if (value === 'walk') { startWalk(); return; }
+  if (walk.on) stopWalk();
   if (value !== 'auto' && (!Number.isInteger(+value) || +value < 0 || +value >= cams.list.length)) value = 'auto';
   setCameraFrozen(false); cameraAge = 0; cameraIndex = -1;
   $('cam').value = value; keep('cam', value); cams.auto = value === 'auto';
@@ -224,7 +241,7 @@ function refreshTheme() {
   $('showTheme').value = controls.showTheme;
   $('lightChoreography').value = controls.lightChoreography;
   $('cameraFollowsLight').checked = controls.cameraFollowsLight;
-  $('timeOfDay').value = controls.timeOfDay; $('hangarDoor').checked = controls.door;
+  $('timeOfDay').value = controls.timeOfDay; $('hangarDoor').checked = controls.door; $('crowd').checked = controls.crowd;
   $('hangarDoor').closest('label').hidden = !world.layout.shell.opening;   // only a place with a door that opens
   $('choreographyHint').textContent = CHOREOGRAPHIES[controls.lightChoreography].description;
   $('showTheme').disabled = venueKey !== 'hangar';
@@ -241,6 +258,7 @@ $('lightChoreography').onchange = () => { controls.lightChoreography = $('lightC
 $('cameraFollowsLight').onchange = () => { controls.cameraFollowsLight = $('cameraFollowsLight').checked; persistControls(); };
 $('timeOfDay').onchange = () => { controls.timeOfDay = $('timeOfDay').value; persistControls(); };
 $('hangarDoor').onchange = () => { controls.door = $('hangarDoor').checked; persistControls(); };
+$('crowd').onchange = () => { controls.crowd = $('crowd').checked; persistControls(); };
 const LOOK_SLIDERS = [['lookLight', 'light'], ['lookBloom', 'bloom'], ['lookHaze', 'haze'], ['lookHall', 'hall']];
 const LOOK_PRESETS = { standard: { light: 1, bloom: 1, haze: 1, hall: 1 }, calm: { light: 0.8, bloom: 0.6, haze: 0.65, hall: 1.15 }, cinematic: { light: 0.9, bloom: 1.15, haze: 1.3, hall: 0.65 }, energetic: { light: 1.2, bloom: 1.3, haze: 1.15, hall: 0.85 } };
 function refreshLookPreset() {
@@ -459,6 +477,11 @@ addEventListener('keydown', e => {
   if (key === 'escape' && ui.settingsOpen()) { ui.setSettingsOpen(false); return; }
   // a text field or a list keeps every key; a button, a switch or the player keeps Space and Enter (ui.js)
   if (typing(at) || (pressable(at) && (e.code === 'Space' || key === 'enter'))) return;
+  // walking round: the keys under the left hand move you, whatever they do otherwise (S is not the settings then)
+  if (walk.on && !(at.type === 'range' && e.code.startsWith('Arrow')) && walk.key(e.code, true)) { if (!e.code.startsWith('Shift')) e.preventDefault(); return; }
+  if (key === 'escape' && walk.on && performance.now() - unlockedAt > 300) { setCam(walkedFrom); return; }   // (the Escape that let go of the mouse does not count)
+  if (key === 'w' && !e.repeat) { setCam('walk'); return; }
+  if (key === 'l' && !e.repeat) { setWorkLights(!look.work); return; }
   if (e.code === 'Space') { effects.setHeld('strobe', 'key', true); e.preventDefault(); }
   if (key === 'b') effects.setHeld('blinder', 'key', true);
   if (e.repeat) return;
@@ -475,7 +498,28 @@ addEventListener('keydown', e => {
   if (key === 'm') { const m = $('mood'); m.selectedIndex = (m.selectedIndex + 1) % m.options.length; m.dispatchEvent(new Event('change')); }
   if (/^[0-9]$/.test(e.key)) { $('cam').value = e.key === '0' ? 'auto' : String(e.key - 1); $('cam').dispatchEvent(new Event('change')); }
 });
-addEventListener('keyup', e => { if (e.code === 'Space') effects.setHeld('strobe', 'key', false); if (e.key.toLowerCase() === 'b') effects.setHeld('blinder', 'key', false); });
+addEventListener('keyup', e => { walk.key(e.code, false); if (e.code === 'Space') effects.setHeld('strobe', 'key', false); if (e.key.toLowerCase() === 'b') effects.setHeld('blinder', 'key', false); });
+addEventListener('blur', () => walk.held.clear());
+// looking round while walking: the mouse is taken by the picture after a click on it (Escape gives it back), or drag
+let unlockedAt = 0, dragging = false;
+const canvas = renderer.domElement;
+canvas.addEventListener('click', () => { if (walk.on && !document.pointerLockElement) try { canvas.requestPointerLock()?.catch?.(() => {}); } catch {} });
+canvas.addEventListener('pointerdown', e => { dragging = walk.on && e.button === 0; });
+addEventListener('pointerup', () => { dragging = false; });
+addEventListener('mousemove', e => { if (walk.on && (document.pointerLockElement === canvas || dragging)) walk.look(e.movementX, e.movementY); });
+document.addEventListener('pointerlockchange', () => { $('walkAim').hidden = document.pointerLockElement !== canvas; if (!document.pointerLockElement) unlockedAt = performance.now(); });
+// the work lights: the hall lit evenly, to see how everything is built
+function setWorkLights(on) { look.work = on; $('walkWork').setAttribute('aria-pressed', String(on)); }
+$('walkWork').onclick = () => setWorkLights(!look.work);
+// a link to this spot, as it is now (the time of day and the door with it), to send to someone or to come back to
+$('walkLink').onclick = () => {
+  const url = new URL(location.origin + location.pathname);
+  url.searchParams.set('at', walk.at.join(','));
+  if (controls.timeOfDay !== 'night') url.searchParams.set('time', controls.timeOfDay);
+  if (controls.door) url.searchParams.set('door', '');
+  const say = text => { $('walkCopied').textContent = text; };
+  (navigator.clipboard?.writeText(url.href) ?? Promise.reject()).then(() => say('Copied'), () => say(url.href));
+};
 // While working on the show: the page keeps a log of what the show decides with live sound (a line a second, and one
 // for every break, drop, lift, silence and change of part or program), so it can be held against the recording
 // afterwards. fps: the frames drawn in that second; slowest: the longest of them, in milliseconds.
@@ -506,5 +550,8 @@ if (!navigator.webdriver && (location.hostname === '127.0.0.1' || location.hostn
   let seen = null;
   setInterval(async () => { try { const now = await (await fetch('/__changed')).text(); if (seen !== null && now !== seen) location.reload(); seen = now; } catch {} }, 1500);
 }
+if (params.has('door')) world.env.door = 1;   // a picture or a link with the door open: open from the start
+const spot = params.get('at')?.split(',').map(Number);
+if (spot?.length === 5 && spot.every(Number.isFinite)) startWalk(spot);   // ?at=x,y,z,yaw,pitch: walking, from that spot
 playHere();
 requestAnimationFrame(frame);

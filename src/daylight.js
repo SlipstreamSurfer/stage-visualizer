@@ -76,6 +76,10 @@ export function shafts({ add, env }, openings, u, v, s, weight, colour, strength
   return mesh;
 }
 
+// The mobile light towers in the yard outside the hangar door, [x, z] from the middle of the door on the floor, away
+// from the hall (facilities.js builds them; their light falls on the apron here).
+export const LIGHT_TOWERS = [[-23, 15], [25, 21], [-9, 47], [35, 52]];
+
 // Outside the open hangar door: the sky all round, the apron, and across the airfield hangars, a tower and trees. Only
 // drawn while the door is open, and seen only through it. door: [x, z] of its middle, the hall's floor at 0.
 export function outside({ add, env }, door) {
@@ -85,7 +89,12 @@ export function outside({ add, env }, door) {
   const dome = new THREE.Mesh(new THREE.SphereGeometry(700, 32, 16), sky); dome.renderOrder = -10; group.add(dome);
   // the apron: concrete, as light as the sky makes it
   const apron = new THREE.MeshBasicNodeMaterial({ fog: false }), dark = mx_noise_float(positionWorld.mul(0.08)).mul(0.15).add(0.85);
-  apron.colorNode = mix(mix(vec3(0.006, 0.007, 0.01), vec3(0.32, 0.32, 0.31), env.uDay), vec3(0.3, 0.17, 0.1), env.uSunset).mul(dark);
+  // concrete slabs of 5 m with dark joints, and at night the pools of the light towers on it
+  const slab = vec2(positionWorld.x, positionWorld.z).div(5), joint = smoothstep(0.012, 0.0, min(abs(fract(slab.x).sub(0.5)).oneMinus().sub(0.5), abs(fract(slab.y).sub(0.5)).oneMinus().sub(0.5)));
+  let pools = float(0);
+  for (const [dx, dz] of LIGHT_TOWERS) pools = pools.add(pow(smoothstep(24, 0, length(vec2(positionWorld.x.sub(door[0] + dx), positionWorld.z.sub(door[1] + dz)))), 1.6));
+  const night = float(1).sub(env.uDay.mul(0.9)).sub(env.uSunset.mul(0.5));
+  apron.colorNode = mix(mix(vec3(0.006, 0.007, 0.01), vec3(0.32, 0.32, 0.31), env.uDay), vec3(0.3, 0.17, 0.1), env.uSunset).mul(dark).mul(joint.mul(-0.35).add(1)).add(vec3(0.5, 0.46, 0.38).mul(pools.min(1.3)).mul(night).mul(dark).mul(0.42));
   group.add(new THREE.Mesh(new THREE.PlaneGeometry(1200, 600).rotateX(-Math.PI / 2).translate(door[0], -0.02, door[1] + 300), apron));
   // Across the airfield: other hangars, a tower and trees, far enough to be grey in the haze, the colour of the sky
   // low down behind them; at night dark, with red lights on their roofs and the airfield's lights along the ground.

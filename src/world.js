@@ -16,7 +16,7 @@ import { buildWalkers } from './walkers.js';
 import { buildSmoke } from './smoke.js';
 import { surfaces } from './surfaces.js';
 import { box, strut, truss, batcher } from './shapes.js';
-import { people, peopleMaterial, peopleU, shadowMaterial, SHIRTS } from './people.js';
+import { people, peopleMaterial, peopleU, shadowMaterial, SHIRTS, KIT } from './people.js';
 import { DANCES, danceOf } from './dance.js';
 
 const WHITE = new THREE.Color(1, 1, 1), tone = new THREE.Color();
@@ -87,6 +87,7 @@ function lighting(n, shadowCount = 0) {
 // quality: { crowd (share of the crowd, 0 to 1), beams (how many beams light the room), details (bars, exits,
 // people who walk: everything a venue lists besides its stage and lights) }
 const DAY_SKY = new THREE.Color(0xcfe0ff), DAY_GROUND = new THREE.Color(0x7a6a58), SUNSET_SKY = new THREE.Color(0xffb07a), SUNSET_GROUND = new THREE.Color(0x5a3a2a);
+const WORK_SKY = new THREE.Color(0xfff4e6), WORK_GROUND = new THREE.Color(0x8a8278);   // the hall's work lights: plain white from above
 export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   const L = layout(venue), { W, D, H } = L.plan, st = L.stage, sh = L.shell, open = !!sh.open, F = L.floor;
   const hangarRig = L.things.some(f => f.props.hangar);
@@ -147,10 +148,12 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
 
   // ----- what a venue lists besides its stage and lights: parked unless asked for, but for what is structure -----
   const details = !!quality.details;
-  const fac = buildFacilities({ ...L, fence: details, facilities: L.facilities.filter(f => details || STRUCTURE.has(f.type) || (hangarRig && ['barrier', 'foh', 'delays', 'hangarDoor'].includes(f.type))) }, { add, lit, black, steel, env });
+  const fac = buildFacilities({ ...L, fence: details, facilities: L.facilities.filter(f => details || STRUCTURE.has(f.type) || (hangarRig && ['barrier', 'corridor', 'foh', 'delays', 'hangarDoor'].includes(f.type))) }, { add, lit, black, steel, env });
   const hasDoor = !!sh.opening && L.facilities.some(f => f.type === 'hangarDoor');   // a door that can open (Hangar's)
-  // aisles: a venue with people walking keeps a lane free down both sides and across the back
-  const lane = (details || hangarRig) && L.walkers && !L.walkPath ? { x: W / 2 - 6.6, z0: st.front + 5, z1: D / 2 - 7.2 } : null;
+  // aisles: a venue with people walking keeps a lane free down both sides and across the back, behind the lanes
+  // along the walls when it has those (in front of them the crowd stands shoulder to shoulder, nobody walks there)
+  const sideLane = L.facilities.find(f => f.type === 'corridor');
+  const lane = details && L.walkers && !L.walkPath ? { x: W / 2 - 6.6, z0: sideLane ? sideLane.to + 3 : st.front + 5, z1: D / 2 - 7.2 } : null;
   // where people walk: the venue's own route, or the aisles; the crowd keeps a strip free along every stretch of it
   const route = details && L.walkers ? L.walkPath || (lane && [[-lane.x, lane.z0], [-lane.x, lane.z1], [lane.x, lane.z1], [lane.x, lane.z0]]) : null;
   const rect = (x0, x1, z0, z1) => (x, z) => x > x0 && x < x1 && z > z0 && z < z1;
@@ -212,11 +215,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   // the torch of every other phone: in a breakdown, seen from the stage, a field of small lights over the crowd
   const TORCHES = Math.ceil(PHONES / 2), torches = add(new THREE.InstancedMesh(new THREE.SphereGeometry(0.025, 6, 4), new THREE.MeshBasicMaterial({ color: 0, fog: false }), Math.max(1, TORCHES))); torches.frustumCulled = false; torches.count = TORCHES;
   const blobs = add(new THREE.InstancedMesh(new THREE.PlaneGeometry(1.1, 0.8).rotateX(-Math.PI / 2), shadowMaterial(), Math.max(1, n))); blobs.renderOrder = -1; blobs.frustumCulled = false; blobs.count = n;
-  const guards = spots.filter(q => q[4] === 'security');
-  const vests = add(new THREE.InstancedMesh(new THREE.LatheGeometry([[0.165, 1.02], [0.182, 1.27], [0.214, 1.37], [0.184, 1.44], [0.085, 1.475]].map(q => new THREE.Vector2(q[0], q[1])), 10).scale(1, 1, 0.66), plain(0xc8b400, { roughness: 0.8, gain: 1.6 }), Math.max(1, guards.length)));
-  vests.count = guards.length;
   const KIND = { staff: 0x0c0c0e, crew: 0x0c0c0e, security: 0x0c0c0e, medic: 0xb8c0b8 };
-  let g = 0;
   for (let i = 0; i < n; i++) {
     const [x, z, turned, still, kind, y = 0, seated = false] = spots[i];
     const s = 0.9 + Math.random() * 0.25, build = 0.88 + Math.random() * 0.26;
@@ -227,7 +226,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
     const yaw = turned ?? facing(x, z) + (talking ? (i % 2 ? 1 : -1) * (1.1 + Math.random() * 0.5) : (Math.random() - 0.5) * 0.7);   // turned towards whoever plays, more or less
     crowd.put(i, x, z, yaw, s, build); crowd.sit(i, y, seated); crowd.shirt(i, c.setHex(KIND[kind] ?? SHIRTS[Math.random() * SHIRTS.length | 0]));
     o.rotation.set(0, yaw, 0);
-    if (kind === 'security') { o.position.set(x, 0, z); o.scale.set(1.04 * s * build, s, 1.04 * s * build); o.updateMatrix(); vests.setMatrixAt(g++, o.matrix); }
+    if (kind in KIT) crowd.kit(i, KIT[kind]);   // the vest is part of the figure and moves with it
     if (i < PHONES) {   // in the raised right hand, screen towards the back of the hall
       o.position.set(0.47 * s * build, 1.99 * s, -0.15 * s * build).applyAxisAngle(o.up, yaw); o.position.x += x; o.position.z += z;
       o.scale.set(1, 1, 1); o.updateMatrix(); phones.setMatrixAt(i, o.matrix);
@@ -251,7 +250,8 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
     crowd.dense(i, spots[i][6] ? 0.3 : Math.min(1, (near - 1) / 8));
   }
 
-  const updateWalkers = route && buildWalkers({ add, light: lights.light, U, path: route, pois: fac.pois, count: Math.round(L.walkers * quality.crowd) });
+  const walking = [], updateWalkers = route && buildWalkers({ add: o => (walking.push(o), add(o)), light: lights.light, U, path: route, pois: fac.pois, count: Math.round(L.walkers * quality.crowd) });
+  const everyone = [crowd.mesh, blobs, ...walking];   // what the switch for people in the hall takes away (the DJ stays)
   let hands = 0, filming = 0, cheer = 0;
 
   // ----- light that is not a fixture: what the place has of its own, and what the show throws on it -----
@@ -383,7 +383,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   const size = Math.max(W, D) / 55, fogOf = sky ? sky.fog : [0, 0, 0];   // light and haze are tuned on a hall of about this size
 
   return {
-    layout: L, groups: byRole(L.things), env, shots: fac.shots, lights,
+    layout: L, groups: byRole(L.things), env, shots: fac.shots, lights, solids: fac.solids,   // solids: what someone walking round cannot pass (walk.js)
     // director: the Director after its update; signals: Signals; look: the viewer's sliders
     update(dt, t, director, signals, look) {
       updateWalkers?.(dt); shell.update(dt, t);
@@ -415,7 +415,9 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       for (const key in style) U[key].value += (style[key] - U[key].value) * k;
       U.front.value.copy(env.wallColor).multiplyScalar(2.2).add(tone.setRGB(...director.room.color).multiplyScalar(director.room.level * (hangarRig ? 0.007 : 0.012))).multiplyScalar(look.light * (director.manual.blackout ? 0 : 1));
       U.rim.value.copy(stageLight.color).lerp(WHITE, 0.5).multiplyScalar((0.1 + signals.kick * 0.35 + signals.drop + director.blind) * look.light * (director.manual.blackout ? 0 : 1));
-      phones.visible = torches.visible = filming > 0.05; phones.material.color.setRGB(0.6, 0.75, 1).multiplyScalar(filming * 1.5);
+      const crowded = look.controls?.crowd !== false;
+      for (const o of everyone) o.visible = crowded;
+      phones.visible = torches.visible = crowded && filming > 0.05; phones.material.color.setRGB(0.6, 0.75, 1).multiplyScalar(filming * 1.5);
       torches.material.color.setRGB(3.2, 3.1, 2.9).multiplyScalar(filming * (brk ? 1 : 0.35));   // the torches mostly in the quiet
       const room = director.room, spill = look.hall < 1 ? look.hall : 1 + (look.hall - 1) * 1.5;
       hall.color.setRGB(...room.color); hall.intensity = (spill * room.level * (hangarRig ? 0.26 : 0.42) + 0.4 * Math.pow(look.hall, 3)) * size;
@@ -429,6 +431,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       const doorLight = env.door * (0.4 + env.day * 0.6 + env.sunset * 0.4);   // an open door lets the outside in
       house.intensity = daylight * Math.pow(look.hall, 4) + env.day * 2.4 + env.sunset * 0.9 + doorLight * 0.5;
       house.color.copy(nightSky).lerp(DAY_SKY, env.day).lerp(SUNSET_SKY, env.sunset); house.groundColor.copy(nightGround).lerp(DAY_GROUND, env.day).lerp(SUNSET_GROUND, env.sunset);
+      if (look.work) { house.intensity += 2.6; house.color.lerp(WORK_SKY, 0.85); house.groundColor.lerp(WORK_GROUND, 0.85); }   // the work lights: the hall lit evenly, to look at how it is built
       env.uDay.value = env.day; env.uSunset.value = env.sunset; env.uDoor.value = env.door; env.uSunHaze.value = Math.min(1.6, env.haze);
       fac.update(dt);
       scene.fog.density = 0.015 * (hangarRig ? Math.min(1.5, env.haze) : env.haze) / size * (open ? 0.45 : 1);

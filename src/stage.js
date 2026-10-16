@@ -11,7 +11,7 @@
 // To add a kind of performer, add an entry to PERFORMERS.
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { box, post } from './shapes.js';
+import { box, post, lineArray } from './shapes.js';
 import { buildDJ } from './dj.js';
 import { buildDecks } from './decks.js';
 import { people, peopleMaterial } from './people.js';
@@ -24,31 +24,25 @@ export function buildStage(L, ctx) {
   const deck = st.floor ? surface(st.floor, { gain: 2 }) : plain(0x1d1d20, { roughness: 0.55, metalness: 0.1, gain: 2.2 });   // a stage floor is dark, not a hole
   if (st.height > 0.02) put(deck, st.round ? post(st.width / 2, st.height, 0, st.z, 0, 48) : box(Math.min(W - 0.2, st.width), st.height, st.depth, 0, st.height / 2, st.z));
   const pa = st.pa ?? (st.kind === 'centre' ? 'none' : H > 8 || open ? 'arrays' : 'stacks');
-  for (const s of [-1, 1]) {   // the PA: flown line arrays in large rooms, compact stacks in small ones
-    const x = s * Math.min(W / 2 - 1.2, st.width / 2 + 1.6);
-    if (pa === 'arrays') {
-      const face = plain(0x292c31, { roughness: 0.82, metalness: 0.22, gain: 0.85 });
-      const cone = plain(0x111317, { roughness: 0.72, metalness: 0.18, gain: 0.7 });
-      const rings = [], cones = [];
-      for (let j = 0; j < 8; j++) {
-        const tilt = j * 0.055, y = H * 0.72 - j * 0.5, z = st.front - 0.4 - j * j * 0.012;
-        put(black, box(1.4, 0.48, 0.9, 0, 0, 0).rotateX(tilt).translate(x, y, z));
-        // Two recessed-looking drivers on every cabinet face; the discs follow each cabinet's downward splay.
-        for (const offset of [-0.105, 0.105]) {
-          const cy = y + Math.cos(tilt) * offset - Math.sin(tilt) * 0.452;
-          const cz = z + Math.sin(tilt) * offset + Math.cos(tilt) * 0.452;
-          rings.push(post(0.126, 0.018, 0, 0, 0, 16).rotateX(Math.PI / 2).rotateX(tilt).translate(x, cy, cz));
-          cones.push(post(0.094, 0.02, 0, 0, 0, 16).rotateX(Math.PI / 2).rotateX(tilt).translate(x, cy, cz + 0.012));
-        }
-      }
-      put(face, rings); put(cone, cones);
-      // A flybar and two slim hang points make the array read as flown equipment, not floating boxes.
-      const topY = H * 0.72 + 0.25, topZ = st.front - 0.34;
-      put(face, box(1.58, 0.09, 0.16, x, topY, topZ));
-      for (const dx of [-0.52, 0.52]) put(face, post(0.025, H - 0.55 - topY, x + dx, topZ, topY, 6));
+  // The PA: flown line arrays in large rooms, compact stacks in small ones. A hall for thousands has what a touring
+  // system brings: a long main hang either side, flown subwoofers beside it, a side hang turned out to the sides of
+  // the room (and subwoofers and front fills on the floor, facilities.js).
+  if (pa === 'arrays') {
+    // painted black wood, a grey steel grille that catches the light, and bright steel rigging
+    const body = plain(0x18191c, { roughness: 0.6, metalness: 0.1, gain: 1.8 }), grille = plain(0x33363c, { roughness: 0.72, metalness: 0.15, gain: 1.6 }), rigging = plain(0x5a5e66, { roughness: 0.4, metalness: 0.5, gain: 1.4 });
+    const big = H >= 12 && W >= 30, roof = open ? null : H, parts = { body: [], grille: [], rig: [] };
+    const hang = spec => { const g = lineArray({ roof, ...spec }); for (const k in parts) parts[k].push(...g[k]); };
+    const J = [0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 5, 6, 8, 10];   // degrees between cabinets: almost straight for the back, opening up for the front
+    for (const s of [-1, 1]) {
+      const x = s * Math.min(W / 2 - 1.2, st.width / 2 + 1.6), y = big ? H * 0.79 : H * 0.74;
+      hang({ top: [x, y, st.front - 0.3], n: big ? 14 : 8, w: 1.34, h: 0.36, d: 0.56, splay: i => J[Math.round(i * (J.length - 1) / ((big ? 14 : 8) - 1))] });
+      if (!big) continue;
+      hang({ top: [x + s * 1.75, y, st.front - 0.7], n: 8, w: 1.34, h: 0.55, d: 0.9 });   // the subwoofers, straight down
+      hang({ top: [s * Math.min(W / 2 - 3.2, Math.abs(x) + 4.2), H * 0.75, st.front + 0.4], n: 10, w: 0.74, h: 0.25, d: 0.48, turn: s * 0.6, splay: i => [0, 1, 1, 2, 2, 3, 4, 5, 6, 8][i] });   // the side hang, turned out
     }
-    if (pa === 'stacks') for (let j = 0; j < 3; j++) put(black, box(0.75, 0.6, 0.7, x, 0.3 + j * 0.62, st.front + 0.5));
+    put(body, parts.body); put(grille, parts.grille); put(rigging, parts.rig);
   }
+  if (pa === 'stacks') for (const s of [-1, 1]) { const x = s * Math.min(W / 2 - 1.2, st.width / 2 + 1.6); for (let j = 0; j < 3; j++) put(black, box(0.75, 0.6, 0.7, x, 0.3 + j * 0.62, st.front + 0.5)); }
   const who = typeof st.performer === 'object' ? st.performer : { beat: st.performer || 'dj', flow: st.performer || 'dj' }, acts = {};
   for (const kind of new Set([who.beat, who.flow])) {
     if (!PERFORMERS[kind]) throw new Error(`the venue ${L.name} asks for a performer "${kind}" that does not exist`);

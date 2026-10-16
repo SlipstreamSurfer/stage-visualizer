@@ -33,6 +33,31 @@ export function truss([a, b], out, size = 0.42) {
   }
 }
 
+// A line array, flown the way a PA company hangs one: a frame on two chain hoists, and under it the cabinets, each
+// tilted a little more than the one above, so the hang curves like a J and reaches from the front rows to the back.
+// Geometry in metres by what it is made of: { body, grille, rig }.
+//   top: [x, y, z] of the frame; n cabinets of w × h × d facing +z; splay(i): degrees between cabinet i and the one
+//   above it; turn: the hang turned about the vertical, towards +x for a positive angle; roof: where the chains go up to
+export function lineArray({ top: [x, y, z], n, w, h, d, splay = () => 0, turn = 0, roof = null }) {
+  const body = [], grille = [], rig = [], pivot = new THREE.Vector3(0, -0.14, -d / 2), drop = new THREE.Vector3();
+  const set = g => g.rotateY(turn).translate(x, y, z);
+  let angle = 0;
+  for (let i = 0; i < n; i++) {
+    angle += splay(i) * Math.PI / 180;
+    // the cabinet hangs from its top back edge, which is where the one above it ends
+    const hang = g => set(g.translate(0, -h / 2, d / 2).rotateX(angle).translate(pivot.x, pivot.y, pivot.z));
+    body.push(hang(new THREE.BoxGeometry(w, h - 0.008, d)));
+    grille.push(hang(new THREE.PlaneGeometry(w - 0.05, h - 0.05).translate(0, 0, d / 2 + 0.003)));
+    pivot.add(drop.set(0, -h, 0).applyAxisAngle(new THREE.Vector3(1, 0, 0), angle));
+  }
+  rig.push(set(new THREE.BoxGeometry(w + 0.18, 0.1, d + 0.12).translate(0, -0.05, 0)));   // the frame
+  for (const k of [-0.32, 0.32]) {
+    rig.push(set(new THREE.BoxGeometry(0.02, 0.7, 0.02).translate(k * w, 0.35, 0)), set(new THREE.BoxGeometry(0.26, 0.36, 0.26).translate(k * w, 0.88, 0)));   // chain to the hoist
+    if (roof) rig.push(set(new THREE.BoxGeometry(0.02, roof - y - 1.06, 0.02).translate(k * w, 1.06 + (roof - y - 1.06) / 2, 0)));   // and the hoist's chain to the roof
+  }
+  return { body, grille, rig };
+}
+
 // a flat piece between points given in order round its edge, [[x, y, z], ...]; coordinates for a surface are the
 // distance along the first edge and across it, in metres
 export function patch(points, flip = false, v0 = 0) {

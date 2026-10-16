@@ -105,6 +105,13 @@
   #elsewhere { position: fixed; z-index: 15; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; padding: 18px 26px; border-radius: 14px; font-size: 15px; cursor: pointer; }
   #elsewhere span { color: var(--dim); font-size: 12px; }
   #openPanel { position: fixed; z-index: 4; left: 16px; bottom: 16px; padding: 10px 14px; border-radius: 12px; font-size: 12px; cursor: pointer; }
+  #walkHud { position: fixed; z-index: 12; top: 16px; left: 16px; display: grid; gap: 7px; max-width: min(430px, calc(100vw - 32px)); padding: 11px 14px; border-radius: 12px; font-size: 12px; }
+  #walkHud[hidden], #walkAim[hidden] { display: none; }
+  #walkHud strong { font-size: 13px; } #walkHud .keys, #walkWhere, #walkCopied { color: var(--dim); }
+  #walkHud .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #walkHud button { color: var(--text); background: rgba(255,255,255,.06); border: 1px solid var(--edge); border-radius: 8px; padding: 5px 10px; font: inherit; cursor: pointer; }
+  #walkHud button[aria-pressed="true"] { background: var(--on); border-color: var(--on-edge); }
+  #walkAim { position: fixed; z-index: 12; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: rgba(255,255,255,.7); pointer-events: none; }
   #miniStatus { display: none; position: fixed; left: 150px; bottom: 16px; max-width: calc(100vw - 200px); color: #ddd; background: #111c; border: 1px solid #444; border-radius: 10px; padding: 9px 12px; font-size: 12px; pointer-events: none; }
   #console.hidden ~ #miniStatus { display: block; }
 
@@ -256,6 +263,12 @@
 </div>
 <button id="openPanel" class="glass" type="button" aria-controls="console" aria-expanded="true" hidden>Show controls · H</button>
 <div id="miniStatus"></div>
+<div id="walkHud" class="glass" role="region" aria-label="Walking round" hidden>
+  <div class="row"><strong>Walking round</strong><span id="walkWhere"></span></div>
+  <div class="keys">W A S D or the arrows to walk · click the picture, then the mouse to look round · E up into the air, Q down · Shift faster · Esc to stop</div>
+  <div class="row"><button id="walkWork" type="button" aria-pressed="false">Work lights · L</button><button id="walkLink" type="button">Copy a link to this spot</button><span id="walkCopied" aria-live="polite"></span></div>
+</div>
+<div id="walkAim" hidden></div>
 
 <div id="panel" class="glass hidden" role="dialog" aria-labelledby="settingsTitle">
   <header class="panel-header"><h1 id="settingsTitle"><svg class="mark" viewBox="-12 -8 204 216" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="15" stroke-linecap="round"><path d="M90 28L8 192M90 28L172 192M90 28V192"/></g><circle cx="90" cy="28" r="24" fill="#ff5a36"/></svg>Settings</h1><button id="closeSettings" type="button" title="Close (Esc)" aria-label="Close settings">×</button></header>
@@ -308,6 +321,7 @@
     <div class="setting"><label for="quality">Quality</label><select id="quality" class="ctl"></select></div>
     <div class="setting"><span></span><div><div id="qualityNote" class="panel-note" role="status"></div><div id="fps"></div></div></div>
     <label class="check"><input id="steadyPicture" type="checkbox" checked>Keep the picture smooth: draw fewer pixels while frames take too long</label>
+    <label class="check"><input id="crowd" type="checkbox" checked>People in the hall: the crowd, security and crew (off for an empty hall and a lighter picture)</label>
     <div class="setting"><label for="particles">Extra smoke (heavy)</label><select id="particles" class="ctl"><option value="0">Off</option><option value="300000">Light</option><option value="600000">Dense</option><option value="1200000">Very dense</option></select></div>
     <h2>Screen content</h2>
     <div class="row"><button id="wallPick" class="ctl" type="button">Picture or video</button><button id="wallClear" class="ctl" type="button">Clear</button></div>
@@ -350,7 +364,7 @@
   </section>
   <section id="pageKeys" class="panel-page" role="tabpanel" aria-labelledby="tabKeys" hidden>
     <h2>Keyboard shortcuts</h2>
-    <div id="hint">H = hide controls &middot; S = settings &middot; F = fullscreen<br>? = shortcuts &middot; P = freeze camera &middot; N = next scene<br>G = good moment &middot; X = wrong moment &middot; T = unrated moment<br>Space = strobe &middot; B = blinders<br>C = CO2 &middot; V = pyro &middot; K = confetti<br>1&ndash;9 = camera &middot; 0 = automatic &middot; M = mood<br>Double-click a fader to restore its default.</div>
+    <div id="hint">H = hide controls &middot; S = settings &middot; F = fullscreen<br>W = walk round (W A S D, mouse, E/Q up and down, Esc to stop) &middot; L = work lights<br>? = shortcuts &middot; P = freeze camera &middot; N = next scene<br>G = good moment &middot; X = wrong moment &middot; T = unrated moment<br>Space = strobe &middot; B = blinders<br>C = CO2 &middot; V = pyro &middot; K = confetti<br>1&ndash;9 = camera &middot; 0 = automatic &middot; M = mood<br>Double-click a fader to restore its default.</div>
   </section>
   </div>
 </div>

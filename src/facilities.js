@@ -34,8 +34,8 @@ export function buildFacilities(L, ctx) {
   // the lane along the side walls, when the venue has one: the barrier in front of the stage stops where it begins
   const lane = L.facilities.find(f => f.type === 'corridor'), laneWidth = lane ? lane.width : 0, pitZ = st.front + (L.facilities.find(f => f.type === 'barrier')?.pit ?? 1.6);
   const red = lit(new THREE.MeshStandardMaterial({ color: 0x8a0c0c, roughness: 0.5 }), 1.4);
-  const grey = lit(new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.6, metalness: 0.5 }), 1.5);
-  const alu = lit(new THREE.MeshStandardMaterial({ color: 0x9a9da3, roughness: 0.45, metalness: 0.7 }), 1.3);
+  const grey = lit(new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.6, metalness: 0.5 }), 1.5, 0.2);
+  const alu = lit(new THREE.MeshStandardMaterial({ color: 0x9a9da3, roughness: 0.4, metalness: 0.7 }), 1.3, 0.6);   // barriers: the beams glint on them
   const white = lit(new THREE.MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.8 }), 1.2);
   const glow = (r, g, b) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), fog: false });
   const SIGN = { exit: sign('EXIT', '#0a7a36', '#ffffff', 3), bar: sign('BAR', '#1a0f04', '#ffb45a', 3), cloak: sign('CLOAKROOM', '#06101c', '#9fc4ff', 6), aid: sign('FIRST AID  +', '#0a7a36', '#ffffff', 6),
@@ -171,7 +171,7 @@ export function buildFacilities(L, ctx) {
       // leaves stacked one behind the other, and the middle of the opening is free (env.door, 0 shut to 1 open; it
       // takes its time). The rails are in the floor, the guides along the top.
       const p = place(f.wall, f.at), h = f.top - f.bottom, leaves = 6, w = f.width / leaves, track = i => i < 3 ? 2 - i : i - 3, leafOf = [];
-      const paint = lit(new THREE.MeshStandardMaterial({ color: 0x5d6168, roughness: 0.55, metalness: 0.6 }), 1.4);
+      const paint = lit(new THREE.MeshStandardMaterial({ color: 0x5d6168, roughness: 0.5, metalness: 0.6 }), 1.4, 0.3);
       for (let i = 0; i < leaves; i++) {
         const x = (i - (leaves - 1) / 2) * w, z = 0.06 + track(i) * 0.09, leaf = [p.box(w - 0.12, h, 0.06, x, f.bottom + h / 2, z, paint)];
         for (let y = f.bottom + 0.6; y < f.top; y += 1.15) leaf.push(p.box(w - 0.2, 0.09, 0.05, x, y, z + 0.05, steel));

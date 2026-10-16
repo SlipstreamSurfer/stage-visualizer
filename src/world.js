@@ -4,7 +4,7 @@
 // WebGPU and WebGL.
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { Fn, Loop, If, uniform, uniformArray, materialColor, positionWorld, normalWorld, texture, vec2, vec3, abs, mix, smoothstep, dot, length, normalize, select, cross, sin, cos, atan, min, max, sqrt } from 'three/tsl';
+import { Fn, Loop, If, uniform, uniformArray, materialColor, positionWorld, normalWorld, cameraPosition, texture, float, vec2, vec3, abs, mix, smoothstep, step, dot, length, normalize, select, cross, sin, cos, atan, min, max, sqrt, pow } from 'three/tsl';
 import { layout, byRole } from './layout.js';
 import { moveRig } from './rig-motion.js';
 import { FIXTURES, buildPools } from './fixtures.js';
@@ -25,6 +25,26 @@ const STRUCTURE = new Set(['stageRoof', 'tower', 'wings']);
 
 // Light from the beams on what they hit. Every beam is a cone (where it starts, which way it points, how wide, what
 // colour); a material that is lit this way tests each point of its surface against the brightest cones. n: how many.
+// What metal sees of the hall around it: dark, the rows of lamps in the rig above, the stage's glow ahead (towards
+// -z) and the skylights. Shared by every venue's metal, as a picture all round (the card blurs it for rough metal).
+// Without it aluminium and steel would be dull grey wherever no beam happens to glint on them.
+let hallView;
+function hallReflection() {
+  return hallView ||= (() => {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+    const g = c.getContext('2d'), sky = g.createLinearGradient(0, 0, 0, 256);
+    sky.addColorStop(0, '#0b0d12'); sky.addColorStop(0.47, '#15161b'); sky.addColorStop(0.53, '#0a0a0b'); sky.addColorStop(1, '#030303');
+    g.fillStyle = sky; g.fillRect(0, 0, 512, 256);
+    for (const [x, y, w, h] of [[40, 8, 70, 14], [170, 6, 90, 12], [300, 8, 70, 14], [420, 6, 80, 12]]) { g.fillStyle = '#20283a'; g.fillRect(x, y, w, h); }   // skylights
+    const stage = g.createRadialGradient(128, 130, 4, 128, 130, 70);   // the stage and its LED wall, ahead
+    stage.addColorStop(0, 'rgba(255,214,170,0.9)'); stage.addColorStop(0.4, 'rgba(160,110,90,0.35)'); stage.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = stage; g.fillRect(40, 60, 180, 140);
+    for (const row of [44, 62, 80]) for (let x = 6 + row % 11; x < 512; x += 13) { g.fillStyle = `rgba(255,${235 + (x % 20)},${210 + (x % 40)},0.95)`; g.fillRect(x, row + Math.sin(x) * 2, 3, 2); }   // the rig's lamps
+    const tex = new THREE.CanvasTexture(c); tex.mapping = THREE.EquirectangularReflectionMapping; tex.colorSpace = THREE.SRGBColorSpace; tex.userData.shared = true;
+    return tex;
+  })();
+}
+
 function lighting(n, shadowCount = 0) {
   const pos = uniformArray(Array.from({ length: n }, () => new THREE.Vector3(0, 1e4, 0))), dir = uniformArray(Array.from({ length: n }, () => new THREE.Vector4(0, -1, 0, 0.9))), col = uniformArray(Array.from({ length: n }, () => new THREE.Vector3()));
   const optics = uniformArray(Array.from({ length: n }, () => new THREE.Vector4()));
@@ -65,8 +85,22 @@ function lighting(n, shadowCount = 0) {
     const fd = p.sub(flashPos);   // fire and fireworks light everything around them
     return sum.add(flashCol.mul(abs(dot(nrm, normalize(fd))).mul(0.6).add(0.4)).div(dot(fd, fd).mul(0.02).add(1)));
   });
+  // The glint of the beams on what shines: aluminium truss, steel, a stage deck, a sealed concrete floor. A beam that
+  // falls on it shows as a bright highlight where it reflects towards the eye, sharp on smooth metal and spread out on
+  // concrete. Only the brightest few beams (they come first), for what it costs on every pixel of such a surface.
+  const SHINE = Math.min(6, n), metals = [];
+  const glint = Fn(([p, nrm, rough]) => {
+    const sum = vec3(0).toVar(), eye = normalize(cameraPosition.sub(p)), k = mix(float(140), float(6), rough);   // how tight the highlight is
+    Loop(SHINE, ({ i }) => {
+      const d = p.sub(pos.element(i)), dist = length(d), way = d.div(dist), edge = dir.element(i).w;
+      const half = normalize(eye.sub(way)), spot = smoothstep(edge, mix(edge, 1, 0.4), dot(way, dir.element(i).xyz));
+      sum.addAssign(col.element(i).mul(spot).mul(pow(max(dot(nrm, half), 0), k)).mul(k.mul(0.035).add(0.4)).mul(step(0, dot(nrm, way).negate())).div(dist.mul(dist).mul(0.006).add(1)));
+    });
+    return sum;
+  });
   // a material as three knows it, lit by the beams as well
-  const lit = (mat, gain = 1) => {
+  // shine: how strongly the beams glint on it (0: not at all, as most things)
+  const lit = (mat, gain = 1, shine = 0) => {
     const m = new THREE.MeshStandardNodeMaterial();
     for (const key of ['roughness', 'metalness', 'map', 'bumpMap', 'bumpScale', 'side', 'flatShading', 'transparent', 'opacity', 'depthWrite']) if (mat[key] != null) m[key] = mat[key];
     m.color.copy(mat.color);
@@ -79,9 +113,11 @@ function lighting(n, shadowCount = 0) {
       m.colorNode = albedo;
     }
     m.emissiveNode = light(positionWorld, normalWorld).mul(albedo.add(0.03)).mul(gain);
+    if (shine) m.emissiveNode = m.emissiveNode.add(glint(positionWorld, normalWorld, float(mat.roughness)).mul(mix(vec3(1), albedo.mul(2.5).min(1), mat.metalness ?? 0)).mul(shine));   // metal tints its highlight
+    if ((mat.metalness ?? 0) >= 0.35 && !mat.transparent) { m.envMap = hallReflection(); m.envMapIntensity = 0.5; metals.push(m); }   // metal mirrors the hall (world.update dims it with the light)
     return m;
   };
-  return { n, pos, dir, col, optics, shadowMin, shadowMax, flashPos, flashCol, light, lit };
+  return { n, pos, dir, col, optics, shadowMin, shadowMax, flashPos, flashCol, light, lit, metals };
 }
 
 // quality: { crowd (share of the crowd, 0 to 1), beams (how many beams light the room), details (bars, exits,
@@ -98,7 +134,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
     lights.shadowMin.array[0].set(-2.08, base + 0.02, z - 0.58);
     lights.shadowMax.array[0].set(2.08, base + 1.03, z + 0.58);
   }
-  const black = plain(0x0d0d0f, { roughness: 0.8, gain: 2.5 }), steel = plain(0x2c2c30, { roughness: 0.6, metalness: 0.4 });
+  const black = plain(0x0d0d0f, { roughness: 0.8, gain: 2.5 }), steel = plain(0x2c2c30, { roughness: 0.5, metalness: 0.4, shine: 0.35 });
   const casts = Array.from({ length: 200 }, () => ({ I: 0, pos: new THREE.Vector3(), dir: new THREE.Vector4(), col: new THREE.Vector3(), optics: new THREE.Vector4() }));
   let nCast = 0, flashI = 0;
   const env = { scene, W, D, H, hangarRig, haze: 1, hazeOut: 1, roomColor: [1, 1, 1], wallColor: new THREE.Color(), uPointScale: uniform(500), uTime: uniform(0), uDay: uniform(0), uSunset: uniform(0), uDoor: uniform(0), uSunHaze: uniform(1), day: 0, sunset: 0, door: 0, cam: new THREE.Vector3(), put, plain, surface, black, steel,
@@ -140,10 +176,11 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
     for (let i = 0; i <= n; i++) {
       const x = a[0] + (b[0] - a[0]) * i / n, y = a[1] + (b[1] - a[1]) * i / n, z = a[2] + (b[2] - a[2]) * i / n, top = shell.ceil(x, z);
       if (top - y < 0.5) continue;
-      hoists.push(box(0.2, 0.36, 0.2, x, y + 0.42, z)); strut([x, y + 0.2, z], [x, top - 0.05, z], 0.025, members);
+      hoists.push(box(0.22, 0.34, 0.24, x, y + 0.42, z), box(0.15, 0.24, 0.15, x + 0.19, y + 0.3, z)); strut([x, y + 0.2, z], [x, top - 0.05, z], 0.025, members);   // a hoist and its chain bag
     }
   }
-  const trussMat = plain(0x8a8d94, { roughness: 0.4, metalness: 0.8, gain: 1.2 }), hoistMat = plain(0xb89a10, { roughness: 0.6, metalness: 0.3, gain: 1.4 });
+  // aluminium truss, catching every beam that crosses it; chain hoists painted black, as they are in any rig
+  const trussMat = plain(0x9a9da4, { roughness: 0.32, metalness: 0.8, gain: 1.2, shine: 0.9 }), hoistMat = plain(0x141416, { roughness: 0.45, metalness: 0.3, gain: 1.6, shine: 0.3 });
   put(trussMat, members);
 
   // ----- what a venue lists besides its stage and lights: parked unless asked for, but for what is structure -----
@@ -306,7 +343,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       const p = rel([a[0] + (b[0] - a[0]) * k, a[1], a[2] + (b[2] - a[2]) * k]);
       if (!hangarRig) strut([p[0], 0.2, p[2]], [p[0], H, p[2]], 0.025, parts);
       pickUps.push({ local: new THREE.Vector3(p[0], 0.2, p[2]), top: new THREE.Vector3(mid[0] + p[0], shell.ceil(mid[0] + p[0], mid[2] + p[2]) - 0.1, mid[2] + p[2]), radius: 0.0125 });
-      motors.push(new THREE.BoxGeometry(0.2, 0.36, 0.2).translate(p[0], 0.42, p[2]));
+      motors.push(new THREE.BoxGeometry(0.22, 0.34, 0.24).translate(p[0], 0.42, p[2]), new THREE.BoxGeometry(0.15, 0.24, 0.15).translate(p[0] + 0.19, 0.3, p[2]));   // a hoist and its chain bag
     }
     const ra = rel(a), rb = rel(b), end = Math.abs(a[0]) > Math.abs(b[0]) ? ra : rb;
     strut([ra[0], 0.27, ra[2]], [rb[0], 0.27, rb[2]], 0.09, cables);
@@ -415,6 +452,9 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       for (const key in style) U[key].value += (style[key] - U[key].value) * k;
       U.front.value.copy(env.wallColor).multiplyScalar(2.2).add(tone.setRGB(...director.room.color).multiplyScalar(director.room.level * (hangarRig ? 0.007 : 0.012))).multiplyScalar(look.light * (director.manual.blackout ? 0 : 1));
       U.rim.value.copy(stageLight.color).lerp(WHITE, 0.5).multiplyScalar((0.1 + signals.kick * 0.35 + signals.drop + director.blind) * look.light * (director.manual.blackout ? 0 : 1));
+      // what metal mirrors is as bright as the hall is: little in a blackout or a quiet part, more when the rig is up
+      const mirror = director.manual.blackout ? 0.04 : (0.12 + Math.min(1, director.room.level) * 0.45 + env.day * 0.5 + (look.work ? 0.5 : 0)) * look.light;
+      for (const m of lights.metals) m.envMapIntensity = mirror;
       const crowded = look.controls?.crowd !== false;
       for (const o of everyone) o.visible = crowded;
       phones.visible = torches.visible = crowded && filming > 0.05; phones.material.color.setRGB(0.6, 0.75, 1).multiplyScalar(filming * 1.5);

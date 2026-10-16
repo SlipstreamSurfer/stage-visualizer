@@ -5,7 +5,7 @@
 //     opts.tint    a colour to multiply the tile with (a red container, a blue one)
 //     opts.uv      true: the tile follows the shape's own coordinates, which the shape gives in metres (floors,
 //                  vaults, domes). Otherwise the tile is laid on from outside, a metre is a metre on any box or wall.
-//     opts.side, opts.gain (how strongly the beams show on it)
+//     opts.side, opts.gain (how strongly the beams show on it); a kind's shine: how strongly they glint on it
 import * as THREE from 'three/webgpu';
 
 const S = 256;
@@ -16,7 +16,7 @@ const bricks = (g, mortar, colour) => { fill(g, mortar); for (let y = 0, r = 0; 
 
 // one tile is `size` metres
 export const SURFACES = {
-  concrete: { size: 6, roughness: 0.5, metalness: 0.05, bump: 0.5, draw: g => {   // a poured floor: slabs with joints, stains, and the marks of years of use
+  concrete: { size: 6, roughness: 0.45, metalness: 0.05, bump: 0.5, shine: 0.22, draw: g => {   // sealed: the beams lie on it as a sheen   // a poured floor: slabs with joints, stains, and the marks of years of use
     fill(g, '#2f2f31'); speckle(g, 500, 20, 80, 0.08); blots(g, 14, '8,8,9', 8, 48, 0.1, 0.35);
     g.strokeStyle = 'rgba(70,70,72,0.25)'; g.lineWidth = 1.5; for (let i = 0; i < 5; i++) { g.beginPath(); g.moveTo(Math.random() * S, 0); g.bezierCurveTo(Math.random() * S, S * 0.3, Math.random() * S, S * 0.7, Math.random() * S, S); g.stroke(); }
     g.strokeStyle = 'rgba(10,10,10,0.7)'; g.lineWidth = 3; g.strokeRect(1, 1, S - 2, S - 2); } },
@@ -73,11 +73,11 @@ export function surfaces(lit) {
     const k = SURFACES[kind] || SURFACES.concrete, map = tile(kind);
     const mat = new THREE.MeshStandardMaterial({ map, color: tint, roughness: k.roughness, metalness: k.metalness, side, ...(uv && k.bump ? { bumpMap: map, bumpScale: k.bump } : {}) });
     if (!uv) mat.userData.metres = k.size;
-    return lit(mat, gain);
+    return lit(mat, gain, k.shine || 0);
   });
   // how many of a kind's tiles fit in so many metres, for shapes that bring their own coordinates
   surface.size = kind => (SURFACES[kind] || SURFACES.concrete).size;
-  const plain = (colour, { roughness = 0.8, metalness = 0, gain = 1.5, side = THREE.FrontSide, opacity = 1 } = {}) => once(['plain', colour, roughness, metalness, gain, side, opacity].join(), () =>
-    lit(new THREE.MeshStandardMaterial({ color: colour, roughness, metalness, side, ...(opacity < 1 ? { transparent: true, opacity, depthWrite: false } : {}) }), gain));
+  const plain = (colour, { roughness = 0.8, metalness = 0, gain = 1.5, side = THREE.FrontSide, opacity = 1, shine = 0 } = {}) => once(['plain', colour, roughness, metalness, gain, side, opacity, shine].join(), () =>
+    lit(new THREE.MeshStandardMaterial({ color: colour, roughness, metalness, side, ...(opacity < 1 ? { transparent: true, opacity, depthWrite: false } : {}) }), gain, shine));
   return { surface, plain };
 }

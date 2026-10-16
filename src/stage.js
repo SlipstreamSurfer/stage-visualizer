@@ -21,7 +21,7 @@ const TAU = Math.PI * 2;
 // ctx: { add, put, lit, surface, plain, black, light, U } from the world
 export function buildStage(L, ctx) {
   const { add, put, surface, plain, black } = ctx, st = L.stage, { W, H } = L.plan, open = !!L.shell.open;
-  const deck = st.floor ? surface(st.floor, { gain: 2 }) : plain(0x1d1d20, { roughness: 0.55, metalness: 0.1, gain: 2.2 });   // a stage floor is dark, not a hole
+  const deck = st.floor ? surface(st.floor, { gain: 2 }) : plain(0x1d1d20, { roughness: 0.35, metalness: 0.1, gain: 2.2, shine: 0.4 });   // a stage floor is dark, not a hole, and the lights shine on it
   if (st.height > 0.02) put(deck, st.round ? post(st.width / 2, st.height, 0, st.z, 0, 48) : box(Math.min(W - 0.2, st.width), st.height, st.depth, 0, st.height / 2, st.z));
   const pa = st.pa ?? (st.kind === 'centre' ? 'none' : H > 8 || open ? 'arrays' : 'stacks');
   // The PA: flown line arrays in large rooms, compact stacks in small ones. A hall for thousands has what a touring
@@ -29,7 +29,7 @@ export function buildStage(L, ctx) {
   // the room (and subwoofers and front fills on the floor, facilities.js).
   if (pa === 'arrays') {
     // painted black wood, a grey steel grille that catches the light, and bright steel rigging
-    const body = plain(0x18191c, { roughness: 0.6, metalness: 0.1, gain: 1.8 }), grille = plain(0x33363c, { roughness: 0.72, metalness: 0.15, gain: 1.6 }), rigging = plain(0x5a5e66, { roughness: 0.4, metalness: 0.5, gain: 1.4 });
+    const body = plain(0x18191c, { roughness: 0.6, metalness: 0.1, gain: 1.8, shine: 0.1 }), grille = plain(0x33363c, { roughness: 0.72, metalness: 0.15, gain: 1.6, shine: 0.15 }), rigging = plain(0x5a5e66, { roughness: 0.4, metalness: 0.5, gain: 1.4, shine: 0.5 });
     const big = H >= 12 && W >= 30, roof = open ? null : H, parts = { body: [], grille: [], rig: [] };
     const hang = spec => { const g = lineArray({ roof, ...spec }); for (const k in parts) parts[k].push(...g[k]); };
     const J = [0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 5, 6, 8, 10];   // degrees between cabinets: almost straight for the back, opening up for the front

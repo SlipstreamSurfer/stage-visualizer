@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.33.0
+
+Bug fixes.
+
+- No more stalls when something shows for the first time. Every shader the show can need is now compiled before it
+  starts: with three r186 the warm-up compiled at the wrong level of drawing, so the first frame compiled everything
+  again, and whatever was hidden then stalled the picture when it first appeared: the sun through the roof (eight
+  frames of a tenth of a second), the phones in the crowd in the first breakdown. Loading takes as long as before.
+- Even movement: the show moves on by the time the browser began each frame, in step with the screen, instead of
+  the moment its code happened to run, which jittered by a few milliseconds from frame to frame.
+- The steady picture also reacts to a stutter: when more than one frame in twelve misses the screen's refresh it
+  draws fewer pixels, also when the typical frame keeps the pace. Measured at 1080p, one frame in five was missed
+  for the first twenty seconds without the resolution changing.
+- Keyboard shortcuts keep working after a mouse click on the console or in the settings: a camera number, M, Space
+  for the strobe and the others did nothing while a clicked button kept the focus, and Escape on the settings did
+  the same. In a text field every key types, in a list a letter chooses, and a button reached with Tab still takes
+  Space and Enter.
+- A show that waits (hidden, or while another tab plays) no longer keeps the sound it does not use: it grew by about
+  a gigabyte an hour. The last two seconds are kept.
+- The local server no longer stops on a malformed address, refuses log and feedback writes from other websites, and
+  starts the show log afresh at 20 MB (the one before is kept as `rec/show.old.log`).
+- The show log notes a silence once instead of every frame, and its frame rate is the frames drawn in that second,
+  with the slowest of them and the resolution, instead of the length of a single frame.
+- A picture or video on the LED walls is released when replaced or cleared; a video no longer plays on unseen.
+- Smaller: fullscreen refused by the browser is no error, the setup steps under Settings → Sound are built only when
+  they change, and the deprecated `THREE.Clock` is replaced by `THREE.Timer`.
+
 ## 0.32.0
 
 - Time of day, in Settings → Show: Night, Day or Sunset (`src/daylight.js`). By day the hall is lit from above and

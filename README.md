@@ -103,7 +103,8 @@ tab with the show pauses the older ones.
 
 **Graphics** (Settings → Picture) work as in a game: **Light**, **Normal**, **High** and **Ultra**, and under them every
 setting on its own: resolution, sharpness on high-resolution screens, frame rate (30, 60 or the screen's), how many
-people are drawn and how finely, how many beams light the surfaces, glints, reflections, glow and haze clouds. Every
+people are drawn and how finely, how many beams light the surfaces, glints, reflections, glow, haze clouds and the
+lights mirrored in the hall's sealed concrete floor. Every
 setting changes the picture at once. **Automatic** measures your computer the first time: from Light up, a preset at
 a time, as long as the picture keeps your screen's pace, and it keeps the best one (**Measure this computer again**
 after a new graphics card). When frames take too long the picture first draws fewer pixels and sharpens again when

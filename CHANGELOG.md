@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.39.0
+
+- The floor mirrors the light. The hall's sealed concrete shows the lenses, the beams in the haze, the LED along the
+  frames and the trusses and the signs as soft streaks, stronger the flatter you look along it, and people stand out
+  against it as silhouettes. A new graphics setting, Floor reflections (off, soft or sharp): on from High.
+- The haze lights up with the show. A hundred lamps in it light the whole air a little, in the show's colour and as
+  far as they are up, so the hall beyond the beams is no longer black, as if they shone in a vacuum.
+- The screens at front of house show what operators look at, dimmed: the sound desk's channel strips and meters, the
+  lighting desk's fixtures over a cue list, the video operator's clips and timeline (they were flat colours).
+- Checked against the real thing, and kept: the PA (K2-sized cabinets, KS28-sized subs, Kara-sized delays), the
+  trusses, the DJ's players and mixer and the stage are the sizes they are at real shows.
+
 ## 0.38.0
 
 - The light on the floor and the crowd no longer flickers. It comes from the brightest beams, and which ones used to

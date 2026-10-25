@@ -8,6 +8,7 @@ import { Fn, Loop, If, uniform, uniformArray, materialColor, positionWorld, norm
 import { layout, byRole } from './layout.js';
 import { moveRig } from './rig-motion.js';
 import { FIXTURES, buildPools } from './fixtures.js';
+import { floorReflection, markGlowing } from './floor-reflection.js';
 import { buildShell } from './shell.js';
 import { TIMES } from './daylight.js';
 import { buildStage } from './stage.js';
@@ -144,7 +145,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28, shine:
   const black = plain(0x0d0d0f, { roughness: 0.8, gain: 2.5 }), steel = plain(0x2c2c30, { roughness: 0.5, metalness: 0.4, shine: 0.35 });
   const casts = Array.from({ length: 200 }, () => ({ I: 0, id: null, score: 0, pos: new THREE.Vector3(), dir: new THREE.Vector4(), col: new THREE.Vector3(), optics: new THREE.Vector4() }));
   let nCast = 0, flashI = 0, inLight = new Map();   // the beams that light the room now, and how far each has come in (0 to 1)
-  const env = { scene, W, D, H, hangarRig, haze: 1, hazeOut: 1, roomColor: [1, 1, 1], wallColor: new THREE.Color(), uPointScale: uniform(500), uTime: uniform(0), uDay: uniform(0), uSunset: uniform(0), uDoor: uniform(0), uSunHaze: uniform(1), uRoof: uniform(0), day: 0, sunset: 0, door: 0, roof: 0, lightChanges: 0, cam: new THREE.Vector3(), put, plain, surface, black, steel,
+  const env = { scene, W, D, H, hangarRig, haze: 1, hazeOut: 1, roomColor: [1, 1, 1], wallColor: new THREE.Color(), uPointScale: uniform(500), uTime: uniform(0), uDay: uniform(0), uSunset: uniform(0), uDoor: uniform(0), uSunHaze: uniform(1), uRoof: uniform(0), day: 0, sunset: 0, door: 0, roof: 0, lightChanges: 0, air: 0, cam: new THREE.Vector3(), put, plain, surface, black, steel,
     media: null,   // a picture or video for the LED walls, or null
     // a beam reports where it shines, so the room can be lit by it; id: the lamp, the same every frame
     cast(at, dx, dy, dz, color, I, half, gobo = 0, spin = 0, mode = 0, id = null) { if (nCast >= casts.length || I < 0.02) return; const k = casts[nCast++]; k.I = I; k.id = id ?? nCast; k.pos.copy(at); k.dir.set(dx, dy, dz, Math.cos(Math.min(1.2, half * 1.5 + 0.03))); k.col.set(color.r * I, color.g * I, color.b * I); k.optics.set(gobo, spin, mode, 0); },
@@ -451,13 +452,16 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28, shine:
   put.done();
   const size = Math.max(W, D) / 55, fogOf = sky ? sky.fog : [0, 0, 0];   // light and haze are tuned on a hall of about this size
 
+  // the floor mirrors what gives light (floor-reflection.js): a hall's sealed concrete, not the ground outside
+  const reflection = !open && (sh.floor || 'concrete') === 'concrete' ? floorReflection({ add, rect: [-W / 2, W / 2, -D / 2, D / 2] }) : null;
+  markGlowing(scene); reflection?.set(quality.reflect ?? 0);
   return {
     layout: L, groups: byRole(L.things), env, shots: fac.shots, lights, solids: fac.solids,   // solids: what someone walking round cannot pass (walk.js)
     // director: the Director after its update; signals: Signals; look: the viewer's sliders
     // camera: the camera as it will draw this frame; height: of the picture, in pixels. Which of the crowd show, and how finely.
-    view(camera, height) { crowd.view(camera, height); }, crowdDetail: crowd.detail,
+    view(camera, height) { crowd.view(camera, height); reflection?.watch(camera); }, crowdDetail: crowd.detail,
     // the graphics settings that change the picture while it plays: how many beams light the room, glint, and mirrors
-    graphics(settings) { lights.set(settings); built = settings.crowd ?? built; smoke.shown(settings.smoke ?? 150); },
+    graphics(settings) { lights.set(settings); built = settings.crowd ?? built; smoke.shown(settings.smoke ?? 150); reflection?.set(settings.reflect ?? 0); },
     update(dt, t, director, signals, look) {
       updateWalkers?.(dt); shell.update(dt, t);
       env.haze = env.hazeOut; env.roomColor = director.room.color;
@@ -469,6 +473,10 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28, shine:
       // a second. Picked afresh every frame, beams of about the same brightness took turns (a hundred heads that all
       // pulse with the kick), and the light on the floor and the crowd flickered.
       const list = casts.slice(0, nCast);
+      // and the haze itself: a hundred lamps in it light the whole air a little, in the show's colour, as far as they
+      // are up (air, eased over half a second). Without it the hall beyond the beams was black, as if they shone in a vacuum.
+      let shining = 0; for (const c of list) shining += c.I;
+      env.air += (Math.min(1, shining / 40) - env.air) * Math.min(1, dt / 0.5);
       for (const c of list) c.score = c.I * (inLight.has(c.id) ? 2 : 1);
       const top = list.sort((p, r) => r.score - p.score).slice(0, lights.used.value), now = new Map();
       for (const c of top) { if (!inLight.has(c.id)) env.lightChanges++; now.set(c.id, Math.min(1, (inLight.get(c.id) ?? 0) + dt / 0.1)); }   // lightChanges: how often one comes in, for looking in
@@ -523,7 +531,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28, shine:
       env.uDay.value = env.day; env.uSunset.value = env.sunset; env.uDoor.value = env.door; env.uSunHaze.value = Math.min(1.6, env.haze);
       fac.update(dt);
       scene.fog.density = 0.015 * (hangarRig ? Math.min(1.5, env.haze) : env.haze) / size * (open ? 0.45 : 1);
-      scene.fog.color.setRGB(...room.color).multiplyScalar((0.006 + signals.kick * 0.02 + director.flash * 0.08) * (1 + Math.max(0, look.haze - 1) * 5) * (director.manual.blackout ? 0 : 1));
+      scene.fog.color.setRGB(...room.color).multiplyScalar((0.006 + env.air * 0.05 + signals.kick * 0.02 + director.flash * 0.08) * (1 + Math.max(0, look.haze - 1) * 5) * Math.min(1, look.haze * 1.5) * (director.manual.blackout ? 0 : 1));
       scene.fog.color.r += fogOf[0] + env.day * 0.05 + env.sunset * 0.05; scene.fog.color.g += fogOf[1] + env.day * 0.058 + env.sunset * 0.03; scene.fog.color.b += fogOf[2] + env.day * 0.07 + env.sunset * 0.02;   // and what distance fades to under this sky, or in daylit haze
       const amp = signals.m.activity < 0.15 ? 0.1 : signals.m.phase === 'break' ? 0.4 + signals.m.build * 0.4 : Math.min(1, 0.7 + signals.energy * 0.3 + signals.hype * 0.3);
       U.groove.value += (amp - U.groove.value) * (1 - Math.exp(-dt / 1.5));

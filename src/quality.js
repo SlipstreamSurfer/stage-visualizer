@@ -17,6 +17,7 @@
 //   metal    metal mirrors the hall
 //   bloom    the glow round what is bright
 //   smoke    how many puffs of haze drift through the hall
+//   reflect  the lights mirrored in a sealed floor: the share of the resolution the mirror is drawn at, 0 for none
 export const OPTIONS = {
   scale: { name: 'Resolution', live: true, choices: [[0.5, '50%'], [0.6, '60%'], [0.75, '75%'], [0.9, '90%'], [1, '100%']] },
   sharp: { name: 'Sharp screens', live: true, choices: [[1, 'Standard'], [1.5, 'Sharper'], [2, 'Full']] },
@@ -28,14 +29,15 @@ export const OPTIONS = {
   metal: { name: 'Reflections', live: true, choices: [[false, 'Off'], [true, 'On']] },
   bloom: { name: 'Glow', live: true, choices: [[false, 'Off'], [true, 'On']] },
   smoke: { name: 'Haze clouds', live: true, choices: [[50, 'Thin'], [100, 'Normal'], [150, 'Thick'], [250, 'Dense']] },
+  reflect: { name: 'Floor reflections', live: true, choices: [[0, 'Off'], [0.2, 'Soft'], [0.35, 'Sharp']] },
 };
 
 // High is what the show drew as Normal up to 0.36; Ultra what it drew as High, with more of it.
 export const PRESETS = {
-  light: { name: 'Light', scale: 0.75, sharp: 1, fps: 30, crowd: 0.4, detail: 0.6, beams: 6, shine: 0, metal: false, bloom: false, smoke: 50 },
-  normal: { name: 'Normal', scale: 0.9, sharp: 1, fps: 60, crowd: 0.6, detail: 1, beams: 12, shine: 3, metal: true, bloom: true, smoke: 100 },
-  high: { name: 'High', scale: 1, sharp: 1, fps: 0, crowd: 0.8, detail: 1, beams: 18, shine: 6, metal: true, bloom: true, smoke: 150 },
-  ultra: { name: 'Ultra', scale: 1, sharp: 1.5, fps: 0, crowd: 1, detail: 1.5, beams: 28, shine: 6, metal: true, bloom: true, smoke: 250 },
+  light: { name: 'Light', scale: 0.75, sharp: 1, fps: 30, crowd: 0.4, detail: 0.6, beams: 6, shine: 0, metal: false, bloom: false, smoke: 50, reflect: 0 },
+  normal: { name: 'Normal', scale: 0.9, sharp: 1, fps: 60, crowd: 0.6, detail: 1, beams: 12, shine: 3, metal: true, bloom: true, smoke: 100, reflect: 0 },
+  high: { name: 'High', scale: 1, sharp: 1, fps: 0, crowd: 0.8, detail: 1, beams: 18, shine: 6, metal: true, bloom: true, smoke: 150, reflect: 0.2 },
+  ultra: { name: 'Ultra', scale: 1, sharp: 1.5, fps: 0, crowd: 1, detail: 1.5, beams: 28, shine: 6, metal: true, bloom: true, smoke: 250, reflect: 0.35 },
 };
 export const ORDER = ['light', 'normal', 'high', 'ultra'];
 const OLD = { low: 'light', normal: 'high', high: 'ultra' };   // the names up to 0.36

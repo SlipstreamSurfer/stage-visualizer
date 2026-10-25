@@ -17,6 +17,35 @@ export function exitWidth(venue) {
   return (venue.facilities || []).reduce((w, f) => w + (f.type === 'exit' ? f.width || EXIT_WIDTH : f.type === 'entrance' ? f.width : 0), 0);
 }
 
+// What a screen at front of house shows, dimmed as operators keep them in the dark: the sound desk's channel strips
+// with their meters, the lighting desk's fixtures as coloured tiles over a cue list, the video operator's clips and
+// timeline. kind: 'sound', 'light' or 'video'; one picture each, shared by every screen of that kind.
+const SCREENS = {};
+function screenOf(kind) {
+  return SCREENS[kind] ||= (() => {
+    const c = document.createElement('canvas'); c.width = 320; c.height = 192;
+    const g = c.getContext('2d'), rnd = (i, k) => { const x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); };
+    g.fillStyle = '#07090c'; g.fillRect(0, 0, 320, 192); g.fillStyle = '#141a22'; g.fillRect(0, 0, 320, 14);   // the background, and a bar along the top
+    if (kind === 'sound') for (let i = 0; i < 16; i++) {   // channel strips: a name, a meter, a fader
+      const x = 6 + i * 19.6, level = 0.25 + rnd(i, 1) * 0.6;
+      g.fillStyle = ['#2b5fa8', '#a8442b', '#3f8a3a', '#8a7a2a'][i % 4]; g.fillRect(x, 20, 16, 8);
+      g.fillStyle = '#10161d'; g.fillRect(x + 5, 34, 6, 120);
+      g.fillStyle = '#3ad15a'; g.fillRect(x + 5, 34 + 120 * (1 - level), 6, 120 * level * 0.75); g.fillStyle = '#e0c03a'; g.fillRect(x + 5, 34 + 120 * (1 - level), 6, 120 * level * 0.12);
+      g.fillStyle = '#9aa3ad'; g.fillRect(x + 2, 160 - 30 * rnd(i, 2), 12, 6);
+    } else if (kind === 'light') {   // fixtures as tiles in their colour, a cue list beside them
+      for (let i = 0; i < 48; i++) { const on = rnd(i, 3) > 0.35; g.fillStyle = on ? ['#c43a2a', '#e8e8f0', '#d0503a', '#ffffff'][i % 4] : '#1a1f26'; g.fillRect(6 + (i % 8) * 25, 20 + Math.floor(i / 8) * 26, 21, 22); }
+      for (let r = 0; r < 9; r++) { g.fillStyle = r === 3 ? '#2b5fa8' : '#121820'; g.fillRect(212, 20 + r * 18, 102, 15); g.fillStyle = '#7d8896'; g.fillRect(216, 25 + r * 18, 40 + rnd(r, 4) * 50, 4); }
+    } else {   // two clips and a timeline
+      for (const [x, a, b] of [[8, '#3a1a6a', '#c43a8a'], [166, '#0a3a5a', '#3ac4d0']]) { const gr = g.createLinearGradient(x, 20, x + 146, 110); gr.addColorStop(0, a); gr.addColorStop(1, b); g.fillStyle = gr; g.fillRect(x, 20, 146, 90); }
+      for (let r = 0; r < 3; r++) for (let k = 0; k < 6; k++) { g.fillStyle = ['#2b5fa8', '#7a3aa8', '#3a8a6a'][r]; g.fillRect(8 + k * 52, 122 + r * 20, 46 * (0.5 + rnd(r, k) * 0.5), 14); }
+      g.fillStyle = '#e04030'; g.fillRect(150, 118, 2, 66);   // the playhead
+    }
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.userData.shared = true;
+    const mat = new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(0.32, 0.32, 0.32), fog: false }); mat.userData.shared = true;   // kept from venue to venue
+    return mat;
+  })();
+}
+
 function sign(text, bg, fg, wide = 4) {
   const c = document.createElement('canvas'); c.width = 64 * wide; c.height = 64;
   const g = c.getContext('2d');
@@ -323,7 +352,7 @@ export function buildFacilities(L, ctx) {
       const p = place([0, f.z, 0]), w = 7, d = 4.6, top = 0.45, desk = top + 0.9;   // the riser; desks at a standing height
       p.box(w, top, d, 0, top / 2, 0);
       const metal = p.parts(grey), dark = p.parts(black), caps = p.parts(glow(0.16, 0.16, 0.18)), leds = p.parts(glow(0.06, 0.45, 0.15)), amber = p.parts(glow(0.5, 0.27, 0.06)), blue = p.parts(glow(0.08, 0.2, 0.5));
-      const screen = (w2, h2, x, y, z, tilt, r = 0.012, g2 = 0.026, b = 0.05) => { p.plate(w2, h2, x, y, z, glow(r, g2, b)).rotation.x = -tilt; dark.box(w2 + 0.04, h2 + 0.04, 0.03, x, y, z - 0.02, -tilt); };
+      const screen = (w2, h2, x, y, z, tilt, kind) => { p.plate(w2, h2, x, y, z, screenOf(kind)).rotation.x = -tilt; dark.box(w2 + 0.04, h2 + 0.04, 0.03, x, y, z - 0.02, -tilt); };
       // the long table the desks stand on, from one end of the riser to the other, on black legs
       dark.box(6.6, 0.05, 1.05, 0, desk - 0.025, -1.3);
       for (const x of [-3.2, -1.1, 1.1, 3.2]) for (const z of [-1.75, -0.85]) metal.box(0.05, desk - top, 0.05, x, (desk + top) / 2, z);
@@ -332,21 +361,21 @@ export function buildFacilities(L, ctx) {
       dark.box(sw, 0.16, 0.85, sx, desk + 0.08, -1.3, 0.12);
       for (let i = 0; i < 24; i++) for (const [z, y] of [[-0.98, desk + 0.17], [-1.2, desk + 0.19]]) { const x = sx - sw / 2 + 0.1 + i * (sw - 0.2) / 23; caps.box(0.022, 0.02, 0.035, x, y, z); dark.box(0.008, 0.002, 0.12, x, y - 0.012, z); }
       for (let i = 0; i < 24; i++) for (let k = 0; k < 3; k++) caps.cyl(0.011, 0.025, sx - sw / 2 + 0.1 + i * (sw - 0.2) / 23, desk + 0.22 + k * 0.025, -1.38 - k * 0.07);
-      for (const k of [-1, 0, 1]) screen(0.56, 0.34, sx + k * 0.66, desk + 0.48, -1.68, 0.35, 0.015, 0.03, 0.06);
+      for (const k of [-1, 0, 1]) screen(0.56, 0.34, sx + k * 0.66, desk + 0.48, -1.68, 0.35, 'sound');
       for (let i = 0; i < 24; i++) (i % 5 === 3 ? amber : leds).box(0.012, 0.03, 0.006, sx - sw / 2 + 0.1 + i * (sw - 0.2) / 23, desk + 0.26, -1.6);   // meters above every channel
       // light: a lighting desk with two built-in screens, two more on a bar above it, and a wing beside it
       const lx = 0.55;
       dark.box(1.55, 0.13, 0.75, lx, desk + 0.065, -1.3, 0.1);
-      for (const k of [-1, 1]) screen(0.5, 0.3, lx + k * 0.38, desk + 0.36, -1.6, 0.55, 0.02, 0.02, 0.035);
+      for (const k of [-1, 1]) screen(0.5, 0.3, lx + k * 0.38, desk + 0.36, -1.6, 0.55, 'light');
       metal.box(0.04, 0.42, 0.04, lx, desk + 0.21, -1.86); metal.box(1.3, 0.04, 0.04, lx, desk + 0.42, -1.86);
-      for (const k of [-1, 1]) screen(0.6, 0.36, lx + k * 0.33, desk + 0.62, -1.86, 0.12, 0.022, 0.016, 0.04);
+      for (const k of [-1, 1]) screen(0.6, 0.36, lx + k * 0.33, desk + 0.62, -1.86, 0.12, 'light');
       for (let i = 0; i < 10; i++) caps.box(0.03, 0.02, 0.04, lx - 0.6 + i * 0.075, desk + 0.15, -1.0);   // the executor faders
       for (let i = 0; i < 6; i++) for (let k = 0; k < 4; k++) (k === 0 && i % 2 ? blue : caps).box(0.04, 0.012, 0.04, lx + 0.15 + i * 0.07, desk + 0.16, -1.08 - k * 0.07);   // the keypad
-      dark.box(0.5, 0.1, 0.55, lx + 1.05, desk + 0.05, -1.25, 0.1); screen(0.42, 0.26, lx + 1.05, desk + 0.28, -1.48, 0.55, 0.02, 0.02, 0.035);
+      dark.box(0.5, 0.1, 0.55, lx + 1.05, desk + 0.05, -1.25, 0.1); screen(0.42, 0.26, lx + 1.05, desk + 0.28, -1.48, 0.55, 'light');
       // video: a laptop, a monitor and a small controller
       const vx = 2.75;
-      dark.box(0.36, 0.015, 0.25, vx - 0.25, desk + 0.008, -1.15); screen(0.34, 0.22, vx - 0.25, desk + 0.12, -1.28, 0.25, 0.04, 0.03, 0.06);
-      metal.box(0.03, 0.3, 0.03, vx + 0.25, desk + 0.15, -1.6); screen(0.56, 0.33, vx + 0.25, desk + 0.46, -1.6, 0.05, 0.035, 0.02, 0.045);
+      dark.box(0.36, 0.015, 0.25, vx - 0.25, desk + 0.008, -1.15); screen(0.34, 0.22, vx - 0.25, desk + 0.12, -1.28, 0.25, 'video');
+      metal.box(0.03, 0.3, 0.03, vx + 0.25, desk + 0.15, -1.6); screen(0.56, 0.33, vx + 0.25, desk + 0.46, -1.6, 0.05, 'video');
       dark.box(0.32, 0.04, 0.2, vx + 0.25, desk + 0.02, -1.05); for (let i = 0; i < 8; i++) (i % 3 ? caps : amber).box(0.025, 0.015, 0.025, vx + 0.13 + (i % 4) * 0.08, desk + 0.05, -1.1 + Math.floor(i / 4) * 0.08);
       // small lamps on goosenecks, warm, low over each desk: all the light FOH allows itself
       for (const x of [sx - 0.9, sx + 0.9, lx - 0.4, vx]) { metal.cyl(0.006, 0.32, x, desk + 0.26, -1.72, -0.5); amber.box(0.05, 0.015, 0.03, x, desk + 0.4, -1.6); }

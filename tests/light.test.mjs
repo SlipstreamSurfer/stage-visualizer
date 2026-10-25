@@ -54,3 +54,14 @@ test('washes are a steady colour under the beams: they rise and fall with the tr
   assert.ok(kicks > 50, `${kicks} kicks`);
   assert.ok(jump < 0.05, `on a kick a wash moves by at most ${jump.toFixed(3)}`);
 });
+
+test('every kind of music plays the row and the washes its own way', async () => {
+  const { STYLES, ROW_LOOKS } = await import('../src/hangar-looks.js');
+  for (const [key, style] of Object.entries(STYLES)) assert.ok(style.row?.length >= 2 && style.row.every(k => k in ROW_LOOKS), key);
+  const looks = moodKey => { const seen = new Set(); play(150, ({ director }) => seen.add(director.rowLook), {}, moodKey); return seen; };
+  const hypnotic = looks('hypnotic'), hard = looks('hard');
+  assert.ok(!hypnotic.has('chase') && !hypnotic.has('crowd'), `hypnotic stays slow: ${[...hypnotic]}`);
+  assert.ok(hard.has('crowd') || hard.has('sweep'), `hard techno sweeps the room: ${[...hard]}`);
+  const wash = moodKey => { let sum = 0, n = 0; play(90, ({ t, groups }) => { if (t > 30) { sum += groups.wash[0].ch.dim; n++; } }, {}, moodKey); return sum / n; };
+  assert.ok(wash('melodic') > wash('raw') * 1.8, 'melodic fills the room with colour, raw techno keeps it dark');
+});

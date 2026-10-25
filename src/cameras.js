@@ -90,10 +90,33 @@ export const LIGHT_SHOTS = {
   pulse: { shots: [0, 5, 2], develop: 8 },
   answer: { shots: [0, 1, 8], develop: 8 },
 };
+// Around the DJ (mode 'dj'): the DJ booth is home, where the camera is most of the time, and it goes out with what the
+// music does and comes back. On a drop the whole room (front of house, or high at the back) for eight bars; in a break,
+// once the build-up is under way, through the DJ's own eyes until the kick is back; in a track that runs, now and then
+// at the start of a 64-beat phrase, out at the crowd for four bars. stay: the DJ plays it themselves (rekordbox), and
+// the camera stays home.
+const HOME = 'DJ booth', EYES = 'DJ view', WIDE = ['Front of house', 'High at the back'], OUT = ['Pit', 'Crane', 'Front of house', 'Side', 'High at the back'];
 export class CameraDirector {
   // list: the venue's shots; the ones after the first nine come from its facilities (the bar, front of house) and are
   // used when the track is calm
-  constructor(list, startedAt = 0) { this.extra = list.map((_, i) => i).filter(i => i >= 9); Object.assign(this, { list, index: 0, auto: true, lastCut: startedAt, pending: null, fadeFrom: 0, fadeIn: -10, turn: 0, fade: 1 }); }
+  constructor(list, startedAt = 0) {
+    this.extra = list.map((_, i) => i).filter(i => i >= 9);
+    const at = name => list.findIndex(s => s.name === name), all = names => names.map(at).filter(i => i >= 0);
+    Object.assign(this, { list, index: 0, auto: true, lastCut: startedAt, pending: null, fadeFrom: 0, fadeIn: -10, turn: 0, fade: 1,
+      mode: 'all', stay: false, home: Math.max(0, at(HOME)), eyes: at(EYES), wide: all(WIDE), out: all(OUT), awayUntil: null });
+  }
+  // the automatic camera: 'all' (around the hall) or 'dj' (around the DJ), starting at home
+  setMode(mode, t) { this.mode = mode; this.awayUntil = null; if (mode === 'dj') this.cut(this.home, t); }
+  aroundTheDJ(signals, t, hold) {
+    const m = signals.m, ev = signals.ev, bars = n => n * 4 * 60 / (signals.stableBpm || m.bpm || 128), home = this.index === this.home;
+    if (this.pending !== null) return;
+    if (this.stay) { if (!home) this.direct(t, [this.home]); return; }
+    if (ev.drop && this.wide.length) { this.direct(t, this.wide, true); this.awayUntil = t + bars(8); return; }
+    if (m.phase === 'break' && m.build > 0.45 && home && this.eyes >= 0 && t - this.lastCut > 6) { this.direct(t, [this.eyes]); this.awayUntil = Infinity; return; }
+    const back = this.index === this.eyes ? m.phase !== 'break' : t > (this.awayUntil ?? 0);
+    if (!home && back) { this.direct(t, [this.home]); this.awayUntil = null; return; }
+    if (home && m.phase !== 'break' && ev.kick && signals.beats % 64 === 0 && t - this.lastCut > 50 * hold && this.out.length) { this.direct(t, this.out); this.awayUntil = t + bars(4); }
+  }
   cut(i, t) { this.index = i; this.lastCut = t; this.pending = null; }
   direct(t, shots, hard = false) {
     const choice = shots.filter(s => s !== this.index && s < this.list.length), next = choice[this.turn++ % choice.length];
@@ -104,7 +127,8 @@ export class CameraDirector {
   // light: the light composition that is playing, { key, started, age } (see LIGHT_SHOTS), or null
   update(signals, t, hold = 1, light = null) {
     const m = signals.m, ev = signals.ev, base = PLAN[m.section], plan = base.shots.length && (m.section === 'intro' || m.section === 'low') ? { hold: base.hold, shots: [...base.shots, ...this.extra] } : base;
-    if (this.auto) {
+    if (this.auto && this.mode === 'dj') this.aroundTheDJ(signals, t, hold);
+    else if (this.auto) {
       const over = factor => this.pending === null && t - this.lastCut > plan.hold * hold * factor;
       const cue = m.phase !== 'break' && light ? LIGHT_SHOTS[light.key] : null, fresh = cue && light.started !== this.lightStarted;
       if (fresh) { this.lightStarted = light.started; this.revealed = false; }

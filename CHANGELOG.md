@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.40.0
+
+- A track keeps its colours from its first kick to its last: one palette and the same two colours of it, through
+  every scene, break and drop (the show used to step through the palette's colours at every scene, and took a new
+  palette after a long break). The next track takes the next palette.
+- Colours belong to no one genre: every kind of club music takes turns between its own palettes and those of all the
+  others. What makes a genre is how the rig moves.
+- Every kind of music plays the stage's row and the washes its own way: techno white lines with little colour under
+  them, raw techno chases in the dark, hypnotic and deep techno slow curtains and waves over deep colour (never a chase),
+  hard techno and hard dance sweeps over the crowd, trance and melodic fans and a V into the roof over rich colour,
+  house sweeps and waves over warm wash.
+- Camera → Around the DJ, the new default: over the DJ's shoulder most of the time, out to the whole room on a drop,
+  through the DJ's own eyes in a build-up, now and then out at the crowd at the start of a phrase, and back. With
+  rekordbox as the source it stays at the DJ. Around the hall is the automatic camera of before.
+
 ## 0.39.0
 
 - The floor mirrors the light. The hall's sealed concrete shows the lenses, the beams in the haze, the LED along the

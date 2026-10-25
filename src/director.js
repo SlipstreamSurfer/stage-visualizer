@@ -103,6 +103,20 @@ export const MOODS = {
 MOODS.deep.accent = hex(0xffa860);   // amber in the washes, so a blue room is not blue alone
 for (const k in MOODS) MOODS[k] = { ...BASE, ...MOODS[k], palettes: MOODS[k].palettes.map(p => p.map(hex)) };
 export const FAMILIES = ['House', 'Techno', 'Hard', 'Trance', 'Bass', 'Open format', 'Concert & ambient'];
+// The palettes a kind of music takes its tracks' colours from: its own, taking turns with those of every other kind of
+// club music, as colours belong to no one genre (what the rig does with them does). Music to listen to (a concert,
+// ambient) keeps to its own, softer ones.
+const POOLS = {};
+export function palettePool(key) {
+  return POOLS[key] ||= (() => {
+    const own = MOODS[key].palettes, seen = new Set(own.map(p => p.join())), others = [];
+    if (MOODS[key].flow) return own.map(p => p.map(hex));
+    for (const [k, m] of Object.entries(MOODS)) if (k !== key && !m.flow) for (const p of m.palettes) if (!seen.has(p.join())) { seen.add(p.join()); others.push(p); }
+    const pool = [], from = [...key].reduce((n, c) => n + c.charCodeAt(0), 0);   // where in the others this kind starts, so kinds do not all follow the same order
+    for (let i = 0; i < Math.max(own.length, others.length); i++) { if (i < own.length) pool.push(own[i]); if (i < others.length) pool.push(others[(i + from) % others.length]); }
+    return pool.map(p => p.map(hex));
+  })();
+}
 
 // Not everything at once: a program is a look that uses part of the rig, with its own way of aiming the heads.
 //   tier      which part of a track it suits: calm (intro, stripped back), mid (the track runs), big (everything in)
@@ -192,7 +206,7 @@ export class Director {
     for (const list of Object.values(groups)) for (const [slot, f] of list.entries()) { f.rp = Math.random() * 2 - 1; f.rt = Math.random(); f.hangarSlot = slot; }
     this.setMood(moodKey);
   }
-  setMood(key) { this.mood = MOODS[key]; this.moodKey = key; this.choreography.reset(); this.palette = 0; this.f = null; this.pick('intro'); }
+  setMood(key) { this.mood = MOODS[key]; this.moodKey = key; this.pool = palettePool(key); this.choreography.reset(); this.palette = 0; this.f = null; this.pick('intro'); }
   resetRingLook(t) { this.ringVariant = 0; this.ringTargets = [...RING_LOOKS[0].drops]; this.ringAt = t; this.ringScene = this.scene; this.ringBreak = false; }
   reset(t) { this.trackAt = null; this.choreography.reset(); this.beat = 0; this.colorIdx = 0; this.archPattern = 0; this.sceneAt = t; this.pick('intro'); }
   // the next program for this part of the track, never the one that is already up if there is a choice
@@ -207,7 +221,6 @@ export class Director {
     this.scene++;
     this.archPattern = (this.archPattern + 1) % 4;
     this.pick(section);
-    if (this.scene % this.mood.colorEvery === 0) this.colorIdx++;
     this.sceneAt = t;
   }
   // Hangar: the heads' look and the trusses' formation (see hangar-looks.js). tier: the part of the track. A new
@@ -300,7 +313,6 @@ export class Director {
     if (ev.kick) {
       if (ev.drop) {
         if (!starting) {
-          if (ev.breakLength >= mood.paletteBreak && !ending) { this.palette++; this.paletteAt = t; }   // a long break earns a new palette
           this.beat = 0; if (!ending) this.next(t, section); this.pendingChange = null;
         }
         const fx = mood.fx; this.drops++;
@@ -365,9 +377,12 @@ export class Director {
     this.vj = this.vj.map((w, i) => w + (vjTarget[i] - w) * vjEase);
     if (brk) this.vjBuild = rising;
     const manualPalette = PALETTES[controls?.palette] || theme;
-    const pal = manualPalette ? manualPalette.colors.map(hex) : mood.palettes[this.palette % mood.palettes.length];
-    this.col = mix(this.col, pal[this.colorIdx % pal.length], ease(1.1));
-    this.col2 = mix(this.col2, pal[(this.colorIdx + 1) % pal.length], ease(1.1));
+    // A track keeps its colours from its first kick to its last: one palette, and the same two of its colours, the
+    // second where the look asks for it. (A new palette, or the next colour of it at every scene, read as the show
+    // changing its mind halfway.) The next track takes the next palette, and the next time round the next pair of it.
+    const pal = manualPalette ? manualPalette.colors.map(hex) : this.pool[this.palette % this.pool.length], pair = manualPalette ? this.colorIdx : Math.floor(this.palette / this.pool.length) * 2;
+    this.col = mix(this.col, pal[pair % pal.length], ease(1.1));
+    this.col2 = mix(this.col2, pal[(pair + 1) % pal.length], ease(1.1));
     const col = this.col, col2 = this.col2, man = this.manual;
     // how much music there is: a quiet passage of an orchestra is still a concert, and silence between two pieces is not a blackout
     this.present += ((mood.flow ? (m.activity > 0.03 ? 0.6 + 0.4 * m.activity : 0.3) : m.activity) - this.present) * (mood.flow ? ease(1.5) : 1);
@@ -410,10 +425,13 @@ export class Director {
     const headLook = HEAD_LOOKS[this.headLook], s = { beat: this.beat, section, build: m.build, energy: sig.energy, drop: sig.drop, stage: this.hangarStage };
     // the stage's row of heads (hangar-looks.js): a curtain in a break that fans open with the build-up, a sunburst for
     // a few seconds after a drop, else the next look for this part of the track at every scene
-    const rowList = ROW_TIERS[TIER[section]] || ROW_TIERS.mid;
+    // the kind of music's own looks for the row (hangar-looks.js): those that suit this part of the track, or else
+    // any of its own (hypnotic techno has no chase, whatever the part)
+    const style = styleOf(this.moodKey, mood.family), tierRow = ROW_TIERS[TIER[section]] || ROW_TIERS.mid, own = (style.row || []).filter(k => tierRow.includes(k));
+    const rowList = own.length ? own : style.row?.length ? style.row : tierRow;
     this.rowLook = brk ? (m.build > 0.5 ? 'fan' : 'curtain') : t - this.vjDropAt < 6 ? 'sunburst' : rowList[(this.scene + this.palette * 2) % rowList.length];
     const rowLook = ROW_LOOKS[this.rowLook];
-    this.rowW += ((brk ? 0.28 + m.build * 0.5 : ROW_LEVEL[TIER[section]] ?? 0.7) - this.rowW) * ease(1.2);
+    this.rowW += ((brk ? 0.28 + m.build * 0.5 : ROW_LEVEL[TIER[section]] ?? 0.7) * (style.rowLevel ?? 1) - this.rowW) * ease(1.2);
     this.beamPeak = 0;
     for (const role of ['overhead', 'stage']) for (const f of G[role] || []) {
       const row = role === 'stage' && f.props?.row;   // one of the stage's row of heads
@@ -490,7 +508,7 @@ export class Director {
     // Washes are the colour under the beams, as a lighting designer runs them: a steady level for the part of the
     // track that changes over a couple of seconds, rising in a build-up and swelling on a drop, and never flashing with
     // the kick: that is what the heads do. (Flashing with every kick, they fought the beams for the room.)
-    const washTarget = brk ? 0.1 + m.build * 0.32 : (WASH_LEVEL[section] ?? 0.24) + mood.breathe * sig.mid * 0.25;
+    const washTarget = ((brk ? 0.1 + m.build * 0.32 : (WASH_LEVEL[section] ?? 0.24) + mood.breathe * sig.mid * 0.25)) * (styleOf(this.moodKey, mood.family).wash ?? 1);
     this.washLevel += (washTarget - this.washLevel) * ease(1.6);
     for (const f of G.wash || []) {
       f.ch.dim = (Math.max(this.washLevel * this.w.wash, mood.wash) + sig.drop * 0.3 + sig.lift * 0.15) * master;

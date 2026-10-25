@@ -175,6 +175,7 @@ function frame(now) {
   if (walk.on) walk.update(dt, world, camera);
   else if (!cameraFrozen) {
     cameraTime += dt * controls.cameraSpeed;
+    cams.stay = $('audioSource').value === 'rekordbox';   // the DJ plays it themselves: around the DJ stays at the DJ
     const shot = cams.update(signals, t, director.mood.camHold, controls.cameraFollowsLight ? director.lightCue : null);
     if (cameraIndex !== cams.index) { cameraAge = 0; cameraIndex = cams.index; }
     else cameraAge += dt * controls.cameraSpeed;
@@ -250,8 +251,8 @@ groups($('venue'), KINDS.map(kind => [kind, Object.entries(VENUES).filter(([, v]
 function fillVenuePanel(moodKey, cameraValue = 'auto') {
   const suits = world.layout.genres.filter(k => k in MOODS);
   groups($('mood'), [['Made for this venue', suits.map(k => [k, MOODS[k].name])], ...FAMILIES.map(f => [f, Object.entries(MOODS).filter(([k, v]) => v.family === f && !suits.includes(k)).map(([k, v]) => [k, v.name])])], moodKey);
-  fill($('cam'), [['auto', 'Switch automatically'], ...cams.list.map((s, i) => [i, `${i + 1} · ${s.name}`]), ['walk', 'Walk round yourself · W']], cameraValue);
-  setCam($('cam').value || 'auto');
+  fill($('cam'), [['dj', 'Around the DJ'], ['auto', 'Around the hall'], ...cams.list.map((s, i) => [i, `${i + 1} · ${s.name}`]), ['walk', 'Walk round yourself · W']], cameraValue);
+  setCam($('cam').value || 'dj');
   fillSwitches(); refreshControlPanel();
 }
 // Walking round: from where the camera is now (or a spot from a link, at), until another camera is chosen or Escape
@@ -268,9 +269,10 @@ function stopWalk() {
 const setCam = value => {
   if (value === 'walk') { startWalk(); return; }
   if (walk.on) stopWalk();
-  if (value !== 'auto' && (!Number.isInteger(+value) || +value < 0 || +value >= cams.list.length)) value = 'auto';
+  if (value !== 'auto' && value !== 'dj' && (!Number.isInteger(+value) || +value < 0 || +value >= cams.list.length)) value = 'dj';
   setCameraFrozen(false); cameraAge = 0; cameraIndex = -1;
-  $('cam').value = value; keep('cam', value); cams.auto = value === 'auto';
+  $('cam').value = value; keep('cam', value); cams.auto = value === 'auto' || value === 'dj';
+  cams.setMode(value === 'dj' ? 'dj' : 'all', timer.getElapsed());   // around the DJ (cameras.js) or around the hall
   if (!cams.auto) cams.cut(+value, timer.getElapsed());
 };
 $('venue').onchange = e => replaceVenue(e.target.value).catch(changeFailed);
@@ -453,7 +455,7 @@ function refreshControlPanel() {
     card.append(label, speed); $('coilControls').append(card);
   }
 }
-fillVenuePanel(moodKey, params.get('cam') || kept('cam', 'auto'));
+fillVenuePanel(moodKey, params.get('cam') || kept('cam', 'dj'));
 
 // Build and compile the next venue alongside the current one. Sound, its listener, the
 // clock and viewer media survive; a failed build leaves the current show running.

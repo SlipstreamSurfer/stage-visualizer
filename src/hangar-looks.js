@@ -214,3 +214,33 @@ export const ROW_LOOKS = {
 export const ROW_TIERS = Object.fromEntries(['calm', 'mid', 'big'].map(tier => [tier, Object.keys(ROW_LOOKS).filter(k => k !== 'sunburst' && ROW_LOOKS[k].tiers.includes(tier))]));
 // how far the row is up in each part of a track (in a break it rises with the build-up)
 export const ROW_LEVEL = { calm: 0.45, mid: 0.7, big: 0.95 };
+
+// How each kind of music plays the stage's row and the washes, as a lighting designer sets a night up: which of the
+// row's looks it uses (row; the sunburst on a drop always), how far the row is up against the others (rowLevel), and
+// how far the washes are up (wash: a share of their level, ROW_LEVEL and WASH_LEVEL in the director). Techno keeps to
+// white lines and little colour under them; raw techno to chases in the dark; hypnotic and deep techno to slow
+// curtains and waves over deep colour; hard techno and hard dance fill the room and sweep over the crowd; trance and
+// melodic open up into the roof over rich colour; house moves and fills the room with warm wash.
+const ROW = (...keys) => keys;
+const STAGE_STYLES = {
+  techno: { row: ROW('curtain', 'chase', 'pairs', 'sweep', 'fan', 'crowd'), rowLevel: 1, wash: 0.75 },
+  raw: { row: ROW('chase', 'pairs', 'curtain', 'crowd'), rowLevel: 0.9, wash: 0.45 },
+  deep: { row: ROW('curtain', 'wave', 'fan', 'vee'), rowLevel: 0.75, wash: 1.15 },
+  hypnotic: { row: ROW('curtain', 'wave', 'vee'), rowLevel: 0.7, wash: 1 },
+  electro: { row: ROW('pairs', 'chase', 'sweep', 'wave'), rowLevel: 1, wash: 0.8 },
+  hard: { row: ROW('sweep', 'crowd', 'pairs', 'chase', 'fan'), rowLevel: 1.1, wash: 0.7 },
+  harddance: { row: ROW('crowd', 'sweep', 'pairs', 'fan', 'chase'), rowLevel: 1.15, wash: 0.8 },
+  trance: { row: ROW('fan', 'vee', 'wave', 'curtain', 'sweep'), rowLevel: 1, wash: 1.3 },
+  trancedeep: { row: ROW('curtain', 'wave', 'vee'), rowLevel: 0.8, wash: 1.2 },
+  psytrance: { row: ROW('sweep', 'wave', 'pairs', 'chase'), rowLevel: 1, wash: 1.1 },
+  House: { row: ROW('sweep', 'wave', 'fan', 'vee'), rowLevel: 0.85, wash: 1.5 },
+  melodic: { row: ROW('wave', 'vee', 'curtain', 'fan'), rowLevel: 0.9, wash: 1.35 },
+  progressive: { row: ROW('vee', 'wave', 'fan', 'curtain'), rowLevel: 0.95, wash: 1.3 },
+  organic: { row: ROW('curtain', 'wave'), rowLevel: 0.6, wash: 1.5 },
+  mainstage: { row: ROW('fan', 'crowd', 'sweep', 'vee', 'pairs'), rowLevel: 1.1, wash: 1.1 },
+  Bass: { row: ROW('pairs', 'sweep', 'crowd', 'chase'), rowLevel: 1, wash: 0.9 },
+  deepdubstep: { row: ROW('curtain', 'pairs'), rowLevel: 0.7, wash: 0.8 },
+  'Open format': { row: ROW('sweep', 'wave', 'fan', 'vee'), rowLevel: 0.9, wash: 1.3 },
+  'Concert & ambient': { row: ROW('curtain', 'wave'), rowLevel: 0.6, wash: 1.4 },
+};
+for (const [key, stage] of Object.entries(STAGE_STYLES)) Object.assign(STYLES[key], stage);

@@ -122,3 +122,31 @@ test('no Hangar camera comes near the hall trusses or their lamps, also at their
   }
 });
 
+
+// the demo track in the Hangar with the camera around the DJ: which shot shows, frame by frame
+function aroundTheDJ(seconds, { stay = false } = {}) {
+  const { Signals, demo } = SIGNALS, list = shots(layout(VENUES.hangar)), camera = new CameraDirector(list), signals = new Signals(), read = demo(signals, 130);
+  camera.setMode('dj', 0); camera.stay = stay;
+  const seen = [];
+  for (let t = 1 / 60; t < seconds; t += 1 / 60) { signals.update(read(t), t, 1 / 60, { live: false }); seen.push({ t, name: camera.update(signals, t, 1).name, drop: signals.ev.drop, brk: signals.m.phase === 'break', build: signals.m.build }); }
+  return seen;
+}
+const SIGNALS = await import('../src/signals.js');
+
+test('around the DJ: the booth is home most of the time; out on a drop and in a build-up, and back again', () => {
+  const seen = aroundTheDJ(240), share = name => seen.filter(s => s.name === name).length / seen.length;
+  assert.ok(share('DJ booth') > 0.55, `at the booth ${Math.round(share('DJ booth') * 100)}% of the time`);
+  const drops = seen.filter(s => s.drop && s.t < 240 - 30).map(s => s.t);
+  assert.ok(drops.length >= 3);
+  for (const at of drops) {
+    const after = seen.find(s => s.t > at + 0.5), later = seen.find(s => s.t > at + 25);
+    assert.ok(['Front of house', 'High at the back'].includes(after.name), `just after a drop: ${after.name}`);
+    assert.equal(later.name, 'DJ booth', 'eight bars later back at the booth');
+  }
+  assert.ok(seen.some(s => s.brk && s.name === 'DJ view'), 'a build-up through the DJ\'s eyes');
+});
+
+test('around the DJ, with the DJ playing it themselves (rekordbox): the camera stays at the booth', () => {
+  const seen = aroundTheDJ(180, { stay: true });
+  assert.ok(seen.every(s => s.name === 'DJ booth'));
+});

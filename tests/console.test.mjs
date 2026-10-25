@@ -116,7 +116,7 @@ test('walking round with W, the work lights with L, and the people in the hall s
     await key('l', 'KeyL');
     assert.equal(await evaluate('window.__show.look.work'), true);
     await key('Escape', 'Escape');
-    assert.equal(await evaluate(`document.getElementById('cam').value + ' ' + document.getElementById('walkHud').hidden`), 'auto true');
+    assert.equal(await evaluate(`document.getElementById('cam').value + ' ' + document.getElementById('walkHud').hidden`), 'dj true');
     const people = () => evaluate(   // a figure shows when it and everything it hangs in shows
       `(() => { let shown = 0; window.__show.world.env.scene.traverse(o => { if (o.isInstancedMesh && o.geometry.attributes.aKit) { let up = o; while (up && up.visible) up = up.parent; shown += up ? 0 : 1; } }); return shown; })()`);
     assert.ok(await people() > 0);

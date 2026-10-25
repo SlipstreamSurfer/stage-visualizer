@@ -87,3 +87,17 @@ test('the local server tells an open page about the track as it changes (server-
     while (!(await reader.read()).done);   // the feed ends with the server
   } finally { server.close(); }
 });
+
+test('a track keeps its colours from start to end, through breaks and drops; the next track brings other ones', async () => {
+  const { palettePool } = await import('../src/director.js');
+  let first = null, moved = 0, palettes = new Set();
+  play(260, t => t < 0.02 ? track('a', 0, 600) : Math.abs(t - 230) < 1 / 120 ? track('b') : null, ({ t, director }) => {
+    palettes.add(director.palette);
+    if (t > 10 && t < 229) { first ??= [...director.col, ...director.col2]; moved = Math.max(moved, ...[...director.col, ...director.col2].map((v, i) => Math.abs(v - first[i]))); }
+  });
+  assert.ok(moved < 0.01, `within the track the colours moved by ${moved.toFixed(3)}`);
+  assert.equal(palettes.size, 2, 'one palette for the first track, the next one for the second');
+  const pool = palettePool('hypnotic'), own = palettePool('techno');
+  assert.ok(pool.length > 20 && own.length > 20, 'every kind of club music draws on the palettes of all of them');
+  assert.ok(palettePool('ambient').length < 8, 'music to listen to keeps its own');
+});

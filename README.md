@@ -97,11 +97,17 @@ scrolling: **Sound** (source, tempo, connect), **Track** (while a file plays), *
 camera and freeze), **Levels** (faders for light, glow, haze, hall light, beam width, sound sensitivity and camera
 speed), **Fixtures** (a switch for every light group and effect) and **Effects** (strobe, blinder, blackout, CO2,
 pyro, confetti). **Settings** (the gear, or **S**) holds what you set once: choreography, hall heads and truss
-formation, look presets, colour palette and a level per light group, quality and extra smoke, screen content,
-presets, the audio input device and the keyboard shortcuts. Venue and quality changes preserve the active audio
-stream. When frames take too long the picture first draws fewer pixels and sharpens again when there is room;
-automatic quality reduces detail only after that. Explicit Light, Normal and High choices are remembered. A newer tab
-with the show pauses the older ones.
+formation, look presets, colour palette and a level per light group, graphics and extra smoke, screen content,
+presets, the audio input device and the keyboard shortcuts. Venue changes preserve the active audio stream. A newer
+tab with the show pauses the older ones.
+
+**Graphics** (Settings → Picture) work as in a game: **Light**, **Normal**, **High** and **Ultra**, and under them every
+setting on its own: resolution, sharpness on high-resolution screens, frame rate (30, 60 or the screen's), how many
+people are drawn and how finely, how many beams light the surfaces, glints, reflections, glow and haze clouds. Every
+setting changes the picture at once. **Automatic** measures your computer the first time: from Light up, a preset at
+a time, as long as the picture keeps your screen's pace, and it keeps the best one (**Measure this computer again**
+after a new graphics card). When frames take too long the picture first draws fewer pixels and sharpens again when
+there is room; automatic steps down a preset only after that.
 
 Look presets include Standard, Calm, Cinematic and Energetic; moving a fader makes a custom look.
 

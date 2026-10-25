@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AutoQuality, OPTIONS, PRESETS, ORDER, choiceOf, settingsOf, needsBuild, presetOf, guessPreset, cardLabel } from '../src/quality.js';
+import { AutoQuality, Calibration, OPTIONS, PRESETS, ORDER, choiceOf, settingsOf, needsBuild, presetOf, cardLabel } from '../src/quality.js';
 
 function draw(control, fps, seconds, options = {}) {
   const settings = { visible: true, ready: true, automatic: true, atMin: true, target: 1 / 60, ...options };
@@ -52,15 +52,24 @@ test('no graphics setting builds the venue again: from Ultra to Light and back, 
   for (const a of ORDER) for (const b of ORDER) assert.equal(needsBuild(PRESETS[a], PRESETS[b]), false, `${a} to ${b}`);
 });
 
-test('a first guess from the graphics card: built in is Light, an M1 Normal, a card of its own High, never Ultra', () => {
-  const cases = {
-    'AMD, AMD Radeon Vega 11 Graphics (radeonsi, raven, LLVM 19.1.7, DRM 3.61, 6.17.1-arch1-1), OpenGL 4.6': 'light',
-    'AMD Radeon(TM) Graphics': 'light', 'Intel(R) UHD Graphics 620': 'light', 'Intel Iris Xe Graphics': 'light',
-    'Apple M1': 'normal', 'Apple M2 Pro': 'high', 'apple metal-3': 'normal',
-    'NVIDIA, NVIDIA GeForce GTX 1660 SUPER (0x000021C4) Direct3D11': 'high', 'AMD Radeon RX 6700 XT': 'high', 'nvidia turing': 'high',
-    'Google SwiftShader': 'light', 'llvmpipe (LLVM 15.0.7, 256 bits)': 'light', '': 'normal', 'Something new': 'normal',
-  };
-  for (const [name, preset] of Object.entries(cases)) assert.equal(guessPreset(name), preset, name);
+// frames of a computer that keeps the screen's pace up to and including the given preset, and is slow above it
+function measure(fastUpTo, target = 1 / 60) {
+  const calibration = new Calibration(), tried = [calibration.preset];
+  for (let i = 0; i < 4000; i++) {
+    const slow = ORDER.indexOf(calibration.preset) > ORDER.indexOf(fastUpTo), found = calibration.sample(slow ? target * 1.6 : target, target);
+    if (found?.next) tried.push(found.next);
+    if (found?.done) return { done: found.done, tried };
+  }
+  return null;
+}
+test('automatic measures this computer: from Light up while it keeps the pace, back one at the first that does not', () => {
+  assert.deepEqual(measure('normal'), { done: 'normal', tried: ['light', 'normal', 'high'] });
+  assert.deepEqual(measure('ultra'), { done: 'ultra', tried: ORDER });
+  assert.deepEqual(measure('none'), { done: 'light', tried: ['light'] }, 'a computer that keeps up with nothing gets Light');
+  const calibration = new Calibration();
+  for (let i = 0; i < 100; i++) calibration.sample(1 / 60);
+  calibration.pause();
+  assert.equal(calibration.sample(1 / 60), null, 'after a pause the preset is measured afresh');
 });
 
 test('the card is named as people know it', () => {

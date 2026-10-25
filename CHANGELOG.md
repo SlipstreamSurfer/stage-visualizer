@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.37.0
+
+- Graphics settings as in a game: Light, Normal, High and Ultra, and every setting on its own under them
+  (Settings → Picture): resolution, sharpness on high-resolution screens, frame rate (30, 60 or the screen's), how
+  many people are drawn and how finely, how many beams light the surfaces, glints, reflections, glow and haze clouds.
+- Every setting changes the picture at once, presets too: the venue is built with room for the most of everything
+  and the settings say how much of it is drawn, so nothing is built again (that took half a minute).
+- Automatic measures your computer the first time, whatever it is: from Light up, a preset at a time, as long as the
+  picture keeps your screen's pace, and keeps the best one. It steps a preset down later only when even the fewest
+  pixels do not keep up. "Measure this computer again" starts over, after a new graphics card, say.
+- High is what Normal was up to 0.36 and Ultra what High was, with more of it; a choice kept by 0.36 moves along.
+- A frame-rate limit for computers that cannot keep 60 a second smoothly: 30 steady frames instead of an uneven 40.
+- Switching the glow on or off no longer stalls the picture for seconds.
+
 ## 0.36.1
 
 - The trusses no longer catch a warm patch of light on their middle. The light the LED wall throws on the stage came

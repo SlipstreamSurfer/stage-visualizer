@@ -17,7 +17,7 @@ import { Audio } from './audio.js';
 import { followPlayer } from './player.js';
 import { DETAIL_AT } from './people.js';
 import { mountPlayback } from './playback.js';
-import { OPTIONS, PRESETS, ORDER, AutoQuality, choiceOf, settingsOf, needsBuild, presetOf, guessPreset, cardLabel } from './quality.js';
+import { OPTIONS, PRESETS, ORDER, AutoQuality, Calibration, choiceOf, settingsOf, needsBuild, presetOf, cardLabel } from './quality.js';
 import { SteadyResolution } from './steady.js';
 import { djEye } from './dj-eye.js';
 import { Walk } from './walk.js';
@@ -45,14 +45,15 @@ const params = new URLSearchParams(location.search);
 let WEBGL = params.has('webgl') || !navigator.gpu;   // ?webgl asks for the WebGL way of drawing
 const renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance', forceWebGL: WEBGL });
 // The graphics settings (quality.js): automatic, a preset, or custom (a preset with the viewer's own values over it).
-// Automatic starts from what the graphics card is called, and what it learnt on this card before.
+// Automatic measures this computer once (Calibration, from Light up) and keeps what it found; the card's name is
+// only shown, never used to decide.
 let graphicsChoice = params.has('quality') ? choiceOf(params.get('quality')) : choiceOf(kept('quality', 'auto'), kept('graphics', '') !== '0.37');
 keep('graphics', '0.37');   // what is kept from here on uses the names of 0.37
 let ownGraphics = parseStored(kept('graphicsOwn', '{}')) || {};
 const autoQuality = new AutoQuality(), steady = new SteadyResolution();   // steady: fewer pixels when frames take too long (steady.js)
 let steadyOn = kept('steady', 'true') !== 'false';
-let quality = { ...PRESETS.normal, details: params.has('details') }, autoPick = 'normal', gpuName = '';
-const pixelRatio = () => Math.min(window.devicePixelRatio, quality.sharp) * quality.scale * (steadyOn ? steady.scale : 1);
+let quality = { ...PRESETS.normal, details: params.has('details') }, autoPick = 'light', gpuName = '', calibration = null;
+const pixelRatio = () => Math.min(window.devicePixelRatio, quality.sharp) * quality.scale * (steadyOn && !calibration ? steady.scale : 1);   // while measuring, the steady picture would only hide a slow card
 renderer.setPixelRatio(pixelRatio());
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
@@ -60,7 +61,7 @@ document.body.prepend(renderer.domElement);
 await renderer.init();
 WEBGL = !!renderer.backend.isWebGLBackend;
 gpuName = cardName(renderer);
-{ const learnt = parseStored(kept('autoGraphics', '{}')) || {}; autoPick = learnt.gpu === gpuName && learnt.preset in PRESETS ? learnt.preset : guessPreset(gpuName); }
+{ const learnt = parseStored(kept('autoGraphics', '{}')) || {}; if (learnt.preset in PRESETS) autoPick = learnt.preset; else if (graphicsChoice === 'auto') calibration = new Calibration(); }
 const graphicsNow = () => graphicsChoice === 'custom' ? settingsOf(ownGraphics.base, ownGraphics) : settingsOf(graphicsChoice === 'auto' ? autoPick : graphicsChoice);
 const graphicsKey = () => graphicsChoice === 'auto' ? autoPick : graphicsChoice;
 quality = { ...graphicsNow(), details: quality.details };
@@ -70,17 +71,18 @@ const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 1600);   // far enough to
 // the scene, a glow round what is bright, and the finish of a camera: colour that splits slightly towards the edge
 // of the lens, darker corners and a little grain
 const post = new THREE.RenderPipeline(renderer), scenePass = pass(scene, camera), image = scenePass.getTextureNode(), grainAt = uniform(0);
-let glow, combined, configuredBloom;
+// With and without the glow: both kept once made, so that switching back (the graphics setting) costs nothing.
+let glow, configuredBloom;
+const finishes = {};
 function configurePost() {
   if (configuredBloom === quality.bloom) return;
-  combined?.renderTarget?.dispose(); combined?.dispose(); glow?.dispose();
-  glow = quality.bloom ? bloomOf(image, 0.8, 0.7, 0.6) : null;
-  combined = glow ? convertToTexture(image.add(glow)) : null;
-  const lit = combined || image, off = uv().sub(0.5), r2 = dot(off, off);
-  const split = vec3(lit.sample(uv().sub(off.mul(r2).mul(0.004))).r, lit.sample(uv()).g, lit.sample(uv().add(off.mul(r2).mul(0.004))).b);
-  const shaded = max(split, vec3(0)).mul(r2.mul(-0.9).add(1));
-  post.outputNode = shaded.add(fract(sin(dot(uv().mul(grainAt.add(1)), vec3(12.9898, 78.233, 0).xy)).mul(43758.5453)).sub(0.5).mul(0.03).mul(shaded.add(0.4)));
-  post.needsUpdate = true;
+  const f = finishes[quality.bloom] ||= (() => {
+    const bloom = quality.bloom ? bloomOf(image, 0.8, 0.7, 0.6) : null, lit = bloom ? convertToTexture(image.add(bloom)) : image, off = uv().sub(0.5), r2 = dot(off, off);
+    const split = vec3(lit.sample(uv().sub(off.mul(r2).mul(0.004))).r, lit.sample(uv()).g, lit.sample(uv().add(off.mul(r2).mul(0.004))).b);
+    const shaded = max(split, vec3(0)).mul(r2.mul(-0.9).add(1));
+    return { bloom, output: shaded.add(fract(sin(dot(uv().mul(grainAt.add(1)), vec3(12.9898, 78.233, 0).xy)).mul(43758.5453)).sub(0.5).mul(0.03).mul(shaded.add(0.4))) };
+  })();
+  glow = f.bloom; post.outputNode = f.output; post.needsUpdate = true;
   configuredBloom = quality.bloom;
 }
 configurePost();
@@ -110,6 +112,9 @@ const drawOnce = target => {
 };
 post.render();   // the first frame, as it is: it sets the scene pass up the way every frame has it, which the warm-up must match
 await warmScene(renderer, scene, camera, { draw: drawOnce });   // behind the start screen: nothing stalls later
+// the other finish too (with the glow or without), drawn once behind the loading screen, so that the graphics setting
+// switches it at once later instead of stalling the picture for seconds while it is made
+{ const was = quality.bloom, frame = () => new Promise(r => requestAnimationFrame(r)); quality.bloom = !was; configurePost(); for (let i = 0; i < 3; i++) { post.render(); await frame(); } quality.bloom = was; configurePost(); post.render(); }
 let cams = new CameraDirector(shots(world.layout, world.shots));
 // what is off unless the viewer switches it on: with everything at once the show is too much
 let controls = normalizeControls(parseStored(kept('controls', '{}')));
@@ -147,7 +152,7 @@ function frame(now) {
   if (elsewhere) return;
   // a frame-rate limit (graphics setting fps): skip a refresh until a frame's time is up; the next one is due a frame's
   // time after when this one was due, so that on a screen of another pace the frames still average out at the limit
-  if (quality.fps) { const each = 1000 / quality.fps, since = now - drawnAt; if (since < each - 1.5) return; drawnAt = since > each * 3 ? now : drawnAt + each; }
+  if (quality.fps && !calibration) { const each = 1000 / quality.fps, since = now - drawnAt; if (since < each - 1.5) return; drawnAt = since > each * 3 ? now : drawnAt + each; }
   timer.update(now);
   const raw = Math.max(0, timer.getDelta()), dt = Math.min(raw, 0.05), t = timer.getElapsed();
   signals.decay = director.mood.decay;
@@ -196,7 +201,7 @@ function frame(now) {
     playback.update();
     show.fps = frames / (t - statusAt); frames = 0; statusAt = t;
     $('fps').textContent = `${Math.round(show.fps)} frames a second${WEBGL ? ' · WebGL' : ''}`;
-    $('qualityNote').textContent = (graphicsChoice === 'auto' ? `Automatic · ${PRESETS[autoPick].name}` : graphicsChoice === 'custom' ? 'Custom' : PRESETS[graphicsChoice].name) + (gpuName ? ` · ${cardLabel(gpuName)}` : '') + (steadyOn && steady.scale < 1 ? ` · ${Math.round(steady.scale * 100)}% resolution to keep the pace` : '');
+    $('qualityNote').textContent = (graphicsChoice === 'auto' ? `Automatic · ${PRESETS[autoPick].name}${calibration ? ' · measuring what this computer keeps up with…' : ''}` : graphicsChoice === 'custom' ? 'Custom' : PRESETS[graphicsChoice].name) + (gpuName ? ` · ${cardLabel(gpuName)}` : '') + (steadyOn && steady.scale < 1 ? ` · ${Math.round(steady.scale * 100)}% resolution to keep the pace` : '');
     const m = signals.m;
     const signal = audio.signal();
     $('inputLevel').hidden = !audio.live;
@@ -216,12 +221,24 @@ function frame(now) {
     start.update(changing);
     syncSegments();
   }
+  // Automatic, the first time: measuring what this computer keeps up with, a preset at a time (quality.js)
+  if (calibration) {
+    if (document.hidden || changing || !show.ready) calibration.pause();
+    else {
+      const found = calibration.sample(raw, Math.min(1 / 60, steady.fastest));
+      if (found) {
+        autoPick = found.next || found.done;
+        if (found.done) { calibration = null; steady.scale = 1; steady.reset(); keep('autoGraphics', JSON.stringify({ preset: autoPick, measured: new Date().toISOString().slice(0, 10) })); }
+        applyGraphics().catch(changeFailed);
+      }
+    }
+  }
   // first fewer pixels, a step at a time; a lighter quality (a rebuild) only when even the fewest are too many
-  if (steady.sample(raw, { visible: !document.hidden, ready: !changing && !!show.ready, enabled: steadyOn }) !== null) { renderer.setPixelRatio(pixelRatio()); resize(); }
+  if (steady.sample(raw, { visible: !document.hidden, ready: !changing && !!show.ready, enabled: steadyOn && !calibration }) !== null) { renderer.setPixelRatio(pixelRatio()); resize(); }
   show.resolution = steadyOn ? steady.scale : 1;
   // and automatic: one preset lighter when even the fewest pixels do not keep the pace, remembered for this card
-  const lower = autoQuality.sample(raw, { visible: !document.hidden, ready: !changing && !!show.ready, automatic: graphicsChoice === 'auto', atMin: !steadyOn || steady.atMin, target: steady.target, lightest: autoPick === ORDER[0] });
-  if (lower) { autoPick = ORDER[ORDER.indexOf(autoPick) - 1]; keep('autoGraphics', JSON.stringify({ gpu: gpuName, preset: autoPick })); applyGraphics().catch(changeFailed); }
+  const lower = autoQuality.sample(raw, { visible: !document.hidden, ready: !changing && !!show.ready, automatic: graphicsChoice === 'auto' && !calibration, atMin: !steadyOn || steady.atMin, target: steady.target, lightest: autoPick === ORDER[0] });
+  if (lower) { autoPick = ORDER[ORDER.indexOf(autoPick) - 1]; keep('autoGraphics', JSON.stringify({ preset: autoPick, measured: new Date().toISOString().slice(0, 10) })); applyGraphics().catch(changeFailed); }
 }
 
 // ----- the show's own controls -----
@@ -352,7 +369,9 @@ function liveGraphics() {
   Object.assign(world.crowdDetail, { near: DETAIL_AT.near * quality.detail, mid: DETAIL_AT.mid * quality.detail, far: DETAIL_AT.far * quality.detail });
   show.quality = graphicsKey(); show.graphics = quality;
 }
-$('quality').onchange = e => setGraphics(e.target.value);
+$('quality').onchange = e => { if (e.target.value === 'auto' && !(parseStored(kept('autoGraphics', '{}')) || {}).preset) { calibration = new Calibration(); autoPick = calibration.preset; } setGraphics(e.target.value); };
+// measure this computer again: after a new graphics card, say, or with the show on another screen
+$('measureGraphics').onclick = () => { calibration = new Calibration(); autoPick = calibration.preset; setGraphics('auto'); };
 liveGraphics(); syncGraphics();
 $('steadyPicture').checked = steadyOn;
 $('steadyPicture').onchange = e => { steadyOn = e.target.checked; keep('steady', String(steadyOn)); steady.reset(); renderer.setPixelRatio(pixelRatio()); resize(); };

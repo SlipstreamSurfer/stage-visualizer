@@ -1,5 +1,5 @@
 // Graphics settings, as in a game: four presets from Light to Ultra, and every setting on its own for whoever wants
-// to tune them to their computer. Automatic picks a preset from the graphics card the browser reports, and steps
+// to tune them to their computer. Automatic measures what this computer keeps up with (Calibration), and steps
 // down after sustained slow drawing (when even the lowest resolution does not keep the pace). An explicit choice is
 // never overridden; hidden tabs and loading are not measurements. No picture in this file, so the tests run it.
 //
@@ -38,7 +38,6 @@ export const PRESETS = {
   ultra: { name: 'Ultra', scale: 1, sharp: 1.5, fps: 0, crowd: 1, detail: 1.5, beams: 28, shine: 6, metal: true, bloom: true, smoke: 250 },
 };
 export const ORDER = ['light', 'normal', 'high', 'ultra'];
-export const AUTO_TOP = 'high';   // automatic never picks Ultra: that is for whoever chooses it
 const OLD = { low: 'light', normal: 'high', high: 'ultra' };   // the names up to 0.36
 
 // A choice as given in a link or kept by the browser: 'auto', a preset, 'custom', or 'low' (Light up to 0.36).
@@ -60,17 +59,32 @@ export const needsBuild = (a, b) => Object.keys(OPTIONS).some(key => OPTIONS[key
 // the preset a set of settings is, or 'custom'
 export const presetOf = settings => ORDER.find(key => Object.keys(OPTIONS).every(k => PRESETS[key][k] === settings[k])) || 'custom';
 
-// A first guess from the name of the graphics card. Built into the processor (Intel, AMD's Radeon Graphics or Vega,
-// a phone's): Light. An Apple M chip: Normal, a Pro or Max: High. A card of its own: High. Drawn by the processor
-// itself (no graphics card at all): Light. Unknown: Normal.
-export function guessPreset(gpu = '') {
-  const s = String(gpu).toLowerCase();
-  if (!s) return 'normal';
-  if (/swiftshader|llvmpipe|softpipe|software|basic render/.test(s)) return 'light';
-  if (/apple/.test(s)) return /\b(pro|max|ultra)\b/.test(s) ? 'high' : 'normal';
-  if (/geforce|nvidia|quadro|\brtx\b|\bgtx\b|radeon rx|\brx ?\d{3,4}|radeon pro|arc ?a\d/.test(s)) return 'high';
-  if (/intel|vega|radeon\(tm\) graphics|radeon graphics|\buhd\b|iris|mali|adreno|powervr/.test(s)) return 'light';
-  return 'normal';
+// Automatic measures, on whatever computer it is: from Light up, a preset at a time, as long as the picture keeps the
+// screen's pace at full resolution (the steady picture is off meanwhile, so it cannot hide a slow card). The first
+// preset that does not keep up sends it back to the one before, and that is the one. No card is looked up by its
+// name: every computer is different, and only drawing on it tells what it can do.
+//   sample(dt, target) is called every frame while it measures: dt the frame's raw length, target the screen's
+//   frame time. Returns null while it measures, { next } to try the next preset, or { done } with the one to keep.
+const SETTLE = 0.8, MEASURE = 2.5;   // seconds after a change before measuring (the change itself costs a frame or two); how long a preset is measured
+export class Calibration {
+  constructor(order = ORDER) { this.order = order; this.at = 0; this.frames = []; this.clock = 0; }
+  get preset() { return this.order[this.at]; }
+  sample(dt, target = 1 / 60) {
+    if (!Number.isFinite(dt) || dt <= 0) return null;
+    this.clock += Math.min(dt, 0.25);
+    if (this.clock < SETTLE) return null;
+    this.frames.push(Math.min(dt, 0.25));
+    if (this.clock < SETTLE + MEASURE) return null;
+    const sorted = this.frames.sort((a, b) => a - b), typical = sorted[sorted.length >> 1];
+    const missed = sorted.filter(f => f > target * 1.5).length / sorted.length, keeps = typical <= target * 1.08 && missed < 1 / 12;
+    this.frames = []; this.clock = 0;
+    if (!keeps) return { done: this.order[Math.max(0, this.at - 1)] };
+    if (this.at === this.order.length - 1) return { done: this.preset };
+    this.at++;
+    return { next: this.preset };
+  }
+  // a hidden tab or a venue being built is no measurement: that preset is measured again from the start
+  pause() { this.frames = []; this.clock = 0; }
 }
 
 // The card's name as people know it: "NVIDIA Corporation, NVIDIA GeForce GTX 1660 SUPER/PCIe/SSE2, OpenGL ES 3.2" is

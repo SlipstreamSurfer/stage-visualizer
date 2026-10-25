@@ -253,7 +253,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   const n = spots.length, PHONES = Math.round(dancers / 30);
   U.stage.value.set(0, st.height + 5, centre ? st.z : st.back + 1);
   const o = new THREE.Object3D(), c = new THREE.Color();
-  const crowd = people(peopleMaterial({ light: lights.light, U }), n); add(crowd.mesh);
+  const crowd = people(peopleMaterial({ light: lights.light, U }), n, false, true); add(crowd.mesh);   // with less detail further off: see people.js
   const phones = add(new THREE.InstancedMesh(new THREE.PlaneGeometry(0.08, 0.15), new THREE.MeshBasicMaterial({ color: 0, fog: false, side: THREE.DoubleSide }), Math.max(1, PHONES))); phones.frustumCulled = false; phones.count = PHONES;
   // the torch of every other phone: in a breakdown, seen from the stage, a field of small lights over the crowd
   const TORCHES = Math.ceil(PHONES / 2), torches = add(new THREE.InstancedMesh(new THREE.SphereGeometry(0.025, 6, 4), new THREE.MeshBasicMaterial({ color: 0, fog: false }), Math.max(1, TORCHES))); torches.frustumCulled = false; torches.count = TORCHES;
@@ -442,6 +442,8 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   return {
     layout: L, groups: byRole(L.things), env, shots: fac.shots, lights, solids: fac.solids,   // solids: what someone walking round cannot pass (walk.js)
     // director: the Director after its update; signals: Signals; look: the viewer's sliders
+    // camera: the camera as it will draw this frame; height: of the picture, in pixels. Which of the crowd show, and how finely.
+    view(camera, height) { crowd.view(camera, height); }, crowdDetail: crowd.detail,
     update(dt, t, director, signals, look) {
       updateWalkers?.(dt); shell.update(dt, t);
       env.haze = env.hazeOut; env.roomColor = director.room.color;

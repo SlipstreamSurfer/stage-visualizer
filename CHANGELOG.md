@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.36.0
+
+- The show knows which track plays. With Spotify (or another music player) on Linux the local server hears the
+  moment the player moves on, and tells the page at once. The tempo and the parts of the track are learnt afresh,
+  and the new palette and looks land on the new track's first kick, a few seconds in, after any crossfade. A palette
+  now lasts a whole track. Without such a player the show guesses the tracks from the sound, as before.
+- In the last thirty seconds of a track nothing big starts any more, so the change of look falls on the next track.
+- The DJ's players count down what is left of the track, with a bar of the whole track; in the last thirty seconds
+  the time, the bar and the ring of the jog wheel flash red, as on a CDJ.
+- The DJ's gear is darker: the lamps, the screens and above all the green of the meters glow instead of shine.
+- The clock on the DJ's table shows whole (its top half was inside the case), with red digits.
+- The crowd is drawn with less detail further away, at three levels, and whoever is out of the picture is not drawn
+  at all: about 55 to 75 per cent fewer triangles, with no difference to see.
+- Fixed: when the medic walked someone to a spot, the picture stopped for as long as that took.
+
 ## 0.35.0
 
 - Every kind of music uses the Hangar's rig its own way: which looks the heads take, which formations the trusses go

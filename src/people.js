@@ -14,7 +14,7 @@ export const SHIRTS = [0x101013, 0x101013, 0x101013, 0x121216, 0x16161a, 0x1c1c2
 
 const va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 const at = (g, x, y, z) => (g.translate(x, y, z), g);
-const between = (ax, ay, az, bx, by, bz, r1, r2, seg = 8) => {
+const between = (ax, ay, az, bx, by, bz, r1, r2, seg) => {
   va.set(ax, ay, az); vb.set(bx, by, bz);
   const g = new THREE.CylinderGeometry(r2, r1, va.distanceTo(vb), seg, 1, true);
   g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, vc.subVectors(vb, va).normalize()));
@@ -27,22 +27,31 @@ const tag = (g, arm, part) => {
   return g;
 };
 
-export function personGeo() {
-  const head = tag(at(new THREE.SphereGeometry(0.092, 12, 8).scale(0.9, 1.2, 1), 0, 1.625, 0), 0, SKIN);
+// The figure at three levels of detail (DETAIL): the same parts in the same places, with fewer sides the further
+// away it is drawn. Far off a head is a few pixels, and its twelve sides are work nobody sees.
+export const DETAIL = [
+  { head: [12, 8], body: 12, limb: 8, joint: [8, 6], hand: [8, 5], cup: 8 },   // near
+  { head: [8, 6], body: 8, limb: 6, joint: [6, 4], hand: [6, 4], cup: 6 },     // a little way off
+  { head: [6, 5], body: 6, limb: 4, joint: [4, 3], hand: [4, 3], cup: 4 },     // far
+];
+export function personGeo(level = 0) {
+  const d = DETAIL[level];
+  const head = tag(at(new THREE.SphereGeometry(0.092, ...d.head).scale(0.9, 1.2, 1), 0, 1.625, 0), 0, SKIN);
   for (let i = 0, pos = head.attributes.position; i < pos.count; i++) if (pos.getZ(i) > -0.03 || pos.getY(i) > 1.678) head.attributes.aPart.setX(i, HAIR);   // the back and top of the head
-  const torso = new THREE.LatheGeometry([[0.001, 0.84], [0.14, 0.86], [0.172, 0.97], [0.15, 1.12], [0.168, 1.27], [0.2, 1.37], [0.17, 1.435], [0.07, 1.47], [0.058, 1.54], [0.001, 1.54]].map(p => new THREE.Vector2(p[0], p[1])), 12).scale(1, 1, 0.62);
+  const torso = new THREE.LatheGeometry([[0.001, 0.84], [0.14, 0.86], [0.172, 0.97], [0.15, 1.12], [0.168, 1.27], [0.2, 1.37], [0.17, 1.435], [0.07, 1.47], [0.058, 1.54], [0.001, 1.54]].map(p => new THREE.Vector2(p[0], p[1])), d.body).scale(1, 1, 0.62);
   const parts = [tag(torso, 0, SHIRT), head];
   for (const side of [-1, 1]) {
     const sx = side * SHOULDER_X;
     parts.push(
-      tag(between(side * 0.085, 0.92, 0, side * 0.095, 0.5, -0.01, 0.088, 0.062), 0, TROUSERS), tag(between(side * 0.095, 0.5, -0.01, side * 0.095, 0.07, 0.015, 0.06, 0.04), 0, TROUSERS),
-      tag(at(new THREE.BoxGeometry(0.09, 0.07, 0.25), side * 0.095, 0.035, -0.045), 0, SHOES), tag(at(new THREE.SphereGeometry(0.058, 8, 6), side * 0.235, 1.375, 0), 0, SHIRT),
-      tag(between(sx, SHOULDER_Y, 0, sx, SHOULDER_Y - UPPER_ARM, 0, 0.052, 0.043), side, SHIRT),
-      tag(between(sx, SHOULDER_Y - UPPER_ARM, 0, sx, SHOULDER_Y - UPPER_ARM * 2, 0, 0.042, 0.033), side, SLEEVE),
-      tag(at(new THREE.SphereGeometry(0.048, 8, 5).scale(0.8, 1.25, 1), sx, SHOULDER_Y - UPPER_ARM * 2 - 0.045, 0), side, SKIN));
+      tag(between(side * 0.085, 0.92, 0, side * 0.095, 0.5, -0.01, 0.088, 0.062, d.limb), 0, TROUSERS), tag(between(side * 0.095, 0.5, -0.01, side * 0.095, 0.07, 0.015, 0.06, 0.04, d.limb), 0, TROUSERS),
+      tag(at(new THREE.BoxGeometry(0.09, 0.07, 0.25), side * 0.095, 0.035, -0.045), 0, SHOES), tag(at(new THREE.SphereGeometry(0.058, ...d.joint), side * 0.235, 1.375, 0), 0, SHIRT),
+      tag(between(sx, SHOULDER_Y, 0, sx, SHOULDER_Y - UPPER_ARM, 0, 0.052, 0.043, d.limb), side, SHIRT),
+      tag(between(sx, SHOULDER_Y - UPPER_ARM, 0, sx, SHOULDER_Y - UPPER_ARM * 2, 0, 0.042, 0.033, d.limb), side, SLEEVE),
+      tag(at(new THREE.SphereGeometry(0.048, ...d.hand).scale(0.8, 1.25, 1), sx, SHOULDER_Y - UPPER_ARM * 2 - 0.045, 0), side, SKIN));
   }
-  parts.push(tag(at(new THREE.CylinderGeometry(0.036, 0.028, 0.115, 8), SHOULDER_X, SHOULDER_Y - UPPER_ARM * 2 - 0.06, -0.04), 1, CUP));   // a cup in the right hand (folded away for whoever has none)
-  return mergeGeometries(parts);
+  parts.push(tag(at(new THREE.CylinderGeometry(0.036, 0.028, 0.115, d.cup), SHOULDER_X, SHOULDER_Y - UPPER_ARM * 2 - 0.06, -0.04), 1, CUP));   // a cup in the right hand (folded away for whoever has none)
+  const geo = mergeGeometries(parts); geo.deleteAttribute('uv');
+  return geo;
 }
 
 const SX = SHOULDER_X, SY = SHOULDER_Y, UPPER = UPPER_ARM;
@@ -67,14 +76,32 @@ const EACH = 16, FIELDS = [['aSeed', 4, 0], ['aPlace', 4, 4], ['aShirt', 3, 8], 
 // reflect and the word on the back. Part of the figure, so it moves with it.
 export const KIT = { none: 0, security: 1, medic: 2 };
 // A crowd of n figures drawn in one go. put(i, ...) places one; moving: they are placed again every frame.
-export function people(material, n, moving = false) {
-  const geo = personGeo(); geo.deleteAttribute('uv');
-  const data = new Float32Array(Math.max(1, n) * EACH), buffer = new THREE.InstancedInterleavedBuffer(data, EACH);
-  if (moving) buffer.setUsage(THREE.DynamicDrawUsage);
-  for (const [name, size, at] of FIELDS) geo.setAttribute(name, new THREE.InterleavedBufferAttribute(buffer, size, at));
-  const mesh = new THREE.InstancedMesh(geo, material, Math.max(1, n)), o = new THREE.Object3D();
-  mesh.count = n; mesh.frustumCulled = false;
-  return { mesh, data, buffer,
+// lod: drawn at the three levels of detail, each person at the one the camera asks for (view below); otherwise
+// everyone at the first.
+//
+// What the setters write is kept here, whole; what the card draws is a copy per level of detail, of the people at
+// that level only. view(camera, height) sorts the crowd again when the camera has moved or turned, or when
+// someone or the distances in detail were changed: by how big a person shows (their distance, the camera's angle of view and the height of
+// the picture in pixels), and leaving out whoever is out of the picture or folded away (size 0).
+const NEAR = 13, MID = 27, ROOM = 1.6;   // metres from the camera at which a person is drawn with less detail, at 1080 pixels and 50 degrees; how far round a person counts as in the picture
+export function people(material, n, moving = false, lod = false) {
+  const N = Math.max(1, n), data = new Float32Array(N * EACH), matrices = new Float32Array(N * 16), o = new THREE.Object3D();
+  const levels = (lod ? DETAIL : DETAIL.slice(0, 1)).map((_, level) => {
+    const geo = personGeo(level), own = lod ? new Float32Array(N * EACH) : data, buffer = new THREE.InstancedInterleavedBuffer(own, EACH);
+    if (moving) buffer.setUsage(THREE.DynamicDrawUsage);
+    for (const [name, size, at] of FIELDS) geo.setAttribute(name, new THREE.InterleavedBufferAttribute(buffer, size, at));
+    const mesh = new THREE.InstancedMesh(geo, material, N);
+    mesh.instanceMatrix = new THREE.InstancedBufferAttribute(lod ? new Float32Array(N * 16) : matrices, 16);   // three turns the normals with this
+    if (lod) { buffer.setUsage(THREE.DynamicDrawUsage); mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); }
+    mesh.count = lod ? 1 : n; mesh.frustumCulled = false;   // sorted: one folded-away figure until the first view, so the warm-up still builds what it draws with
+    return { mesh, own, buffer };
+  });
+  const group = new THREE.Group(); for (const l of levels) group.add(l.mesh);
+  let dirty = true;
+  const was = new THREE.Vector3(1e9, 0, 0), looked = new THREE.Vector3(), dir = new THREE.Vector3(), frustum = new THREE.Frustum(), sphere = new THREE.Sphere(), seen = new THREE.Matrix4();
+  let wasFov = 0, wasHeight = 0, wasDetail = '';
+  const detail = { near: NEAR, mid: MID };   // the distances, for comparing: Infinity for both draws everyone at full detail
+  return { mesh: group, data, levels: levels.map(l => l.mesh), detail,
     seed(i, a, b, c, d) { data.set([a, b, c, d], i * EACH); },
     shirt(i, colour) { data.set([colour.r, colour.g, colour.b], i * EACH + 8); },
     kit(i, kind) { data[i * EACH + 15] = kind; },
@@ -83,9 +110,28 @@ export function people(material, n, moving = false) {
     sit(i, y, seated) { data[i * EACH + 13] = y; data[i * EACH + 14] = seated ? 1 : 0; },
     put(i, x, z, yaw, size, build = 1) {
       data.set([x, z, yaw, size], i * EACH + 4); data[i * EACH + 11] = build;
-      o.position.set(x, 0, z); o.rotation.set(0, yaw, 0); o.scale.set(size * build, size, size * build); o.updateMatrix(); mesh.setMatrixAt(i, o.matrix);   // three turns the normals with this
+      o.position.set(x, 0, z); o.rotation.set(0, yaw, 0); o.scale.set(size * build, size, size * build); o.updateMatrix(); o.matrix.toArray(matrices, i * 16);
     },
-    moved() { buffer.needsUpdate = true; mesh.instanceMatrix.needsUpdate = true; } };
+    moved() { dirty = true; if (!lod) { levels[0].buffer.needsUpdate = true; levels[0].mesh.instanceMatrix.needsUpdate = true; } },
+    view(camera, height) {
+      if (!lod) return;
+      camera.getWorldDirection(dir);
+      const key = detail.near + ' ' + detail.mid;
+      if (!dirty && camera.position.distanceToSquared(was) < 0.04 && dir.dot(looked) > 0.9995 && camera.fov === wasFov && height === wasHeight && key === wasDetail) return;
+      dirty = false; wasDetail = key; was.copy(camera.position); looked.copy(dir); wasFov = camera.fov; wasHeight = height;
+      camera.updateMatrixWorld(); frustum.setFromProjectionMatrix(seen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+      const scale = Math.tan(camera.fov * Math.PI / 360) / Math.tan(25 * Math.PI / 180) * 1080 / Math.max(1, height), cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+      const count = [0, 0, 0];
+      for (let i = 0; i < n; i++) {
+        const k = i * EACH, x = data[k + 4], z = data[k + 5], size = data[k + 7], y = data[k + 13] + 1;   // their middle: on a tier or a balcony, that far up
+        if (!size) continue;
+        sphere.center.set(x, y, z); sphere.radius = ROOM;
+        if (!frustum.intersectsSphere(sphere)) continue;
+        const far = Math.hypot(x - cx, y - cy, z - cz) * scale, level = far < detail.near ? 0 : far < detail.mid ? 1 : 2, l = levels[level], at = count[level]++;
+        l.own.set(data.subarray(k, k + EACH), at * EACH); l.mesh.instanceMatrix.array.set(matrices.subarray(i * 16, i * 16 + 16), at * 16);
+      }
+      levels.forEach((l, level) => { l.mesh.count = count[level]; l.buffer.needsUpdate = true; l.mesh.instanceMatrix.needsUpdate = true; });
+    } };
 }
 
 // light: the world's function for the light of the beams on a point; U: from peopleU; walking: true for walkers

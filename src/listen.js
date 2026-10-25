@@ -265,6 +265,15 @@ export class Listener {
       section: 'intro', build: 0, grooveAt: 1e9, liftAt: -100, liftArmed: true,
     });
   }
+  // Another track, as the music player says (Signals.told): its tempo, its parts and how hard its kick hits are
+  // learnt afresh. What is heard goes on (with a crossfade the last track still plays for a few seconds), so the kick
+  // keeps its rough tempo until the new one has its own, and nothing breaks.
+  newTrack() {
+    const s = this.s;
+    this.tempo = new TempoTracker(); this.sections.reset(); this.part = { section: 'intro', density: 0, lift: false };
+    this.kicks = 0; this.dropped = false; this.kickRef = 0; this.weakRun = 0; this.hit = null; this.recent = []; this.grid = null;
+    s.gaps.length = 0; s.hasGrooved = false; s.build = 0;
+  }
   // bands: amplitudes of bass (35-170 Hz), mid (250-3000 Hz) and high (4000-14000 Hz); rms: of the waveform
   hear(bands, rms, t, dt, sens = 1) { return this.music.update(bands, rms, t, dt, sens); }
   // Is this bass hit the kick? MusicResponse reports every clear hit in the bass. In real tracks that is not enough:

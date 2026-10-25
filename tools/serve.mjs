@@ -5,7 +5,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { startRekordboxReceiver } from './rekordbox-bridge.mjs';
 
@@ -26,8 +26,8 @@ function changed() {
 const bus = args => new Promise(resolve => execFile('busctl', ['--user', '--json=short', ...args], { timeout: 1500 }, (err, out) => { try { resolve(err ? null : JSON.parse(out)); } catch { resolve(null); } }));
 const ask = (player, property) => bus(['get-property', player, '/org/mpris/MediaPlayer2', 'org.mpris.MediaPlayer2.Player', property]).then(r => r?.data ?? null);
 let track = {}, asked = 0;
-async function nowPlaying() {
-  if (Date.now() - asked < 1500) return track;
+async function nowPlaying(fresh = false) {
+  if (!fresh && Date.now() - asked < 1500) return track;
   asked = Date.now();
   const names = ((await bus(['list'])) || []).map(n => n.name).filter(n => n?.startsWith('org.mpris.MediaPlayer2.')).sort((a, b) => b.endsWith('.spotify') - a.endsWith('.spotify'));
   for (const player of names) {
@@ -39,7 +39,43 @@ async function nowPlaying() {
   return track = {};
 }
 
+// Every open page hears of another track the moment the player says so (/__track?live, server-sent events). The
+// players' own signals on the session bus (dbus-monitor) say when something changed: a track, play or pause, a jump
+// in the track. Without dbus-monitor it is asked every two seconds instead. Only runs while a page listens.
+function trackFeed() {
+  const pages = new Set();
+  let watcher = null, poll = null, soon = null, heartbeat = null, sent = '';
+  const tell = async (always = false) => {
+    soon = null;
+    const now = await nowPlaying(true), text = JSON.stringify(now), key = JSON.stringify({ ...now, position: 0 });
+    if (!always && key === sent) return;
+    sent = key;
+    for (const res of pages) res.write(`data: ${text}\n\n`);
+  };
+  const start = () => {
+    if (process.platform !== 'linux') return;
+    try {
+      watcher = spawn('dbus-monitor', ['--session', "type='signal',path='/org/mpris/MediaPlayer2'"], { stdio: ['ignore', 'pipe', 'ignore'] });
+      watcher.stdout.on('data', () => { soon ??= setTimeout(() => tell(true), 120); });   // a burst of signals is one change
+      watcher.on('error', () => { watcher = null; poll ??= setInterval(tell, 2000); });
+      watcher.on('exit', () => { watcher = null; if (pages.size) poll ??= setInterval(tell, 2000); });
+    } catch { poll = setInterval(tell, 2000); }
+    heartbeat = setInterval(() => { for (const res of pages) res.write(': still here\n\n'); tell(true); }, 20000);   // and now and then where it is in the track
+  };
+  const stop = () => { watcher?.kill(); watcher = null; clearInterval(poll); clearInterval(heartbeat); clearTimeout(soon); poll = heartbeat = soon = null; };
+  return {
+    add(res) {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
+      if (!pages.size) start();
+      pages.add(res); sent = ''; tell();
+      res.on('close', () => { pages.delete(res); if (!pages.size) stop(); });
+    },
+    close() { for (const res of pages) res.end(); pages.clear(); stop(); },
+  };
+}
+
 export function serve(port = 8765, { rekordbox = null } = {}) {
+  const feed = trackFeed();
   const server = http.createServer((req, res) => {
     let name;
     try { name = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { res.writeHead(400).end(); return; }   // a broken address is refused, not the end of the server
@@ -110,6 +146,7 @@ export function serve(port = 8765, { rekordbox = null } = {}) {
       });
       return;
     }
+    if (name === '/__track' && new URL(req.url, 'http://x').searchParams.has('live')) { feed.add(res); return; }
     if (name === '/__track') { nowPlaying().then(now => res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(now)), () => res.writeHead(200).end('{}')); return; }
     if (name === '/__changed') { res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }).end(String(changed())); return; }
     const file = path.join(root, name.endsWith('/') ? name + 'index.html' : name);
@@ -120,6 +157,9 @@ export function serve(port = 8765, { rekordbox = null } = {}) {
       res.end(data);
     });
   });
+  server.on('close', () => feed.close());
+  const close = server.close.bind(server);
+  server.close = callback => { feed.close(); return close(callback); };   // open pages listening for tracks do not keep the server up
   return new Promise((resolve, reject) => server.once('error', reject).listen(port, '127.0.0.1', () => resolve(server)));
 }
 

@@ -14,6 +14,7 @@ import { buildParticles } from './particles.js';
 import { shots, CameraDirector } from './cameras.js';
 import { HEAD_LOOKS, TRUSS_LOOKS } from './hangar-looks.js';
 import { Audio } from './audio.js';
+import { followPlayer } from './player.js';
 import { mountPlayback } from './playback.js';
 import { QUALITY, AutoQuality } from './quality.js';
 import { SteadyResolution } from './steady.js';
@@ -97,6 +98,7 @@ const look = { ...normalizeLook({ light: +kept('light', 1), bloom: +kept('bloom'
 let cameraFrozen = false, cameraTime = 0, cameraAge = 0, cameraIndex = -1;
 const walk = new Walk();   // walking round the venue yourself (walk.js)
 const audio = new Audio(() => { signals.reset(); director.reset(timer.getElapsed()); });
+const player = followPlayer();   // what the music player on this computer says it plays (player.js)
 const timer = new THREE.Timer();   // the show's clock, moved on once a frame (frame)
 let readDemo = demo(signals, director.mood.demoBpm, director.mood.flow), statusAt = 0, exposure = 1, frames = 0;
 const SKIP = +(params.get('skip') || 0);   // ?skip=24: the demo track starts that many seconds in, for a picture of its peak
@@ -128,6 +130,7 @@ function frame(now) {
   if (audio.live) {   // every step of sound that has come in since the last frame, then let the pulses fall away
     const sens = +$('sens').value;
     signals.begin();
+    signals.told(audio.source === audio.playerNode ? null : player.now);   // the music player's tracks, unless the show plays a file of its own
     const missed = audio.pump((bands, rms) => signals.hear(bands, rms, sens));
     if (missed) signals.skip(missed);
     signals.flow(dt);
@@ -159,6 +162,7 @@ function frame(now) {
   exposure += (wanted - exposure) * (1 - Math.exp(-dt / (wanted < exposure ? 0.12 : 1.8)));
   renderer.toneMappingExposure = exposure;
   grainAt.value = t % 1;
+  world.view(camera, renderer.domElement.height);
   post.render();
   if (pictureWanted) { pictureWanted(renderer.domElement.toDataURL('image/jpeg', 0.82)); pictureWanted = null; }   // straight after drawing, while the picture is there
   frames++;
@@ -401,6 +405,7 @@ async function replaceVenue(key, { force = false, nextQuality = qualityKey } = {
     const oldScene = scene, oldParticles = particles, cameraValue = $('cam').value;
     nextWorld.env.media = world.env.media;
     scene = nextScene; world = nextWorld; director = nextDirector; particles = nextParticles;
+    Object.assign(show, { world, director });   // for looking in from the console: the venue that plays now
     cams = new CameraDirector(shots(world.layout, world.shots), timer.getElapsed());
     scenePass.scene = scene;
     if (nextQuality !== qualityKey) { steady.scale = 1; steady.reset(); }   // another quality: find the resolution again
@@ -551,6 +556,7 @@ function logShow(t, raw) {
   logShow.frames++; logShow.slowest = Math.max(logShow.slowest, raw);
   const m = signals.m, ev = signals.ev, w = Date.now(), note = what => { logLines.push(JSON.stringify({ w, what, bpm: m.bpm, section: m.section })); };
   if (ev.drop) note('drop'); if (ev.broke) note('break'); if (ev.lift) note('lift');
+  if (ev.newTrack) note('new track: ' + [signals.track.artist, signals.track.title].filter(Boolean).join(' - '));   // as the music player says
   const silent = m.silentFor > 2.5;   // once per silence: ev.silent is only there in a frame that heard sound
   if (silent && !logShow.silent) note('silence'); logShow.silent = silent;
   if (ev.kick && signals.m.phase === 'groove' && logShow.phase === 'break' && !ev.drop) note('kick comes in'); logShow.phase = m.phase;
@@ -558,7 +564,7 @@ function logShow(t, raw) {
   if (t - logAt >= 1) {
     const fps = Math.round(logShow.frames / (t - logAt)), slowest = Math.round(logShow.slowest * 1000);
     logAt = t; logShow.frames = 0; logShow.slowest = 0;
-    logLines.push(JSON.stringify({ w, bpm: m.bpm, phase: m.phase, section: m.section, build: +m.build.toFixed(2), energy: +signals.energy.toFixed(2), fps, slowest, res: show.resolution, cam: cams.list[cams.index].name }));
+    logLines.push(JSON.stringify({ w, bpm: m.bpm, phase: m.phase, section: m.section, build: +m.build.toFixed(2), energy: +signals.energy.toFixed(2), fps, slowest, res: show.resolution, cam: cams.list[cams.index].name, left: signals.remaining === null ? undefined : Math.round(signals.remaining) }));
     const lines = logLines.splice(0).join('\n') + '\n';
     if (location.hostname === '127.0.0.1' && !navigator.webdriver && !/Headless/.test(navigator.userAgent)) fetch('/__log', { method: 'POST', body: lines, keepalive: true }).catch(() => {});   // not from a test browser
   }

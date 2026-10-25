@@ -14,6 +14,7 @@
 //   elapsed(t), bpm, turn    the time the track has played, its tempo, and how far the jog wheels have turned
 //   told(now, t)             what the computer's own music player says it is playing, when there is one to ask:
 //                            then title names the track, and another track begins when it really does
+//   remaining(t)             how long the track that plays still has, when the player says how long it is
 export const COLS = 32;
 const KEEP = 1024, MIX_SECONDS = 14, LONG = 330;   // columns kept; how long two tracks are mixed; a track that runs longer than this is mixed out at its next drop
 
@@ -21,7 +22,7 @@ export class Mix {
   constructor() {
     this.band = new Float32Array(KEEP * 3); this.head = 0; this.clock = 0; this.top = [0, 0, 0];
     Object.assign(this, { playing: 1, leaving: -1, next: 2, mixing: 0, started: 0, tracks: 1, bpm: 0, master: 0, turn: [0, 0, 0, 0],
-      heard: false, quiet: true, other: 0, otherFor: 0, phase: 0, known: false, id: null, title: '', before: '' });
+      heard: false, quiet: true, other: 0, otherFor: 0, phase: 0, known: false, id: null, title: '', before: '', length: 0 });
     this.levels = [0, 0, 0, 0]; this.peaks = [0, 0, 0, 0]; this.held = [0, 0, 0, 0];
   }
   wave(i) { const k = ((this.head - 1 - i) % KEEP + KEEP) % KEEP * 3; return [this.band[k], this.band[k + 1], this.band[k + 2]]; }
@@ -32,14 +33,17 @@ export class Mix {
     [this.playing, this.next] = [this.next, this.playing];
     this.started = t; this.tracks++; this.otherFor = 0;
   }
-  // now: { id, playing, artist, title, position } from the music player, or nothing when there is none or it is not playing
+  // now: { id, playing, artist, title, position, length } from the music player, or nothing when there is none or it
+  // is not playing. The player's position is the truth about the time: a jump in the track moves the time along.
   told(now, t) {
     if (!now?.id || !now.playing) { this.known = false; return; }
-    const name = [now.artist, now.title].filter(Boolean).join(' - ');
-    if (this.known && now.id !== this.id) { this.before = this.title; this.change(t, !this.quiet); }   // under the last track when the music has not stopped
-    if (!this.known || now.id !== this.id) this.started = t - (this.known ? Math.min(now.position || 0, 5) : now.position || 0);
-    Object.assign(this, { known: true, id: now.id, title: name });
+    const name = [now.artist, now.title].filter(Boolean).join(' - '), at = now.position || 0;
+    if (this.id && now.id !== this.id) { this.before = this.title; this.change(t, !this.quiet); }   // under the last track when the music has not stopped
+    if (now.id !== this.id || !this.known || Math.abs(this.elapsed(t) - at) > 2) this.started = t - at;
+    Object.assign(this, { known: true, id: now.id, title: name, length: now.length || 0 });
   }
+  // the seconds the track that plays still has, when the player has said how long it is; null otherwise
+  remaining(t) { return this.known && this.length > 0 ? Math.max(0, this.length - this.elapsed(t)) : null; }
   // sig: Signals; t, dt: the show's clock
   update(sig, t, dt) {
     const m = sig.m, sounding = m.activity > 0.05;

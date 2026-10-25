@@ -117,10 +117,11 @@ test('walking round with W, the work lights with L, and the people in the hall s
     assert.equal(await evaluate('window.__show.look.work'), true);
     await key('Escape', 'Escape');
     assert.equal(await evaluate(`document.getElementById('cam').value + ' ' + document.getElementById('walkHud').hidden`), 'auto true');
-    const people = () => evaluate(`(() => { let shown = 0; window.__show.world.env.scene.traverse(o => { if (o.isInstancedMesh && o.geometry.attributes.aKit) shown += o.visible ? 1 : 0; }); return shown; })()`);
+    const people = () => evaluate(   // a figure shows when it and everything it hangs in shows
+      `(() => { let shown = 0; window.__show.world.env.scene.traverse(o => { if (o.isInstancedMesh && o.geometry.attributes.aKit) { let up = o; while (up && up.visible) up = up.parent; shown += up ? 0 : 1; } }); return shown; })()`);
     assert.ok(await people() > 0);
     await evaluate(`(() => { const c = document.getElementById('crowd'); c.value = '0'; c.dispatchEvent(new Event('change')); const k = document.getElementById('layer-crew'); k.checked = false; k.dispatchEvent(new Event('change')); })()`);
-    await until(`(() => { let shown = 0; window.__show.world.env.scene.traverse(o => { if (o.isInstancedMesh && o.geometry.attributes.aKit) shown += o.visible ? 1 : 0; }); return shown === 0; })()`, 'the people did not go');
+    await until(`(() => { let shown = 0; window.__show.world.env.scene.traverse(o => { if (o.isInstancedMesh && o.geometry.attributes.aKit) { let up = o; while (up && up.visible) up = up.parent; shown += up ? 0 : 1; } }); return shown === 0; })()`, 'the people did not go');
     assert.deepEqual(JSON.parse(await evaluate(`localStorage.getItem('sv.controls')`)).crowd, 0, 'remembered');
     assert.deepEqual(errors, []);
   });

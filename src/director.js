@@ -29,6 +29,9 @@ const WHITE = [1, 1, 1], WARM = [1, 0.78, 0.56];
 //   warm      0 to 1: how much warm white is mixed into the washes and the light on the building
 //   wash      the least the stage washes give while there is music, so whoever plays is always seen
 //   house     how far the house lights stay up during the music (they come up fully when it stops)
+// When the music player names the tracks: the last seconds of a track, in which no new look starts; and how long
+// after the player moved on the new track's look waits for a kick (SETTLE), or at most (LATE). See startTrack.
+const ENDING = 30, SETTLE = 3, LATE = 10;
 const BASE = {
   family: 'House',
   decay: 8, speed: 0.9, strobes: true, strobeAt: 0.6, strobeRate: 1, lasers: 'peak',   // lasers: false, 'peak' (once a peak scene has settled) or 'both' (also in the quiet of a break)
@@ -189,7 +192,7 @@ export class Director {
   }
   setMood(key) { this.mood = MOODS[key]; this.moodKey = key; this.choreography.reset(); this.palette = 0; this.f = null; this.pick('intro'); }
   resetRingLook(t) { this.ringVariant = 0; this.ringTargets = [...RING_LOOKS[0].drops]; this.ringAt = t; this.ringScene = this.scene; this.ringBreak = false; }
-  reset(t) { this.choreography.reset(); this.beat = 0; this.colorIdx = 0; this.archPattern = 0; this.sceneAt = t; this.pick('intro'); }
+  reset(t) { this.trackAt = null; this.choreography.reset(); this.beat = 0; this.colorIdx = 0; this.archPattern = 0; this.sceneAt = t; this.pick('intro'); }
   // the next program for this part of the track, never the one that is already up if there is a choice
   pick(section) {
     const list = PROGRAMS.map((p, i) => [p, i]).filter(([p]) => p.tier === TIER[section]).map(([, i]) => i);
@@ -198,7 +201,7 @@ export class Director {
     this.visual = (this.visual + 1) % 8;
   }
   next(t, section) {
-    if (t - this.paletteAt >= this.mood.paletteHold) { this.palette++; this.paletteAt = t; }
+    if (!this.told && t - this.paletteAt >= this.mood.paletteHold) { this.palette++; this.paletteAt = t; }   // a palette lasts a track: when the player names the tracks, that is the whole track
     this.scene++;
     this.archPattern = (this.archPattern + 1) % 4;
     this.pick(section);
@@ -266,11 +269,22 @@ export class Director {
       energy: 0.25 + rel * 0.6, bass: sig.bass, mid: sig.mid, treble: sig.treble, phase: F.clock, sinceBreak: 0 };
   }
 
+  // Another track, as the music player says (Signals.told): its own palette and its own looks, from its first kick.
+  // With a crossfade the last track still plays for a few seconds after the player has moved on, so its kicks do not
+  // count: the new look lands on the first kick from SETTLE seconds on, or after LATE seconds without one (a track
+  // that opens without a kick gets its calm look then).
+  startTrack(t, section) { this.palette++; this.paletteAt = t; this.beat = 0; this.next(t, section); this.pendingChange = null; this.trackAt = null; }
+
   // sig: Signals; look: { light, haze } from the viewer, both 1 when untouched, and off: the roles switched off
   update(sig, t, dt, look = { light: 1, haze: 1 }) {
     this.off = look.off || {};
     const mood = this.mood, G = this.groups, controls = look.controls;
     const theme = this.venue === 'hangar' ? SHOW_THEMES[controls?.showTheme] : null;
+    // What the player says: whether it names the tracks, and how long this one still has. In the last half minute
+    // nothing big starts any more, so that the change of look falls on the next track and not just before it.
+    this.told = !!sig.track?.known;
+    const left = sig.remaining ?? Infinity, ending = this.ending = left < ENDING;
+    if (sig.ev?.newTrack) this.trackAt = t;
     if (mood.flow) sig = this.flow(sig, t, dt);
     const m = sig.m, ev = sig.ev;
     const section = m.section, calm = m.phase !== 'break' && TIER[section] === 'calm';
@@ -278,10 +292,14 @@ export class Director {
     if (ev.drop) { this.coilDropAt = t; this.coilDropStrength = clamp(ev.kick || sig.drop || 1); }
 
     // ----- what just happened in the music -----
+    const starting = this.trackAt != null && t - this.trackAt >= (ev.kick ? SETTLE : LATE);
+    if (starting) this.startTrack(t, section);
     if (ev.kick) {
       if (ev.drop) {
-        if (ev.breakLength >= mood.paletteBreak) { this.palette++; this.paletteAt = t; }   // a long break earns a new palette
-        this.beat = 0; this.next(t, section); this.pendingChange = null;
+        if (!starting) {
+          if (ev.breakLength >= mood.paletteBreak && !ending) { this.palette++; this.paletteAt = t; }   // a long break earns a new palette
+          this.beat = 0; if (!ending) this.next(t, section); this.pendingChange = null;
+        }
         const fx = mood.fx; this.drops++;
         for (const kind of ['co2', 'flame', 'spark']) if (fx[kind]) this.fire(kind, t);
         for (const kind of ['firework', 'confetti']) if (fx[kind] && this.drops % fx[kind] === 0) this.fire(kind, t);
@@ -297,7 +315,7 @@ export class Director {
       this.barStart = this.beat === 1 || first(8);
       // hold a scene for a musical phrase, changing on its first beat; a calm part holds its look twice as long
       const hold = calm ? 2 : 1;
-      if (first(mood.sceneKicks * hold) && t - this.sceneAt >= mood.sceneMin * hold) this.next(t, section);
+      if (!ending && first(mood.sceneKicks * hold) && t - this.sceneAt >= mood.sceneMin * hold) this.next(t, section);
       const bars = G.bars || [], pattern = Math.floor((this.beat - 1) / 32) % 4, mid = (bars.length - 1) / 2;
       for (let i = 0; i < bars.length; i++) {
         const on = pattern === 0 ? true : pattern === 1 ? i % 2 === this.beat % 2 : pattern === 2 ? Math.abs(i - mid) < (this.beat % 4 + 1) * bars.length / 8 : i % 4 === this.beat % 4;
@@ -305,14 +323,15 @@ export class Director {
       }
       if (this.barStart) for (const role of ['overhead', 'stage']) for (const f of G[role] || []) { f.rp = Math.random() * 2 - 1; f.rt = Math.random(); }
     } else this.barStart = false;
-    if (ev.silent) { if (ev.trackEnded && t - this.paletteAt > 60) { this.palette++; this.paletteAt = t; } this.beat = 0; }
+    if (ev.silent) { if (ev.trackEnded && !this.told && t - this.paletteAt > 60) { this.palette++; this.paletteAt = t; } this.beat = 0; }
     if (ev.from) {
       // the track moved to another part while the kick kept going: a new look that fits it
       if (ev.from !== 'break' && section !== 'break' && !ev.drop) this.pendingChange = { section, at: t };
       else if (ev.from === 'break' && PROGRAMS[this.program].tier !== TIER[section]) { this.pick(section); this.sceneAt = t; }
     }
     if (ev.lift && t - this.sceneAt >= mood.sceneMin - 4) this.pendingChange = { section, at: t - 3, lift: true };
-    if (mood.flow && t - this.sceneAt >= mood.sceneMin) this.next(t, section);   // with no kicks to count, a scene lasts its time
+    if (ending) this.pendingChange = null;
+    if (mood.flow && !ending && t - this.sceneAt >= mood.sceneMin) this.next(t, section);   // with no kicks to count, a scene lasts its time
     // A new part of the track, or a layer coming in, changes the look on the first beat of the next pair of bars (a
     // new part once it has lasted three seconds); the count of the phrase goes on.
     if (this.pendingChange) {

@@ -106,23 +106,23 @@ const PERFORMERS = {
     mesh(box(0.075, 0.009, 0.155, -edge + 0.25, table + 0.005, boothZ + 0.32, 0.4), black);
     const updateDJ = buildDJ({ add: own, lit, black, at: [0, base, boothZ - 0.72], top: table + 0.1, gearZ: boothZ - 0.2 });
     // A small clock on the table for the DJ: the time, or a set's time counting down (look.controls.djClock, with
-    // look.clockStart when the countdown began). Amber digits on black, turned to the DJ.
+    // look.clockStart when the countdown began). Red digits on black, flat on the side of the clock that faces the DJ.
     const clock = document.createElement('canvas'); clock.width = 160; clock.height = 48;
     const clockTex = new THREE.CanvasTexture(clock), cg = clock.getContext('2d'); clockTex.colorSpace = THREE.SRGBColorSpace;
     const cx = -edge + 0.62, cz = boothZ + 0.5;
     mesh(box(0.2, 0.075, 0.05, cx, table + 0.0375, cz), black);
-    mesh(new THREE.PlaneGeometry(0.18, 0.054).rotateY(Math.PI).rotateX(0.25).translate(cx, table + 0.04, cz - 0.026), new THREE.MeshBasicMaterial({ map: clockTex, fog: false }));
+    mesh(new THREE.PlaneGeometry(0.18, 0.054).rotateY(Math.PI).translate(cx, table + 0.0375, cz - 0.0256), new THREE.MeshBasicMaterial({ map: clockTex, color: new THREE.Color(0.7, 0.7, 0.7), fog: false }));   // tilted, its top half went into the case
     let clockShown = '';
     const drawClock = look => {
       const c = look.controls?.djClock || { mode: 'time', minutes: 60 }, now = new Date();
       let text = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`, warn = false;
       if (c.mode === 'timer') {
         const left = Math.max(0, c.minutes * 60 - (look.clockStart ? (Date.now() - look.clockStart) / 1000 : 0)), m = Math.floor(left / 60);
-        text = `${String(Math.floor(m / 60))}:${String(m % 60).padStart(2, '0')}:${String(Math.floor(left % 60)).padStart(2, '0')}`; warn = left < 300 && Math.floor(Date.now() / 500) % 2 === 0 && look.clockStart;
+        text = `${String(Math.floor(m / 60))}:${String(m % 60).padStart(2, '0')}:${String(Math.floor(left % 60)).padStart(2, '0')}`; warn = left < 300 && Math.floor(Date.now() / 500) % 2 === 0 && look.clockStart;   // the last five minutes: blinking
       }
       if (text + warn === clockShown) return;
       clockShown = text + warn;
-      cg.fillStyle = '#050505'; cg.fillRect(0, 0, 160, 48); cg.fillStyle = warn ? '#ff3020' : '#ffa010'; cg.font = 'bold 34px monospace'; cg.textAlign = 'center'; cg.textBaseline = 'middle'; cg.fillText(text, 80, 26);
+      cg.fillStyle = '#050505'; cg.fillRect(0, 0, 160, 48); cg.fillStyle = warn ? '#5a0c06' : '#ff2a1a'; cg.font = 'bold 34px monospace'; cg.textAlign = 'center'; cg.textBaseline = 'middle'; cg.fillText(text, 80, 26);
       clockTex.needsUpdate = true;
     };
     const monitorFaces = [], monitorDrivers = [], monitorRings = [];

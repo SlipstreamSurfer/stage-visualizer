@@ -9,6 +9,8 @@
 //   drop lift  1 on the moment, falling away  hype    stays up for a while after a drop
 //   energy     how loud and full, smoothed    bass mid treble   the three bands, 0 to 1
 //   beats      kicks counted                  phase   beats as a clock, whole numbers fall on the kick
+//   track      what the music player says plays (told): { known, id, title, artist, length, position, at };
+//              remaining: the seconds the track still has, or null; ev.newTrack: the player began another one
 import { Listener } from './listen.js';
 import { STEPS } from './ear.js';
 
@@ -24,12 +26,27 @@ export class Signals {
   reset() {   // another sound source
     this.listener.reset();
     this.now = 0; this.begin();
+    this.track = { known: false }; this.player = null;
     Object.assign(this, { kick: 0, accent: 0, drop: 0, lift: 0, hype: 0, energy: 0, bass: 0, mid: 0, treble: 0, beats: 0, phase: 0, rate: 2.1, stableBpm: 0, tempoCandidate: 0, tempoCandidateFor: 0 });
   }
   // Live sound goes in step by step, on the sound's own clock (see ear.js), and the picture reads the result once
   // per frame: begin() at the start of a frame, hear() for every step of sound that has come in since the last one
   // (none, one or several), flow() once to let the pulses fall away.
-  begin() { this.ev = { kick: 0, kickGap: 0, drop: false, breakLength: 0, broke: false, back: 0, silent: false, trackEnded: false, from: null, lift: false }; }
+  begin() { this.ev = { kick: 0, kickGap: 0, drop: false, breakLength: 0, broke: false, back: 0, silent: false, trackEnded: false, from: null, lift: false, newTrack: false }; }
+  // What the music player on this computer says it plays (player.js), once a frame while the show listens to it: the
+  // truth about where one track ends and the next begins, which the sound alone can only guess. Another track starts
+  // the listening afresh. now: as the player told it, a new object each time; null or not playing is not knowing.
+  told(now) {
+    if (now === this.player) return;
+    this.player = now;
+    if (!now?.id || !now.playing) { this.track = { ...this.track, known: false }; return; }
+    if (this.track.id && now.id !== this.track.id) {
+      this.ev.newTrack = true; this.listener.newTrack(); this.stableBpm = 0;
+      this.onEvent?.({ t: this.now, what: 'new track' });
+    }
+    this.track = { known: true, id: now.id, title: now.title || '', artist: now.artist || '', length: now.length || 0, position: now.position || 0, at: this.now };
+  }
+  get remaining() { const k = this.track; return k.known && k.length > 0 ? Math.max(0, k.length - k.position - (this.now - k.at)) : null; }
   hear(bands, rms, sens = 1) {
     const dt = 1 / STEPS; this.now += dt;
     const phase = this.m.phase, wasSilent = this.m.silentFor > 2.5;

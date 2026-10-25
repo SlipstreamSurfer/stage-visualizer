@@ -36,7 +36,7 @@ export function buildWalkers({ add, light, U, path, pois, count, special = false
     clock += dt;
     for (let i = 0; i < count; i++) {
       const w = who[i]; let moving = 1, tx = w.x, tz = w.z;
-      if (w.role === 'helped' && medic) { w.s = medic.s; w.lat = medic.lat + 0.55; w.goal = medic.goal; w.state = medic.state === 'wait' ? 'lane' : medic.state; w.stop = null; }   // beside the medic, on the way
+      if (w.role === 'helped' && medic) { w.s = medic.s; w.lat = medic.lat + 0.55; w.goal = medic.goal; w.state = medic.state; w.stop = medic.stop && { x: medic.stop.x + 0.55, z: medic.stop.z, ry: medic.stop.ry }; }   // beside the medic, on the way and where they stop
       if (w.state === 'lane') {
         const d = w.goal - w.s, step = Math.min(Math.abs(d), w.speed * dt);
         w.s += Math.sign(d) * step; at(w.s, w.lat * Math.sign(d || 1), p); tx = p.x; tz = p.z;

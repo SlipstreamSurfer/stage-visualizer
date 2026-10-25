@@ -56,7 +56,7 @@ test('the console keeps the show controls in one place, settings open apart and 
     // A first visit sees the start screen: it waits for the venue, ignores show shortcuts and leaves on a click.
     await evaluate(`document.documentElement.classList.remove('started')`);
     await until(`!document.getElementById('startShow').disabled && document.getElementById('startShow').textContent === 'Start the show'`, 'The start screen did not offer the show');
-    assert.equal(await evaluate(`document.querySelectorAll('#startSource button').length === 4 && document.querySelectorAll('#startQuality button').length === 4`), true);
+    assert.equal(await evaluate(`document.querySelectorAll('#startSource button').length === 4 && document.querySelectorAll('#startQuality button').length === 5`), true);
     await evaluate(`dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }))`);
     assert.equal(await evaluate('window.__show.director.manual.blinder'), false, 'show shortcuts wait for the start');
     await evaluate(`document.getElementById('startDemo').click()`);

@@ -324,10 +324,15 @@
     </details>
   </section>
   <section id="pagePicture" class="panel-page" role="tabpanel" aria-labelledby="tabPicture" hidden>
-    <h2>Performance</h2>
-    <div class="setting"><label for="quality">Quality</label><select id="quality" class="ctl"></select></div>
+    <h2>Graphics</h2>
+    <div class="setting"><label for="quality">Preset</label><select id="quality" class="ctl"></select></div>
     <div class="setting"><span></span><div><div id="qualityNote" class="panel-note" role="status"></div><div id="fps"></div></div></div>
     <label class="check"><input id="steadyPicture" type="checkbox" checked>Keep the picture smooth: draw fewer pixels while frames take too long</label>
+    <details id="graphicsTune">
+      <summary>Each setting on its own</summary>
+      <div id="graphicsOptions"></div>
+      <p class="panel-note">Every setting changes the picture at once.</p>
+    </details>
     <div class="setting"><label for="crowd">Crowd</label><select id="crowd" class="segmented"><option value="1">Full</option><option value="0.5">Half</option><option value="0.25">A quarter</option><option value="0">Empty hall</option></select></div>
     <div class="setting"><label>Layers</label><div class="layers"><label class="check"><input id="layer-crew" type="checkbox" checked>Security and crew</label><label class="check"><input id="layer-pa" type="checkbox" checked>PA</label><label class="check"><input id="layer-terrace" type="checkbox" checked>Terrace outside</label><label class="check"><input id="layer-towers" type="checkbox" checked>Light towers</label></div></div>
     <div class="setting"><label for="particles">Extra smoke (heavy)</label><select id="particles" class="ctl"><option value="0">Off</option><option value="300000">Light</option><option value="600000">Dense</option><option value="1200000">Very dense</option></select></div>

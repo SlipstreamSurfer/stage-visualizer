@@ -87,7 +87,8 @@ export const KIT = { none: 0, security: 1, medic: 2 };
 // that level only. view(camera, height) sorts the crowd again when the camera has moved or turned, or when
 // someone or the distances in detail were changed: by how big a person shows (their distance, the camera's angle of view and the height of
 // the picture in pixels), and leaving out whoever is out of the picture or folded away (size 0).
-const NEAR = 13, MID = 27, FAR = 45, ROOM = 2.1;   // metres from the camera at which a person is drawn with less detail, at 1080 pixels and 50 degrees; how far round a person counts as in the picture
+export const DETAIL_AT = { near: 13, mid: 27, far: 45 };
+const { near: NEAR, mid: MID, far: FAR } = DETAIL_AT, ROOM = 2.1;   // metres from the camera at which a person is drawn with less detail, at 1080 pixels and 50 degrees; how far round a person counts as in the picture
 export function people(material, n, moving = false, lod = false) {
   const N = Math.max(1, n), data = new Float32Array(N * EACH), matrices = new Float32Array(N * 16), o = new THREE.Object3D();
   const levels = (lod ? DETAIL : DETAIL.slice(0, 1)).map((_, level) => {

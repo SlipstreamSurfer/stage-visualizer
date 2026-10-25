@@ -45,7 +45,12 @@ function hallReflection() {
   })();
 }
 
-function lighting(n, shadowCount = 0) {
+// Room for MOST_BEAMS; how many of them light the room (used), how many of those glint (shine, at most 6) and whether
+// metal mirrors the hall are set while the show plays (set), so the graphics settings change them without the
+// venue being built and its shaders made again. Every loop runs as far as it is asked, not as far as there is room.
+const MOST_BEAMS = 28;
+function lighting(beams, shadowCount = 0, { shine = 6, metal = true } = {}) {
+  const n = MOST_BEAMS, used = uniform(Math.min(beams, n), 'int'), glints = uniform(Math.min(shine, beams, 6), 'int'), mirrors = { on: metal };
   const pos = uniformArray(Array.from({ length: n }, () => new THREE.Vector3(0, 1e4, 0))), dir = uniformArray(Array.from({ length: n }, () => new THREE.Vector4(0, -1, 0, 0.9))), col = uniformArray(Array.from({ length: n }, () => new THREE.Vector3()));
   const optics = uniformArray(Array.from({ length: n }, () => new THREE.Vector4()));
   const shadowMin = uniformArray(Array.from({ length: Math.max(1, shadowCount) }, () => new THREE.Vector3(1e4, 1e4, 1e4)));
@@ -53,7 +58,7 @@ function lighting(n, shadowCount = 0) {
   const flashPos = uniform(new THREE.Vector3(0, -1e4, 0)), flashCol = uniform(new THREE.Vector3());
   const light = Fn(([p, nrm]) => {
     const sum = vec3(0).toVar();
-    Loop(n, ({ i }) => {
+    Loop(used, ({ i }) => {
       const d = p.sub(pos.element(i)), dist = length(d), way = d.div(dist), edge = dir.element(i).w;
       const detail = vec3(1).toVar();
       if (shadowCount) {
@@ -88,10 +93,10 @@ function lighting(n, shadowCount = 0) {
   // The glint of the beams on what shines: aluminium truss, steel, a stage deck, a sealed concrete floor. A beam that
   // falls on it shows as a bright highlight where it reflects towards the eye, sharp on smooth metal and spread out on
   // concrete. Only the brightest few beams (they come first), for what it costs on every pixel of such a surface.
-  const SHINE = Math.min(6, n), metals = [];
+  const metals = [];
   const glint = Fn(([p, nrm, rough]) => {
     const sum = vec3(0).toVar(), eye = normalize(cameraPosition.sub(p)), k = mix(float(140), float(6), rough);   // how tight the highlight is
-    Loop(SHINE, ({ i }) => {
+    Loop(glints, ({ i }) => {
       const d = p.sub(pos.element(i)), dist = length(d), way = d.div(dist), edge = dir.element(i).w;
       const half = normalize(eye.sub(way)), spot = smoothstep(edge, mix(edge, 1, 0.4), dot(way, dir.element(i).xyz));
       sum.addAssign(col.element(i).mul(spot).mul(pow(max(dot(nrm, half), 0), k)).mul(k.mul(0.035).add(0.4)).mul(step(0, dot(nrm, way).negate())).div(dist.mul(dist).mul(0.006).add(1)));
@@ -117,18 +122,19 @@ function lighting(n, shadowCount = 0) {
     if ((mat.metalness ?? 0) >= 0.35 && !mat.transparent) { m.envMap = hallReflection(); m.envMapIntensity = 0.5; metals.push(m); }   // metal mirrors the hall (world.update dims it with the light)
     return m;
   };
-  return { n, pos, dir, col, optics, shadowMin, shadowMax, flashPos, flashCol, light, lit, metals };
+  const set = ({ beams: b = beams, shine: g = shine, metal: m = mirrors.on } = {}) => { used.value = Math.min(b, n); glints.value = Math.min(g, b, 6); mirrors.on = m; };
+  return { n, used, pos, dir, col, optics, shadowMin, shadowMax, flashPos, flashCol, light, lit, metals, mirrors, set };
 }
 
-// quality: { crowd (share of the crowd, 0 to 1), beams (how many beams light the room), details (bars, exits,
-// people who walk: everything a venue lists besides its stage and lights) }
+// quality: the graphics settings (quality.js), which world.graphics() changes while the show plays; and details
+// (bars, exits, people who walk: everything a venue lists besides its stage and lights)
 const DAY_SKY = new THREE.Color(0xcfe0ff), DAY_GROUND = new THREE.Color(0x7a6a58), SUNSET_SKY = new THREE.Color(0xffb07a), SUNSET_GROUND = new THREE.Color(0x5a3a2a);
 const WORK_SKY = new THREE.Color(0xfff4e6), WORK_GROUND = new THREE.Color(0x8a8278);   // the hall's work lights: plain white from above
-export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
+export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28, shine: 6, metal: true, smoke: 150 }) {
   const L = layout(venue), { W, D, H } = L.plan, st = L.stage, sh = L.shell, open = !!sh.open, F = L.floor;
   const hangarRig = L.things.some(f => f.props.hangar);
   const add = o => (scene.add(o), o), put = batcher(add);
-  const lights = lighting(quality.beams, hangarRig ? 6 : 0), { lit } = lights, { surface, plain } = surfaces(lit);
+  const lights = lighting(quality.beams, hangarRig ? 6 : 0, quality), { lit } = lights, { surface, plain } = surfaces(lit);
   if (hangarRig) {
     const base = st.height + 0.4, z = L.focus[2];
     lights.shadowMin.array[0].set(-2.08, base + 0.02, z - 0.58);
@@ -217,7 +223,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   // rows across the floor. And on whatever seats the place has: tiers, balconies. A spot is
   // [x, z, facing, still, kind, height, seated].
   let spots = [];
-  const centre = st.kind === 'centre', count = Math.round(L.crowd.count * quality.crowd), seats = [];
+  const centre = st.kind === 'centre', count = L.crowd.count, seats = [];   // all of them: the graphics setting shows a share (graphics below)
   const reach = centre ? Math.max(W, D) / 2 - st.width / 2 : F.z1 - F.z0, away = (x, z) => centre ? (Math.hypot(x, z - st.z) - st.width / 2) / reach : (z - F.z0) / reach;   // 0 at the stage, 1 as far from it as the floor goes
   const facing = (x, z) => centre ? Math.atan2(x, z - st.z) : Math.atan2(x, z - st.back - 2) * 0.7;
   if (L.crowd.seated) {
@@ -242,7 +248,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   // the seats the place itself has: as many filled as the venue asks for
   const more = shell.seats.slice();
   for (let i = more.length - 1; i > 0; i--) { const k = Math.random() * (i + 1) | 0; [more[i], more[k]] = [more[k], more[i]]; }
-  for (const q of more.slice(0, Math.round((L.crowd.seats ?? 1400) * quality.crowd))) spots.push([q.x, q.z, q.yaw + (Math.random() - 0.5) * 0.3, !q.stand, null, q.y, !q.stand]);
+  for (const q of more.slice(0, L.crowd.seats ?? 1400)) spots.push([q.x, q.z, q.yaw + (Math.random() - 0.5) * 0.3, !q.stand, null, q.y, !q.stand]);
   for (const q of shell.seats) if (!q.stand) seats.push(q);
   for (const q of fac.people) spots.push([q.x, q.z, q.ry + Math.PI, true, q.kind]);   // the figure faces -z as built
   if (seats.length && L.crowd.chairs !== false) {   // a chair for every seat, taken or not
@@ -293,15 +299,16 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
     crowd.dense(i, spots[i][6] ? 0.3 : Math.min(1, (near - 1) / 8));
   }
 
-  const walking = [], updateWalkers = route && buildWalkers({ add: o => (walking.push(o), add(o)), light: lights.light, U, path: route, pois: fac.pois, count: Math.round((hangarRig && !details ? 32 : L.walkers) * quality.crowd), special: hangarRig });
+  const walking = [], updateWalkers = route && buildWalkers({ add: o => (walking.push(o), add(o)), light: lights.light, U, path: route, pois: fac.pois, count: hangarRig && !details ? 32 : L.walkers, special: hangarRig });
   const everyone = [crowd.mesh, blobs, ...walking];   // what the switch for people in the hall takes away (the DJ stays)
   // Who shows: a share of the crowd (the first of a shuffled crowd, so a random half or quarter), security and crew
   // as a layer of their own, and the people on the terrace outside with the terrace. Someone left out is folded to
   // a point (their size 0), so nothing is built again.
   const STAFF = new Set(['security', 'staff', 'crew', 'medic']), sizes = Array.from({ length: n }, (_, i) => crowd.data[i * 16 + 7]), shadows = Array.from({ length: n }, (_, i) => { const m = new THREE.Matrix4(); blobs.getMatrixAt(i, m); return m; });
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);
-  let peopleKey = '';
+  let peopleKey = '', built = quality.crowd ?? 1;   // built: the share of the crowd the graphics settings draw at most
   function showPeople(share, crew, terrace) {
+    share *= built;
     const key = [share, crew, terrace].join(); if (key === peopleKey) return; peopleKey = key;
     for (let i = 0; i < n; i++) {
       const [, z, , , kind] = spots[i], show = i < dancers ? i < dancers * share : STAFF.has(kind) ? crew : z > D / 2 ? terrace : share > 0;
@@ -325,7 +332,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
 
   // haze and smoke that move through the room (smoke.js), from the hazers; without a hazer, from the back of the stage
   const hazers = L.things.filter(th => th.role === 'hazer').map(th => th.pos);
-  const smoke = buildSmoke({ add, room: { W, D, H: H + shell.rise * 0.5 }, wind: sh.wind, sources: hazers.length ? hazers : [[0, st.height, st.back + 1]], count: Math.round(150 * quality.crowd) });
+  const smoke = buildSmoke({ add, room: { W, D, H: H + shell.rise * 0.5 }, wind: sh.wind, sources: hazers.length ? hazers : [[0, st.height, st.back + 1]], count: 250 });   // room for the most; the graphics setting shows a share of them (graphics below)
   let smokeAt = -100;
 
   // ----- the fixtures -----
@@ -448,6 +455,8 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
     // director: the Director after its update; signals: Signals; look: the viewer's sliders
     // camera: the camera as it will draw this frame; height: of the picture, in pixels. Which of the crowd show, and how finely.
     view(camera, height) { crowd.view(camera, height); }, crowdDetail: crowd.detail,
+    // the graphics settings that change the picture while it plays: how many beams light the room, glint, and mirrors
+    graphics(settings) { lights.set(settings); built = settings.crowd ?? built; smoke.shown(settings.smoke ?? 150); },
     update(dt, t, director, signals, look) {
       updateWalkers?.(dt); shell.update(dt, t);
       env.haze = env.hazeOut; env.roomColor = director.room.color;
@@ -455,8 +464,8 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       for (const fx of live) fx.update(dt, t);
       flush();
       // the brightest beams light the room
-      const top = casts.slice(0, nCast).sort((p, r) => r.I - p.I).slice(0, lights.n);
-      for (let i = 0; i < lights.n; i++) { if (i < top.length) { lights.pos.array[i].copy(top[i].pos); lights.dir.array[i].copy(top[i].dir); lights.col.array[i].copy(top[i].col).multiplyScalar(2.2); lights.optics.array[i].copy(top[i].optics); } else lights.col.array[i].set(0, 0, 0); }
+      const top = casts.slice(0, nCast).sort((p, r) => r.I - p.I).slice(0, lights.used.value);
+      for (let i = 0; i < lights.used.value; i++) { if (i < top.length) { lights.pos.array[i].copy(top[i].pos); lights.dir.array[i].copy(top[i].dir); lights.col.array[i].copy(top[i].col).multiplyScalar(2.2); lights.optics.array[i].copy(top[i].optics); } else lights.col.array[i].set(0, 0, 0); }
       if (hangarRig) movers.slice(0, 5).forEach((mv, i) => {
         const tilt = 0.15 + Math.abs(Math.sin(mv.group.rotation.z)) * 17;   // a tilted truss reaches higher and lower at its ends
         lights.shadowMin.array[i + 1].set(mv.mid[0] - 17, mv.group.position.y - tilt, mv.mid[2] - 0.15);
@@ -480,7 +489,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       U.rim.value.copy(stageLight.color).lerp(WHITE, 0.5).multiplyScalar((0.1 + signals.kick * 0.35 + signals.drop + director.blind) * look.light * (director.manual.blackout ? 0 : 1));
       // what metal mirrors is as bright as the hall is: little in a blackout or a quiet part, more when the rig is up
       const mirror = director.manual.blackout ? 0.04 : (0.12 + Math.min(1, director.room.level) * 0.45 + env.day * 0.5 + (look.work ? 0.5 : 0)) * look.light;
-      for (const m of lights.metals) m.envMapIntensity = mirror;
+      for (const m of lights.metals) m.envMapIntensity = lights.mirrors.on ? mirror : 0;
       const share = look.controls?.crowd ?? 1, layers = look.controls?.layers || {}, crowded = share > 0 || layers.crew !== false;
       for (const o of everyone) o.visible = crowded;
       showPeople(share, layers.crew !== false, layers.terrace !== false);

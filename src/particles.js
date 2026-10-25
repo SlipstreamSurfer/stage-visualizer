@@ -28,7 +28,7 @@ export function buildParticles({ renderer, add, count, room: { W, D, H }, stage,
     });
     // the light a particle catches: inside which cones, how far from the lamp, and is something in the way
     const sum = vec3(ambient).toVar();
-    Loop(lights.n, ({ i }) => {
+    Loop(lights.used, ({ i }) => {
       const toP = p.sub(lights.pos.element(i)), dist = length(toP), dir = toP.div(dist), edge = lights.dir.element(i).w;
       const inCone = smoothstep(edge, edge.add(float(1).sub(edge).mul(0.35)), dot(dir, lights.dir.element(i).xyz));
       If(inCone.greaterThan(0.001), () => {

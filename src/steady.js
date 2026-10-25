@@ -6,10 +6,10 @@
 export const MIN = 0.7, STEP = 0.05;
 
 export class SteadyResolution {
-  constructor() { this.scale = 1; this.fastest = 1 / 60; this.ceiling = 1; this.ceilingFor = 0; this.sinceUp = 99; this.reset(); }
+  constructor() { this.scale = 1; this.cap = 0; this.fastest = 1 / 60; this.ceiling = 1; this.ceilingFor = 0; this.sinceUp = 99; this.reset(); }
   reset() { this.warmup = 3; this.frames = []; this.room = 0; this.since = 0; }
   // the frame time to keep: the screen's own pace once it has shown it (a 75 Hz screen: 13.3 ms), else 60 a second
-  get target() { return Math.min(1 / 60, this.fastest); }
+  get target() { return Math.max(this.cap, Math.min(1 / 60, this.fastest)); }   // cap: the frame time of a frame-rate limit, 0 for none
   get atMin() { return this.scale <= MIN + 1e-9; }
   sample(dt, { visible = true, ready = true, enabled = true } = {}) {
     if (!visible || !ready || !enabled || !Number.isFinite(dt) || dt <= 0) { this.reset(); return null; }

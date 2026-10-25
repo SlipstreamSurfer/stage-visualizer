@@ -15,8 +15,9 @@ import { shots, CameraDirector } from './cameras.js';
 import { HEAD_LOOKS, TRUSS_LOOKS } from './hangar-looks.js';
 import { Audio } from './audio.js';
 import { followPlayer } from './player.js';
+import { DETAIL_AT } from './people.js';
 import { mountPlayback } from './playback.js';
-import { QUALITY, AutoQuality } from './quality.js';
+import { OPTIONS, PRESETS, ORDER, AutoQuality, choiceOf, settingsOf, needsBuild, presetOf, guessPreset, cardLabel } from './quality.js';
 import { SteadyResolution } from './steady.js';
 import { djEye } from './dj-eye.js';
 import { Walk } from './walk.js';
@@ -27,24 +28,43 @@ import { mountSound } from './sound-ui.js';
 import { mountEffects } from './effects-ui.js';
 import { mountPresets } from './presets-ui.js';
 
+// What the graphics card is called, as the browser tells it: WebGL's name for it says the most ("AMD Radeon Vega 11
+// Graphics", "Apple M1"), so it is asked even when the show draws with WebGPU; else WebGPU's own few words.
+function cardName(renderer) {
+  try {
+    const gl = renderer.backend.gl || document.createElement('canvas').getContext('webgl2'), ext = gl?.getExtension('WEBGL_debug_renderer_info');
+    const name = gl ? String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || '') : '';
+    if (name && !/^webkit webgl$/i.test(name)) return name.replace(/^ANGLE \((.*)\)$/, '$1');
+    const info = renderer.backend.device?.adapterInfo;
+    return info ? [info.vendor, info.architecture, info.description].filter(Boolean).join(' ') : '';
+  } catch { return ''; }
+}
+
 // ----- the picture -----
 const params = new URLSearchParams(location.search);
 let WEBGL = params.has('webgl') || !navigator.gpu;   // ?webgl asks for the WebGL way of drawing
 const renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance', forceWebGL: WEBGL });
-// quality: how much the computer is asked to draw
-let qualityChoice = params.get('quality') || kept('quality', 'auto');
-if (qualityChoice !== 'auto' && !(qualityChoice in QUALITY)) qualityChoice = 'auto';
-let qualityKey = qualityChoice === 'auto' ? 'normal' : qualityChoice;
-let quality = { ...QUALITY[qualityKey], details: params.has('details') };
+// The graphics settings (quality.js): automatic, a preset, or custom (a preset with the viewer's own values over it).
+// Automatic starts from what the graphics card is called, and what it learnt on this card before.
+let graphicsChoice = params.has('quality') ? choiceOf(params.get('quality')) : choiceOf(kept('quality', 'auto'), kept('graphics', '') !== '0.37');
+keep('graphics', '0.37');   // what is kept from here on uses the names of 0.37
+let ownGraphics = parseStored(kept('graphicsOwn', '{}')) || {};
 const autoQuality = new AutoQuality(), steady = new SteadyResolution();   // steady: fewer pixels when frames take too long (steady.js)
 let steadyOn = kept('steady', 'true') !== 'false';
-const pixelRatio = () => Math.min(window.devicePixelRatio, quality.ratio) * (steadyOn ? steady.scale : 1);
+let quality = { ...PRESETS.normal, details: params.has('details') }, autoPick = 'normal', gpuName = '';
+const pixelRatio = () => Math.min(window.devicePixelRatio, quality.sharp) * quality.scale * (steadyOn ? steady.scale : 1);
 renderer.setPixelRatio(pixelRatio());
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 document.body.prepend(renderer.domElement);
 await renderer.init();
 WEBGL = !!renderer.backend.isWebGLBackend;
+gpuName = cardName(renderer);
+{ const learnt = parseStored(kept('autoGraphics', '{}')) || {}; autoPick = learnt.gpu === gpuName && learnt.preset in PRESETS ? learnt.preset : guessPreset(gpuName); }
+const graphicsNow = () => graphicsChoice === 'custom' ? settingsOf(ownGraphics.base, ownGraphics) : settingsOf(graphicsChoice === 'auto' ? autoPick : graphicsChoice);
+const graphicsKey = () => graphicsChoice === 'auto' ? autoPick : graphicsChoice;
+quality = { ...graphicsNow(), details: quality.details };
+renderer.setPixelRatio(pixelRatio());
 let scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 1600);   // far enough to see the sky
 // the scene, a glow round what is bright, and the finish of a camera: colour that splits slightly towards the edge
@@ -104,7 +124,7 @@ let readDemo = demo(signals, director.mood.demoBpm, director.mood.flow), statusA
 const SKIP = +(params.get('skip') || 0);   // ?skip=24: the demo track starts that many seconds in, for a picture of its peak
 // for looking in from the console; view = [x, y, z, lookAtX, lookAtY, lookAtZ] puts the camera anywhere
 let changing = false, changeMessage = '';
-const show = window.__show = { signals, director, world, cams, look, audio, renderer, camera, post, steady, quality: qualityKey, changing: false, view: null, heard: [], webgl: WEBGL, fps: 0 };   // heard: what the listener found in live sound, [{ t, what }] with t on the sound's clock
+const show = window.__show = { signals, director, world, cams, look, audio, renderer, camera, post, steady, quality: graphicsKey(), gpu: gpuName, changing: false, view: null, heard: [], webgl: WEBGL, fps: 0 };   // heard: what the listener found in live sound, [{ t, what }] with t on the sound's clock
 const effects = mountEffects({ show: () => ({ director, world, look }), now: () => timer.getElapsed() });
 const sound = mountSound(audio);
 const ui = mountControls({ release: () => effects.release() });
@@ -121,9 +141,13 @@ $('elsewhere').onclick = playHere;
 
 // now: when the browser began this frame, in step with the screen. Moving the show on by that, and not by the moment
 // the code happens to run, keeps every movement even, and a frame the screen missed shows as one refresh too long.
+let drawnAt = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   if (elsewhere) return;
+  // a frame-rate limit (graphics setting fps): skip a refresh until a frame's time is up; the next one is due a frame's
+  // time after when this one was due, so that on a screen of another pace the frames still average out at the limit
+  if (quality.fps) { const each = 1000 / quality.fps, since = now - drawnAt; if (since < each - 1.5) return; drawnAt = since > each * 3 ? now : drawnAt + each; }
   timer.update(now);
   const raw = Math.max(0, timer.getDelta()), dt = Math.min(raw, 0.05), t = timer.getElapsed();
   signals.decay = director.mood.decay;
@@ -172,7 +196,7 @@ function frame(now) {
     playback.update();
     show.fps = frames / (t - statusAt); frames = 0; statusAt = t;
     $('fps').textContent = `${Math.round(show.fps)} frames a second${WEBGL ? ' · WebGL' : ''}`;
-    $('qualityNote').textContent = (qualityChoice === 'auto' ? `Automatic · ${QUALITY[qualityKey].name}` : QUALITY[qualityKey].name) + (steadyOn && steady.scale < 1 ? ` · ${Math.round(steady.scale * 100)}% resolution to keep the pace` : '');
+    $('qualityNote').textContent = (graphicsChoice === 'auto' ? `Automatic · ${PRESETS[autoPick].name}` : graphicsChoice === 'custom' ? 'Custom' : PRESETS[graphicsChoice].name) + (gpuName ? ` · ${cardLabel(gpuName)}` : '') + (steadyOn && steady.scale < 1 ? ` · ${Math.round(steady.scale * 100)}% resolution to keep the pace` : '');
     const m = signals.m;
     const signal = audio.signal();
     $('inputLevel').hidden = !audio.live;
@@ -195,8 +219,9 @@ function frame(now) {
   // first fewer pixels, a step at a time; a lighter quality (a rebuild) only when even the fewest are too many
   if (steady.sample(raw, { visible: !document.hidden, ready: !changing && !!show.ready, enabled: steadyOn }) !== null) { renderer.setPixelRatio(pixelRatio()); resize(); }
   show.resolution = steadyOn ? steady.scale : 1;
-  const lower = autoQuality.sample(raw, { visible: !document.hidden, ready: !changing && !!show.ready, automatic: qualityChoice === 'auto' && (!steadyOn || steady.atMin), quality: qualityKey });
-  if (lower) changeQuality(lower).catch(changeFailed);
+  // and automatic: one preset lighter when even the fewest pixels do not keep the pace, remembered for this card
+  const lower = autoQuality.sample(raw, { visible: !document.hidden, ready: !changing && !!show.ready, automatic: graphicsChoice === 'auto', atMin: !steadyOn || steady.atMin, target: steady.target, lightest: autoPick === ORDER[0] });
+  if (lower) { autoPick = ORDER[ORDER.indexOf(autoPick) - 1]; keep('autoGraphics', JSON.stringify({ gpu: gpuName, preset: autoPick })); applyGraphics().catch(changeFailed); }
 }
 
 // ----- the show's own controls -----
@@ -288,12 +313,47 @@ $('lookPreset').onchange = e => { if (LOOK_PRESETS[e.target.value]) applyLook(LO
 $('sens').value = kept('sens', 1); sliderValue('sens');
 $('sens').oninput = () => { keep('sens', $('sens').value); sliderValue('sens'); };
 $('resetSliders').onclick = () => { applyLook(LOOK_PRESETS.standard); $('sens').value = 1; keep('sens', 1); sliderValue('sens'); };
-fill($('quality'), [['auto', 'Automatic'], ...Object.entries(QUALITY).map(([k, v]) => [k, v.name])], qualityChoice);
+// Graphics: a preset (or automatic), and every setting on its own under it. Changing one makes the settings custom,
+// unless they are then exactly a preset. Only what needs it builds the venue again (quality.js).
+fill($('quality'), [['auto', 'Automatic'], ...ORDER.map(k => [k, PRESETS[k].name]), ['custom', 'Custom']], graphicsChoice);
+$('quality').querySelector('option[value="custom"]').disabled = true;   // shown when it is so, never a choice of its own
 segmented($('quality'), $('startQuality'));
-$('quality').onchange = e => {
-  qualityChoice = e.target.value; keep('quality', qualityChoice); autoQuality.reset();
-  changeQuality(qualityChoice === 'auto' ? 'normal' : qualityChoice).catch(changeFailed);
-};
+for (const [key, option] of Object.entries(OPTIONS)) {
+  const row = document.createElement('div'), label = document.createElement('label'), select = document.createElement('select');
+  row.className = 'setting'; label.htmlFor = select.id = 'gfx-' + key; label.textContent = option.name; select.className = 'ctl';
+  option.choices.forEach(([, name], i) => select.add(new Option(name, String(i))));
+  select.onchange = () => {
+    const values = { ...graphicsNow(), [key]: option.choices[+select.value][0] }, preset = presetOf(values);
+    if (preset === 'custom') ownGraphics = { ...values, base: graphicsKey() in PRESETS ? graphicsKey() : ownGraphics.base };
+    setGraphics(preset);
+  };
+  row.append(label, select); $('graphicsOptions').append(row);
+}
+function syncGraphics() {
+  $('quality').value = graphicsChoice;
+  for (const [key, option] of Object.entries(OPTIONS)) $('gfx-' + key).value = String(Math.max(0, option.choices.findIndex(([v]) => v === quality[key])));
+  syncSegments();
+}
+function setGraphics(choice) {
+  graphicsChoice = choice; keep('quality', choice); keep('graphicsOwn', JSON.stringify(ownGraphics)); autoQuality.reset();
+  applyGraphics().catch(changeFailed);
+}
+// what changes at once (resolution, frame rate, glow, detail of people) at once; the rest with a new build of the venue
+async function applyGraphics() {
+  const next = { ...graphicsNow(), details: quality.details };
+  if (needsBuild(quality, next)) await replaceVenue($('venue').value, { force: true, nextSettings: next });
+  else { quality = next; liveGraphics(); }
+  syncGraphics();
+}
+function liveGraphics() {
+  steady.cap = quality.fps ? 1 / quality.fps : 0;
+  renderer.setPixelRatio(pixelRatio()); resize(); configurePost();
+  world.graphics(quality);
+  Object.assign(world.crowdDetail, { near: DETAIL_AT.near * quality.detail, mid: DETAIL_AT.mid * quality.detail, far: DETAIL_AT.far * quality.detail });
+  show.quality = graphicsKey(); show.graphics = quality;
+}
+$('quality').onchange = e => setGraphics(e.target.value);
+liveGraphics(); syncGraphics();
 $('steadyPicture').checked = steadyOn;
 $('steadyPicture').onchange = e => { steadyOn = e.target.checked; keep('steady', String(steadyOn)); steady.reset(); renderer.setPixelRatio(pixelRatio()); resize(); };
 $('particles').value = String(particleCount); $('particles').disabled = WEBGL;
@@ -372,7 +432,7 @@ fillVenuePanel(moodKey, params.get('cam') || kept('cam', 'auto'));
 // clock and viewer media survive; a failed build leaves the current show running.
 let venueRequest = 0, compileQueue = Promise.resolve();
 const changeFailed = e => { changeMessage = 'Could not change the show: ' + e.message; $('status').textContent = changeMessage; $('venue').value = venueKey; };
-async function replaceVenue(key, { force = false, nextQuality = qualityKey } = {}) {
+async function replaceVenue(key, { force = false, nextSettings = quality } = {}) {
   if (!(key in VENUES)) return;
   if (key === venueKey && !force) { ++venueRequest; changing = show.changing = false; $('loading')?.remove(); return; }
   const request = ++venueRequest, nextScene = new THREE.Scene();
@@ -383,7 +443,6 @@ async function replaceVenue(key, { force = false, nextQuality = qualityKey } = {
   loading.textContent = 'Changing venue…';
   let nextWorld, nextParticles;
   try {
-    const nextSettings = { ...QUALITY[nextQuality], details: quality.details };
     nextWorld = buildWorld(VENUES[key], nextScene, nextSettings);
     const currentMood = $('mood').value;
     const chooseMood = selected => moodLocked || key === venueKey || nextWorld.layout.genres.includes(selected) ? selected : nextWorld.layout.mood || 'techno';
@@ -408,16 +467,16 @@ async function replaceVenue(key, { force = false, nextQuality = qualityKey } = {
     Object.assign(show, { world, director });   // for looking in from the console: the venue that plays now
     cams = new CameraDirector(shots(world.layout, world.shots), timer.getElapsed());
     scenePass.scene = scene;
-    if (nextQuality !== qualityKey) { steady.scale = 1; steady.reset(); }   // another quality: find the resolution again
-    venueKey = key; qualityKey = nextQuality; quality = nextSettings;
-    renderer.setPixelRatio(pixelRatio()); resize(); configurePost();
+    if (needsBuild(quality, nextSettings)) { steady.scale = 1; steady.reset(); }   // other graphics: find the resolution again
+    venueKey = key; quality = nextSettings;
+    liveGraphics();
     readDemo = demo(signals, director.mood.demoBpm, director.mood.flow);
-    Object.assign(show, { world, director, cams, view: null, quality: qualityKey });
+    Object.assign(show, { world, director, cams, view: null, quality: graphicsKey() });
     $('venue').value = key; keep('venue', key); keep('mood', nextMood);
     fillVenuePanel(nextMood, cameraValue);
     const url = new URL(location.href); url.searchParams.set('venue', key);
     url.searchParams.delete('mood'); url.searchParams.delete('cam');
-    if (url.searchParams.has('quality')) url.searchParams.set('quality', qualityChoice);
+    if (url.searchParams.has('quality')) url.searchParams.set('quality', graphicsChoice);
     if (url.searchParams.has('n')) url.searchParams.set('n', particleCount);
     history.replaceState(null, '', url);
     oldParticles?.dispose(); disposeScene(oldScene, [world.env.media]);
@@ -427,7 +486,6 @@ async function replaceVenue(key, { force = false, nextQuality = qualityKey } = {
     if (request === venueRequest) { changing = show.changing = false; $('loading')?.remove(); autoQuality.reset(); }
   }
 }
-async function changeQuality(key) { await replaceVenue($('venue').value, { force: true, nextQuality: key }); }
 
 // Presets (presets-ui.js) keep show controls, never live audio connections or graphics quality.
 const presets = mountPresets({

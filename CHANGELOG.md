@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.40.1
+
+- Fixed: with the show theme on Auto every colour came out black, so the light faded to nothing within seconds of
+  the start. The shared palettes of 0.40 turned colours into colours a second time. A test now checks that a track's
+  colours are lit, and not only that they hold.
+
 ## 0.40.0
 
 - A track keeps its colours from its first kick to its last: one palette and the same two colours of it, through

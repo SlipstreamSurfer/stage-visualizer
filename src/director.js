@@ -110,11 +110,11 @@ const POOLS = {};
 export function palettePool(key) {
   return POOLS[key] ||= (() => {
     const own = MOODS[key].palettes, seen = new Set(own.map(p => p.join())), others = [];
-    if (MOODS[key].flow) return own.map(p => p.map(hex));
+    if (MOODS[key].flow) return own;   // (the moods' palettes are colours already: see the moods)
     for (const [k, m] of Object.entries(MOODS)) if (k !== key && !m.flow) for (const p of m.palettes) if (!seen.has(p.join())) { seen.add(p.join()); others.push(p); }
     const pool = [], from = [...key].reduce((n, c) => n + c.charCodeAt(0), 0);   // where in the others this kind starts, so kinds do not all follow the same order
     for (let i = 0; i < Math.max(own.length, others.length); i++) { if (i < own.length) pool.push(own[i]); if (i < others.length) pool.push(others[(i + from) % others.length]); }
-    return pool.map(p => p.map(hex));
+    return pool;
   })();
 }
 

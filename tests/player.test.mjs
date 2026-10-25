@@ -96,8 +96,10 @@ test('a track keeps its colours from start to end, through breaks and drops; the
     if (t > 10 && t < 229) { first ??= [...director.col, ...director.col2]; moved = Math.max(moved, ...[...director.col, ...director.col2].map((v, i) => Math.abs(v - first[i]))); }
   });
   assert.ok(moved < 0.01, `within the track the colours moved by ${moved.toFixed(3)}`);
+  assert.ok(Math.max(...first) > 0.3, `and they are colours, not black: ${first.map(v => v.toFixed(2))}`);
   assert.equal(palettes.size, 2, 'one palette for the first track, the next one for the second');
   const pool = palettePool('hypnotic'), own = palettePool('techno');
   assert.ok(pool.length > 20 && own.length > 20, 'every kind of club music draws on the palettes of all of them');
+  assert.ok(pool.every(p => p.every(c => c.length === 3 && c.every(v => v >= 0 && v <= 1)) && Math.max(...p.flat()) > 0.2), 'every palette is red, green and blue, and lit');
   assert.ok(palettePool('ambient').length < 8, 'music to listen to keeps its own');
 });

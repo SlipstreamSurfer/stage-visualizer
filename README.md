@@ -9,7 +9,7 @@
 
 <p align="center">
   <strong>Turn your music into a live 3D light show.</strong><br>
-  Moving lights, LED arches, cameras and a crowd — all inside your browser.
+  A festival hangar with 92 moving heads, haze, reflections and 2,600 dancing people — all inside your browser.
 </p>
 
 <p align="center">
@@ -25,12 +25,14 @@
 <p align="center"><em>Hangar · the main stage of Stage Visualizer</em></p>
 
 **Hangar** is the single public venue and the main stage for developing SV.
-Choose from **48 moods** to shape the show, then adjust its look and camera.
-WebGPU renders the show when available; WebGL provides a fallback.
+Choose from **48 moods**: each kind of music plays the rig its own way, and a track keeps its colours from its first
+kick to its last. With Spotify on Linux the show knows when a new track starts; with rekordbox it reads the decks.
+Graphics presets from Light to Ultra, measured on your own computer, keep it smooth on anything from a laptop chip to
+a gaming card. WebGPU renders the show when available; WebGL provides a fallback.
 
 | Music | Light show | Your controls |
 | --- | --- | --- |
-| Local tracks, audio inputs and supported system-audio sharing | Moving heads, LED arches, haze and a dancing crowd | Nine camera views, level faders and a switch for every light group |
+| Spotify (Linux), rekordbox, local tracks, audio inputs and system audio | 92 moving heads, a row of 24 on the stage, washes, haze, floor reflections and a dancing crowd | A camera around the DJ, nine views, level faders and a switch for every light group |
 | Audio processed locally in your browser | Automatic scenes shaped by the incoming music | Fine tuning, saved presets and keyboard effects |
 
 <table>
@@ -48,12 +50,11 @@ WebGPU renders the show when available; WebGL provides a fallback.
   </tr>
   <tr>
     <td align="center"><strong>Start the show</strong><br>Pick your sound and picture while the venue builds.</td>
-    <td align="center"><strong>Settings apart</strong><br>What you set once, in six short pages.</td>
+    <td align="center"><strong>Graphics as in a game</strong><br>A preset, or every setting on its own.</td>
   </tr>
 </table>
 
-*Actual screenshots of the public 0.26.2 Hangar demo, using the Cool palette
-and Energetic look. Click the smaller images to view them at full size.*
+*Actual screenshots of the Hangar demo in 0.40, at Ultra. Click the smaller images to view them at full size.*
 
 ## Start
 

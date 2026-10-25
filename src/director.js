@@ -270,9 +270,10 @@ export class Director {
   }
 
   // Another track, as the music player says (Signals.told): its own palette and its own looks, from its first kick.
-  // With a crossfade the last track still plays for a few seconds after the player has moved on, so its kicks do not
-  // count: the new look lands on the first kick from SETTLE seconds on, or after LATE seconds without one (a track
-  // that opens without a kick gets its calm look then).
+  // When the last track played to its end, that is the very first kick. When the player moved on before (skipped, or a
+  // crossfade), the last track may still sound for a few seconds, so its kicks do not count: the new look lands on the
+  // first kick from SETTLE seconds on. After LATE seconds without a kick it lands anyway (a track that opens without
+  // one gets its calm look then).
   startTrack(t, section) { this.palette++; this.paletteAt = t; this.beat = 0; this.next(t, section); this.pendingChange = null; this.trackAt = null; }
 
   // sig: Signals; look: { light, haze } from the viewer, both 1 when untouched, and off: the roles switched off
@@ -284,7 +285,7 @@ export class Director {
     // nothing big starts any more, so that the change of look falls on the next track and not just before it.
     this.told = !!sig.track?.known;
     const left = sig.remaining ?? Infinity, ending = this.ending = left < ENDING;
-    if (sig.ev?.newTrack) this.trackAt = t;
+    if (sig.ev?.newTrack) { this.trackAt = t; this.trackSettle = sig.ev.newTrack === 'end' ? 0 : SETTLE; }
     if (mood.flow) sig = this.flow(sig, t, dt);
     const m = sig.m, ev = sig.ev;
     const section = m.section, calm = m.phase !== 'break' && TIER[section] === 'calm';
@@ -292,7 +293,7 @@ export class Director {
     if (ev.drop) { this.coilDropAt = t; this.coilDropStrength = clamp(ev.kick || sig.drop || 1); }
 
     // ----- what just happened in the music -----
-    const starting = this.trackAt != null && t - this.trackAt >= (ev.kick ? SETTLE : LATE);
+    const starting = this.trackAt != null && t - this.trackAt >= (ev.kick ? this.trackSettle : LATE);
     if (starting) this.startTrack(t, section);
     if (ev.kick) {
       if (ev.drop) {

@@ -39,6 +39,16 @@ test('the player says another track began: the listening starts afresh, and the 
   assert.ok(signals.track.known && signals.track.id === 'b' && Math.abs(signals.remaining - (360 - 30)) < 0.1, `the track has ${signals.remaining} s left`);
 });
 
+test('when the last track played to its end, the new look lands on the new track\'s very first kick', () => {
+  let toldAt = null, palette = null, changedAt = null, kind = null;
+  play(60, t => t < 0.02 ? track('a', 300, 340) : Math.abs(t - 40.5) < 1 / 120 ? (toldAt = t, track('b')) : null, ({ t, signals, director }) => {
+    if (signals.ev.newTrack) { kind = signals.ev.newTrack; palette = director.palette; }
+    if (palette !== null && changedAt === null && director.palette !== palette) changedAt = t;
+  });
+  assert.equal(kind, 'end');
+  assert.ok(changedAt - toldAt < 0.6, `the palette changed ${(changedAt - toldAt).toFixed(2)} s after the player moved on`);
+});
+
 test('while the player names the tracks a palette lasts the whole track; without it, it changes with time', () => {
   const palettes = told => { const seen = new Set(); play(MOODS.hard.paletteHold + 50, told ? t => t < 0.02 ? track('long', 0, 900) : null : null, ({ director }) => seen.add(director.palette), 'hard'); return seen.size; };
   assert.equal(palettes(true), 1);

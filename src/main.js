@@ -556,7 +556,7 @@ function logShow(t, raw) {
   logShow.frames++; logShow.slowest = Math.max(logShow.slowest, raw);
   const m = signals.m, ev = signals.ev, w = Date.now(), note = what => { logLines.push(JSON.stringify({ w, what, bpm: m.bpm, section: m.section })); };
   if (ev.drop) note('drop'); if (ev.broke) note('break'); if (ev.lift) note('lift');
-  if (ev.newTrack) note('new track: ' + [signals.track.artist, signals.track.title].filter(Boolean).join(' - '));   // as the music player says
+  if (ev.newTrack) note(`new track (${ev.newTrack}): ` + [signals.track.artist, signals.track.title].filter(Boolean).join(' - '));   // as the music player says; end: the last one played to its end
   const silent = m.silentFor > 2.5;   // once per silence: ev.silent is only there in a frame that heard sound
   if (silent && !logShow.silent) note('silence'); logShow.silent = silent;
   if (ev.kick && signals.m.phase === 'groove' && logShow.phase === 'break' && !ev.drop) note('kick comes in'); logShow.phase = m.phase;

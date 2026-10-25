@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.36.1
+
+- The trusses no longer catch a warm patch of light on their middle. The light the LED wall throws on the stage came
+  from a lamp that hung in the air in front of the wall, at the height the trusses come down to; it now comes from
+  behind the wall's middle, and a wall that is switched off throws next to nothing.
+- When a track has played to its end, the next one's palette and looks land on its very first kick. Only when the
+  player moves on early (a skip, or a crossfade) does the show wait three seconds for the last track to fade.
+- The crowd at the back of the hall is drawn with a fourth, still lighter level of detail: from the DJ booth about
+  a fifth fewer triangles again, with no difference to see. Raised hands and jumps at the edge of the picture no
+  longer pop in or out.
+
 ## 0.36.0
 
 - The show knows which track plays. With Spotify (or another music player) on Linux the local server hears the

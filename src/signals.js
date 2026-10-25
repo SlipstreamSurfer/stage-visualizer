@@ -10,7 +10,8 @@
 //   energy     how loud and full, smoothed    bass mid treble   the three bands, 0 to 1
 //   beats      kicks counted                  phase   beats as a clock, whole numbers fall on the kick
 //   track      what the music player says plays (told): { known, id, title, artist, length, position, at };
-//              remaining: the seconds the track still has, or null; ev.newTrack: the player began another one
+//              remaining: the seconds the track still has, or null; ev.newTrack: the player began another one,
+//              'end' when the last track had played to its end (nothing of it sounds on), else 'early'
 import { Listener } from './listen.js';
 import { STEPS } from './ear.js';
 
@@ -41,7 +42,8 @@ export class Signals {
     this.player = now;
     if (!now?.id || !now.playing) { this.track = { ...this.track, known: false }; return; }
     if (this.track.id && now.id !== this.track.id) {
-      this.ev.newTrack = true; this.listener.newTrack(); this.stableBpm = 0;
+      const left = this.remaining;
+      this.ev.newTrack = this.track.known && left !== null && left < 1.5 ? 'end' : 'early'; this.listener.newTrack(); this.stableBpm = 0;
       this.onEvent?.({ t: this.now, what: 'new track' });
     }
     this.track = { known: true, id: now.id, title: now.title || '', artist: now.artist || '', length: now.length || 0, position: now.position || 0, at: this.now };

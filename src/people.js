@@ -27,18 +27,22 @@ const tag = (g, arm, part) => {
   return g;
 };
 
-// The figure at three levels of detail (DETAIL): the same parts in the same places, with fewer sides the further
-// away it is drawn. Far off a head is a few pixels, and its twelve sides are work nobody sees.
+// The figure at four levels of detail (DETAIL): the same parts in the same places, with fewer sides the further
+// away it is drawn. Far off a head is a few pixels, and its twelve sides are work nobody sees. The furthest also
+// leaves out the smaller steps of the torso's outline (TORSO_FAR).
 export const DETAIL = [
-  { head: [12, 8], body: 12, limb: 8, joint: [8, 6], hand: [8, 5], cup: 8 },   // near
-  { head: [8, 6], body: 8, limb: 6, joint: [6, 4], hand: [6, 4], cup: 6 },     // a little way off
-  { head: [6, 5], body: 6, limb: 4, joint: [4, 3], hand: [4, 3], cup: 4 },     // far
+  { head: [12, 8], body: 12, limb: 8, joint: [8, 6], hand: [8, 5], cup: 8 },                // near: 856 triangles
+  { head: [8, 6], body: 8, limb: 6, joint: [6, 4], hand: [6, 4], cup: 6 },                  // a little way off: 512
+  { head: [6, 5], body: 6, limb: 4, joint: [4, 3], hand: [4, 3], cup: 4 },                  // far: 324
+  { head: [5, 4], body: 5, limb: 3, joint: [3, 2], hand: [3, 2], cup: 3, outline: 'far' },  // at the back of the hall: about 190
 ];
+const TORSO = [[0.001, 0.84], [0.14, 0.86], [0.172, 0.97], [0.15, 1.12], [0.168, 1.27], [0.2, 1.37], [0.17, 1.435], [0.07, 1.47], [0.058, 1.54], [0.001, 1.54]];
+const TORSO_FAR = [[0.001, 0.84], [0.15, 0.88], [0.16, 1.1], [0.2, 1.37], [0.07, 1.47], [0.058, 1.54], [0.001, 1.54]];
 export function personGeo(level = 0) {
   const d = DETAIL[level];
   const head = tag(at(new THREE.SphereGeometry(0.092, ...d.head).scale(0.9, 1.2, 1), 0, 1.625, 0), 0, SKIN);
   for (let i = 0, pos = head.attributes.position; i < pos.count; i++) if (pos.getZ(i) > -0.03 || pos.getY(i) > 1.678) head.attributes.aPart.setX(i, HAIR);   // the back and top of the head
-  const torso = new THREE.LatheGeometry([[0.001, 0.84], [0.14, 0.86], [0.172, 0.97], [0.15, 1.12], [0.168, 1.27], [0.2, 1.37], [0.17, 1.435], [0.07, 1.47], [0.058, 1.54], [0.001, 1.54]].map(p => new THREE.Vector2(p[0], p[1])), d.body).scale(1, 1, 0.62);
+  const torso = new THREE.LatheGeometry((d.outline === 'far' ? TORSO_FAR : TORSO).map(p => new THREE.Vector2(p[0], p[1])), d.body).scale(1, 1, 0.62);
   const parts = [tag(torso, 0, SHIRT), head];
   for (const side of [-1, 1]) {
     const sx = side * SHOULDER_X;
@@ -76,14 +80,14 @@ const EACH = 16, FIELDS = [['aSeed', 4, 0], ['aPlace', 4, 4], ['aShirt', 3, 8], 
 // reflect and the word on the back. Part of the figure, so it moves with it.
 export const KIT = { none: 0, security: 1, medic: 2 };
 // A crowd of n figures drawn in one go. put(i, ...) places one; moving: they are placed again every frame.
-// lod: drawn at the three levels of detail, each person at the one the camera asks for (view below); otherwise
+// lod: drawn at the four levels of detail, each person at the one the camera asks for (view below); otherwise
 // everyone at the first.
 //
 // What the setters write is kept here, whole; what the card draws is a copy per level of detail, of the people at
 // that level only. view(camera, height) sorts the crowd again when the camera has moved or turned, or when
 // someone or the distances in detail were changed: by how big a person shows (their distance, the camera's angle of view and the height of
 // the picture in pixels), and leaving out whoever is out of the picture or folded away (size 0).
-const NEAR = 13, MID = 27, ROOM = 1.6;   // metres from the camera at which a person is drawn with less detail, at 1080 pixels and 50 degrees; how far round a person counts as in the picture
+const NEAR = 13, MID = 27, FAR = 45, ROOM = 2.1;   // metres from the camera at which a person is drawn with less detail, at 1080 pixels and 50 degrees; how far round a person counts as in the picture
 export function people(material, n, moving = false, lod = false) {
   const N = Math.max(1, n), data = new Float32Array(N * EACH), matrices = new Float32Array(N * 16), o = new THREE.Object3D();
   const levels = (lod ? DETAIL : DETAIL.slice(0, 1)).map((_, level) => {
@@ -100,7 +104,7 @@ export function people(material, n, moving = false, lod = false) {
   let dirty = true;
   const was = new THREE.Vector3(1e9, 0, 0), looked = new THREE.Vector3(), dir = new THREE.Vector3(), frustum = new THREE.Frustum(), sphere = new THREE.Sphere(), seen = new THREE.Matrix4();
   let wasFov = 0, wasHeight = 0, wasDetail = '';
-  const detail = { near: NEAR, mid: MID };   // the distances, for comparing: Infinity for both draws everyone at full detail
+  const detail = { near: NEAR, mid: MID, far: FAR };   // the distances, for comparing: Infinity for all draws everyone at full detail
   return { mesh: group, data, levels: levels.map(l => l.mesh), detail,
     seed(i, a, b, c, d) { data.set([a, b, c, d], i * EACH); },
     shirt(i, colour) { data.set([colour.r, colour.g, colour.b], i * EACH + 8); },
@@ -116,18 +120,18 @@ export function people(material, n, moving = false, lod = false) {
     view(camera, height) {
       if (!lod) return;
       camera.getWorldDirection(dir);
-      const key = detail.near + ' ' + detail.mid;
+      const key = detail.near + ' ' + detail.mid + ' ' + detail.far;
       if (!dirty && camera.position.distanceToSquared(was) < 0.04 && dir.dot(looked) > 0.9995 && camera.fov === wasFov && height === wasHeight && key === wasDetail) return;
       dirty = false; wasDetail = key; was.copy(camera.position); looked.copy(dir); wasFov = camera.fov; wasHeight = height;
       camera.updateMatrixWorld(); frustum.setFromProjectionMatrix(seen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
       const scale = Math.tan(camera.fov * Math.PI / 360) / Math.tan(25 * Math.PI / 180) * 1080 / Math.max(1, height), cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
-      const count = [0, 0, 0];
+      const count = [0, 0, 0, 0];
       for (let i = 0; i < n; i++) {
-        const k = i * EACH, x = data[k + 4], z = data[k + 5], size = data[k + 7], y = data[k + 13] + 1;   // their middle: on a tier or a balcony, that far up
+        const k = i * EACH, x = data[k + 4], z = data[k + 5], size = data[k + 7], y = data[k + 13] + 1.3;   // their middle, hands up and jumping included: on a tier or a balcony, that far up
         if (!size) continue;
         sphere.center.set(x, y, z); sphere.radius = ROOM;
         if (!frustum.intersectsSphere(sphere)) continue;
-        const far = Math.hypot(x - cx, y - cy, z - cz) * scale, level = far < detail.near ? 0 : far < detail.mid ? 1 : 2, l = levels[level], at = count[level]++;
+        const far = Math.hypot(x - cx, y - cy, z - cz) * scale, level = far < detail.near ? 0 : far < detail.mid ? 1 : far < detail.far ? 2 : 3, l = levels[level], at = count[level]++;
         l.own.set(data.subarray(k, k + EACH), at * EACH); l.mesh.instanceMatrix.array.set(matrices.subarray(i * 16, i * 16 + 16), at * 16);
       }
       levels.forEach((l, level) => { l.mesh.count = count[level]; l.buffer.needsUpdate = true; l.mesh.instanceMatrix.needsUpdate = true; });

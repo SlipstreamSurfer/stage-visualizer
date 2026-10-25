@@ -316,7 +316,11 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
   const house = add(new THREE.HemisphereLight(sky ? sky.light[0] : 0x39404f, sky ? sky.light[1] : 0x14100c, daylight));
   const nightSky = house.color.clone(), nightGround = house.groundColor.clone();
   const hall = add(new THREE.PointLight(0xffffff, 0, 0, 1)); hall.position.set(0, H * 0.75, centre ? st.z : (F.z0 + F.z1) / 2 - (F.z1 - F.z0) * 0.15);
-  const stageLight = add(new THREE.PointLight(0xffffff, 0, 0, 1)); stageLight.position.set(0, st.height + 4.5, centre ? st.z : st.back + 2.5);   // the LED wall, as the lamp it is for the stage and the front rows
+  // The LED wall, as the lamp it is for the stage and the front rows: from behind its middle, so that the light comes
+  // from the wall's direction and nothing comes near enough to catch a hot spot of it. (Floating in front of the wall
+  // at the trusses' height, it lit a lowered truss as a bright patch on its middle.) A wall that is off throws next to
+  // nothing.
+  const stageLight = add(new THREE.PointLight(0xffffff, 0, 0, 1)); stageLight.position.set(0, st.height + 4.5, centre ? st.z : st.back - 2.5);
   scene.fog = new THREE.FogExp2(0x000000, 0.015);
 
   // haze and smoke that move through the room (smoke.js), from the hazers; without a hazer, from the back of the stage
@@ -486,7 +490,7 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28 }) {
       torches.material.color.setRGB(3.2, 3.1, 2.9).multiplyScalar(filming * (brk ? 1 : 0.35));   // the torches mostly in the quiet
       const room = director.room, spill = look.hall < 1 ? look.hall : 1 + (look.hall - 1) * 1.5;
       hall.color.setRGB(...room.color); hall.intensity = (spill * room.level * (hangarRig ? 0.26 : 0.42) + 0.4 * Math.pow(look.hall, 3)) * size;
-      stageLight.color.copy(env.wallColor).lerp(hall.color, 0.3); stageLight.intensity = (1.5 + env.wallColor.r + env.wallColor.g + env.wallColor.b) * 4 * spill * size * (director.manual.blackout ? 0 : 1);
+      stageLight.color.copy(env.wallColor).lerp(hall.color, 0.3); stageLight.intensity = (0.5 + env.wallColor.r + env.wallColor.g + env.wallColor.b) * 12 * spill * size * (director.manual.blackout ? 0 : 1);
       // The time of day (daylight.js) and the hangar door, eased: the light changes over seconds, the door takes its time.
       // By day the hall is lit from above and the haze shows the sun; at sunset warm and low; the lamps count for less.
       const time = TIMES[look.controls?.timeOfDay] || TIMES.night;

@@ -141,13 +141,13 @@ function movingHead(env, thing, base = {}) {
     }
     const half = p.spread * (p.hangar ? zoom : ch.zoom ?? 1);
     gobo += ((ch.gobo || 0) - gobo) * Math.min(1, dt * 3); spin += dt * 0.25 * gobo;
-    env.beams.set(iBeam, at, way, length * Math.tan(half) + 0.1, length, color, I * 0.38 * (0.25 + 0.75 * Math.min(1.6, env.haze)) * (p.fixed ? 0.3 : 1), gobo, spin, ch.goboMode || 0);
+    env.beams.set(iBeam, at, way, length * Math.tan(half) + 0.1, length, color, I * 0.38 * (0.25 + 0.75 * Math.min(1.6, env.haze)) * (p.fixed ? 0.16 : 1), gobo, spin, ch.goboMode || 0);   // a wash's wide cone is a soft glow in the haze, not a beam
     // a lamp that points at you is blinding, one that points away is a dim glow: the flare follows how squarely the
     // lens faces the camera, and stretches sideways like in a lens
     const glare = Math.pow(Math.max(0, way.dot(v.subVectors(env.cam, at).normalize())), 12);
     const near = Math.min(1, Math.max(0, (env.cam.distanceTo(at) - 2.5) / 7)), k = I * (0.5 + glare * 5) * near;   // a lamp right beside the lens must not fill the picture
     env.flares.set(iFlare, at, (0.6 + I * 0.8) * (1 + glare * 2.4), (0.6 + I * 0.8) * (1 + glare * 0.8), color.r * k, color.g * k, color.b * k);
-    env.cast(at, way.x, way.y, way.z, color, I * (p.fixed ? 0.5 : 1), half, p.hangar ? gobo : 0, spin, ch.goboMode || 0);   // and it lights what it lands on
+    env.cast(at, way.x, way.y, way.z, color, I * (p.fixed ? 0.5 : 1), half, p.hangar ? gobo : 0, spin, ch.goboMode || 0, thing);   // and it lights what it lands on
   } };
 }
 

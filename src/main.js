@@ -92,7 +92,9 @@ addEventListener('resize', resize); resize();
 // ----- the venue, and the show in it -----
 let venueKey = params.get('venue') || kept('venue', 'hangar');
 if (!(venueKey in VENUES)) venueKey = 'hangar';
-let world = buildWorld(VENUES[venueKey], scene, quality);
+// the venue's variants as the viewer chose them (Settings → Show: the stage heads), from what was kept
+const venueOptions = c => ({ stageHeads: c.stageHeads });
+let world = buildWorld(VENUES[venueKey], scene, quality, venueOptions(normalizeControls(parseStored(kept('controls', '{}')))));
 // A locked mood survives venue changes and reloads; otherwise a venue brings a mood it suits.
 let moodLocked = kept('moodLock', 'false') === 'true';
 const wanted = params.get('mood') || kept('mood', ''), moodKey = wanted in MOODS && (moodLocked || params.has('mood') || world.layout.genres.includes(wanted)) ? wanted : world.layout.mood in MOODS ? world.layout.mood : 'techno';
@@ -290,6 +292,10 @@ function refreshTheme() {
   $('cameraFollowsLight').checked = controls.cameraFollowsLight;
   $('timeOfDay').value = controls.timeOfDay; $('hangarDoor').checked = controls.door; $('djClockMode').value = controls.djClock.mode; $('djClockMinutes').value = controls.djClock.minutes; $('djTimer').hidden = controls.djClock.mode !== 'timer'; $('crowd').value = String(controls.crowd); for (const k in controls.layers) $('layer-' + k).checked = controls.layers[k];
   $('hangarDoor').closest('label').hidden = !world.layout.shell.opening;   // only a place with a door that opens
+  $('skylights').checked = controls.skylights; $('skylights').closest('label').hidden = !world.layout.shell.services;   // only a hall with skylights
+  const heads = VENUES[venueKey].variants?.stageHeads;   // the venue's ways of setting up its stage heads, if it has more than one
+  $('stageHeadsSetting').hidden = !heads;
+  if (heads) { $('stageHeads').replaceChildren(...Object.entries(heads.choices).map(([k, v]) => new Option(v.name, k))); $('stageHeads').value = controls.stageHeads in heads.choices ? controls.stageHeads : Object.keys(heads.choices)[0]; }
   $('choreographyHint').textContent = CHOREOGRAPHIES[controls.lightChoreography].description;
   $('showTheme').disabled = venueKey !== 'hangar';
   $('themeHint').textContent = venueKey !== 'hangar' ? 'Show themes are available in Hangar.'
@@ -305,6 +311,8 @@ $('lightChoreography').onchange = () => { controls.lightChoreography = $('lightC
 $('cameraFollowsLight').onchange = () => { controls.cameraFollowsLight = $('cameraFollowsLight').checked; persistControls(); };
 $('timeOfDay').onchange = () => { controls.timeOfDay = $('timeOfDay').value; persistControls(); };
 $('hangarDoor').onchange = () => { controls.door = $('hangarDoor').checked; persistControls(); };
+$('skylights').onchange = () => { controls.skylights = $('skylights').checked; persistControls(); };
+$('stageHeads').onchange = () => { controls.stageHeads = $('stageHeads').value; persistControls(); replaceVenue(venueKey, { force: true }).catch(changeFailed); };   // other heads on the stage: the venue is built again
 $('djClockMode').onchange = () => { controls.djClock.mode = $('djClockMode').value; $('djTimer').hidden = controls.djClock.mode !== 'timer'; persistControls(); };
 $('djClockMinutes').onchange = () => { controls.djClock.minutes = Math.max(1, Math.min(600, +$('djClockMinutes').value || 60)); persistControls(); };
 $('djClockStart').onclick = () => { look.clockStart = Date.now(); $('djClockStart').textContent = 'Restart'; };
@@ -462,7 +470,7 @@ async function replaceVenue(key, { force = false, nextSettings = quality } = {})
   loading.textContent = 'Changing venue…';
   let nextWorld, nextParticles;
   try {
-    nextWorld = buildWorld(VENUES[key], nextScene, nextSettings);
+    nextWorld = buildWorld(VENUES[key], nextScene, nextSettings, venueOptions(controls));
     const currentMood = $('mood').value;
     const chooseMood = selected => moodLocked || key === venueKey || nextWorld.layout.genres.includes(selected) ? selected : nextWorld.layout.mood || 'techno';
     let nextMood = chooseMood(currentMood);

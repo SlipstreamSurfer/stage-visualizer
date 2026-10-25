@@ -10,11 +10,16 @@ const rig = [];
 for (let i = 0; i < 5; i++) rig.push({ line: across(front + 6 + i * 10, 11.5, 17), truss: true, moves: true, props: { hangar: true }, hang: [heads(10, 'overhead', { hangar: true }), washes(4), bars(8), ...(i < 3 ? [strobes(4)] : [])] });
 // a truss down either side of the hall
 for (const s of [-1, 1]) rig.push({ line: along(s * 19.5, 10.5, front + 4, front + 48), truss: true, hang: [heads(9, 'overhead', { hangar: true })] });
-// over the front of the stage: blinders at the crowd; over the back: more heads
+// over the front of the stage: blinders at the crowd
 rig.push({ line: across(front - 0.5, 9.6, 12), truss: true, hang: [blinders(6), strobes(4, 0.3)] });
-rig.push({ line: across(front - 6.5, 10.4, 12), truss: true, hang: [heads(10, 'stage', { hangar: true })] });
-// on the stage floor, behind the booth and along the front edge
-rig.push(floorHeads(front - 5.5, deck, 11, 8, 'stage', { hangar: true }), floorHeads(front - 1, deck, 12, 10, 'stage', { hangar: true }));
+// The stage's own heads (a variant, Settings → Show): one long row along the front edge of the deck, in front of the
+// DJ, as on the big techno stages: 24 a metre apart, or 36 closer still; or as before, heads on a truss over the back
+// of the stage and two rows on its floor, behind the booth and along the front.
+const stageHeads = {
+  row24: { name: 'One row of 24 at the front', rig: [floorHeads(front - 0.9, deck, 12, 24, 'stage', { hangar: true, row: true })] },
+  row36: { name: 'One row of 36 at the front', rig: [floorHeads(front - 0.9, deck, 12.3, 36, 'stage', { hangar: true, row: true })] },
+  classic: { name: 'Three rows, as before 0.38', rig: [{ line: across(front - 6.5, 10.4, 12), truss: true, hang: [heads(10, 'stage', { hangar: true })] }, floorHeads(front - 5.5, deck, 11, 8, 'stage', { hangar: true }), floorHeads(front - 1, deck, 12, 10, 'stage', { hangar: true })] },
+};
 rig.push({ line: across(front - 0.4, deck, 11), hang: [{ type: 'co2', count: 4, role: 'co2' }] });
 rig.push({ line: across(front - 0.25, deck, 12), hang: [{ type: 'flame', count: 6, role: 'flame' }, { type: 'spark', count: 5, role: 'spark', inset: 0.1 }] });
 rig.push({ line: across(front - 6.8, 9.2, 11), hang: [{ type: 'laser', count: 6, role: 'laser' }] });
@@ -44,6 +49,6 @@ export default {
   name: 'Hangar', kind: 'Halls', genres: ['techno', 'mainstage', 'hard', 'trance', 'melodic'], capacity: 4200,
   plan: { width: W, depth: D, height: H },
   shell: { walls: 'steel', floor: 'concrete', frames: 9.5, plinth: 2.9, services: true, opening: { wall: 'back', x0: -13.5, x1: 13.5, y0: 0, y1: 12.6, stack: 4.5 } },   // the hangar door's opening, from the floor; its leaves stack 4.5 m deep at either end   // a steel portal frame every 9.5 metres, a concrete base, ducts and sprinklers under the roof
-  stage: STAGE, rig, facilities, walkers: 80,
+  stage: STAGE, rig, facilities, walkers: 80, variants: { stageHeads: { name: 'Stage heads', choices: stageHeads } },
   crowd: { count: 2600 },
 };

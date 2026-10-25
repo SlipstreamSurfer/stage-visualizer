@@ -111,8 +111,11 @@ there is room; automatic steps down a preset only after that.
 
 Look presets include Standard, Calm, Cinematic and Energetic; moving a fader makes a custom look.
 
-**Time of day** (Settings → Show) puts the show at night, by day or at sunset, with sunlight falling through the
-skylights into the haze; the **hangar door** can open onto the airfield outside, by day and by night. **Show theme** combines wall images, light colours and arch/laser patterns:
+**Time of day** (Settings → Show) puts the show at night, by day or at sunset; the **skylights** are covered unless
+you open them, and then sunlight falls through them into the haze; the **hangar door** can open onto the airfield
+outside, by day and by night. **Stage heads** sets up the stage's own moving heads: one long row of 24 (or 36) along
+the front of the deck, played as one instrument (a curtain, fans, a V over the booth, waves, sweeps, chases and a
+sunburst on the drop), or the three rows of before. **Show theme** combines wall images, light colours and arch/laser patterns:
 Industrial, Hypnotic or Melodic; the wall develops within the theme through quiet passages, builds and peaks.
 **Light choreography → Composed show** adds stage openings, slow hall waves and held light pictures, and the
 automatic camera shows each composition. The hall heads have 25 looks and change them within a track and for every new track, the hall trusses hold one of

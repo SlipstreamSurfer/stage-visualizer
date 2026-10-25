@@ -212,8 +212,8 @@ function daylight(c, bays) {
   const u = new THREE.Vector3(W * 0.06, 0, 0), v = new THREE.Vector3(0, 0, (sh.frames - 2.2) / 2), warm = [1, 0.93, 0.8], gold = [1, 0.62, 0.32];
   // each set of shafts only drawn while it shows: by day, at sunset, through the open door
   const shown = [];
-  shown.push([shafts(c, panes.map(p => [p.x, p.y, p.z, reach(p, SUN.day)]), u, v, SUN.day, uDay.mul(uSunset.oneMinus()), warm, 0.05), () => env.day * (1 - env.sunset)]);
-  shown.push([shafts(c, panes.map(p => [p.x, p.y, p.z, reach(p, SUN.sunset)]), u, v, SUN.sunset, uSunset, gold, 0.06), () => env.sunset]);
+  shown.push([shafts(c, panes.map(p => [p.x, p.y, p.z, reach(p, SUN.day)]), u, v, SUN.day, uDay.mul(uSunset.oneMinus()).mul(env.uRoof), warm, 0.05), () => env.day * (1 - env.sunset) * env.roof]);
+  shown.push([shafts(c, panes.map(p => [p.x, p.y, p.z, reach(p, SUN.sunset)]), u, v, SUN.sunset, uSunset.mul(env.uRoof), gold, 0.06), () => env.sunset * env.roof]);
   const o = sh.opening;
   if (o) {
     // the door's opening, as far as the leaves leave it open when they are pushed to its ends
@@ -242,7 +242,8 @@ function structure(c) {
     put(plain(0x6a6d72, { roughness: 0.45, metalness: 0.8, gain: 1.4 }), ducts); put(plain(0x6a1010, { roughness: 0.6, metalness: 0.3, gain: 1.4 }), pipes);
     const lights = [];
     if (sh.frames) for (let n = Math.round(D / sh.frames), i = 0; i < n; i++) for (const k of [-0.25, 0.25]) lights.push(new THREE.PlaneGeometry(W * 0.12, sh.frames - 2.2).rotateX(Math.PI / 2).translate(W * k, H - 0.02, -D / 2 + (i + 0.5) * D / n));
-    if (lights.length) add(new THREE.Mesh(mergeGeometries(lights), c.env ? skylightGlass(c.env) : new THREE.MeshBasicMaterial({ color: new THREE.Color(0.006, 0.009, 0.02), fog: false })));
+    // the skylights are covered unless they are opened (Settings → Show): then the glass, and the sun through it by day
+    if (lights.length) { const glass = add(new THREE.Mesh(mergeGeometries(lights), c.env ? skylightGlass(c.env) : new THREE.MeshBasicMaterial({ color: new THREE.Color(0.006, 0.009, 0.02), fog: false }))); if (c.env) out.updates.push(() => { glass.visible = c.env.roof > 0.5; }); }
     if (lights.length && c.env && sh.frames) daylight(c, Math.round(D / sh.frames));
   }
   if (sh.frames) {

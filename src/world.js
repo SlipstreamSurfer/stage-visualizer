@@ -130,8 +130,9 @@ function lighting(beams, shadowCount = 0, { shine = 6, metal = true } = {}) {
 // (bars, exits, people who walk: everything a venue lists besides its stage and lights)
 const DAY_SKY = new THREE.Color(0xcfe0ff), DAY_GROUND = new THREE.Color(0x7a6a58), SUNSET_SKY = new THREE.Color(0xffb07a), SUNSET_GROUND = new THREE.Color(0x5a3a2a);
 const WORK_SKY = new THREE.Color(0xfff4e6), WORK_GROUND = new THREE.Color(0x8a8278);   // the hall's work lights: plain white from above
-export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28, shine: 6, metal: true, smoke: 150 }) {
-  const L = layout(venue), { W, D, H } = L.plan, st = L.stage, sh = L.shell, open = !!sh.open, F = L.floor;
+// options: the venue's variants as chosen (layout.js)
+export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28, shine: 6, metal: true, smoke: 150 }, options = {}) {
+  const L = layout(venue, options), { W, D, H } = L.plan, st = L.stage, sh = L.shell, open = !!sh.open, F = L.floor;
   const hangarRig = L.things.some(f => f.props.hangar);
   const add = o => (scene.add(o), o), put = batcher(add);
   const lights = lighting(quality.beams, hangarRig ? 6 : 0, quality), { lit } = lights, { surface, plain } = surfaces(lit);
@@ -141,12 +142,12 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28, shine:
     lights.shadowMax.array[0].set(2.08, base + 1.03, z + 0.58);
   }
   const black = plain(0x0d0d0f, { roughness: 0.8, gain: 2.5 }), steel = plain(0x2c2c30, { roughness: 0.5, metalness: 0.4, shine: 0.35 });
-  const casts = Array.from({ length: 200 }, () => ({ I: 0, pos: new THREE.Vector3(), dir: new THREE.Vector4(), col: new THREE.Vector3(), optics: new THREE.Vector4() }));
-  let nCast = 0, flashI = 0;
-  const env = { scene, W, D, H, hangarRig, haze: 1, hazeOut: 1, roomColor: [1, 1, 1], wallColor: new THREE.Color(), uPointScale: uniform(500), uTime: uniform(0), uDay: uniform(0), uSunset: uniform(0), uDoor: uniform(0), uSunHaze: uniform(1), day: 0, sunset: 0, door: 0, cam: new THREE.Vector3(), put, plain, surface, black, steel,
+  const casts = Array.from({ length: 200 }, () => ({ I: 0, id: null, score: 0, pos: new THREE.Vector3(), dir: new THREE.Vector4(), col: new THREE.Vector3(), optics: new THREE.Vector4() }));
+  let nCast = 0, flashI = 0, inLight = new Map();   // the beams that light the room now, and how far each has come in (0 to 1)
+  const env = { scene, W, D, H, hangarRig, haze: 1, hazeOut: 1, roomColor: [1, 1, 1], wallColor: new THREE.Color(), uPointScale: uniform(500), uTime: uniform(0), uDay: uniform(0), uSunset: uniform(0), uDoor: uniform(0), uSunHaze: uniform(1), uRoof: uniform(0), day: 0, sunset: 0, door: 0, roof: 0, lightChanges: 0, cam: new THREE.Vector3(), put, plain, surface, black, steel,
     media: null,   // a picture or video for the LED walls, or null
-    // a beam reports where it shines, so the room can be lit by it
-    cast(at, dx, dy, dz, color, I, half, gobo = 0, spin = 0, mode = 0) { if (nCast >= casts.length || I < 0.02) return; const k = casts[nCast++]; k.I = I; k.pos.copy(at); k.dir.set(dx, dy, dz, Math.cos(Math.min(1.2, half * 1.5 + 0.03))); k.col.set(color.r * I, color.g * I, color.b * I); k.optics.set(gobo, spin, mode, 0); },
+    // a beam reports where it shines, so the room can be lit by it; id: the lamp, the same every frame
+    cast(at, dx, dy, dz, color, I, half, gobo = 0, spin = 0, mode = 0, id = null) { if (nCast >= casts.length || I < 0.02) return; const k = casts[nCast++]; k.I = I; k.id = id ?? nCast; k.pos.copy(at); k.dir.set(dx, dy, dz, Math.cos(Math.min(1.2, half * 1.5 + 0.03))); k.col.set(color.r * I, color.g * I, color.b * I); k.optics.set(gobo, spin, mode, 0); },
     // fire reports a flash of light; the strongest one in a frame counts
     flash(pos, r, g, b, I) { if (I <= flashI) return; flashI = I; lights.flashPos.value.set(...pos); lights.flashCol.value.set(r * I, g * I, b * I); },
   };
@@ -463,9 +464,16 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28, shine:
       nCast = 0; flashI = 0; lights.flashCol.value.set(0, 0, 0); env.uTime.value = t;
       for (const fx of live) fx.update(dt, t);
       flush();
-      // the brightest beams light the room
-      const top = casts.slice(0, nCast).sort((p, r) => r.I - p.I).slice(0, lights.used.value);
-      for (let i = 0; i < lights.used.value; i++) { if (i < top.length) { lights.pos.array[i].copy(top[i].pos); lights.dir.array[i].copy(top[i].dir); lights.col.array[i].copy(top[i].col).multiplyScalar(2.2); lights.optics.array[i].copy(top[i].optics); } else lights.col.array[i].set(0, 0, 0); }
+      // The brightest beams light the room, and which ones is held from frame to frame: a beam that lights the room
+      // keeps its place until another is more than twice as bright, and one that comes in fades in over a tenth of
+      // a second. Picked afresh every frame, beams of about the same brightness took turns (a hundred heads that all
+      // pulse with the kick), and the light on the floor and the crowd flickered.
+      const list = casts.slice(0, nCast);
+      for (const c of list) c.score = c.I * (inLight.has(c.id) ? 2 : 1);
+      const top = list.sort((p, r) => r.score - p.score).slice(0, lights.used.value), now = new Map();
+      for (const c of top) { if (!inLight.has(c.id)) env.lightChanges++; now.set(c.id, Math.min(1, (inLight.get(c.id) ?? 0) + dt / 0.1)); }   // lightChanges: how often one comes in, for looking in
+      inLight = now;
+      for (let i = 0; i < lights.used.value; i++) { if (i < top.length) { lights.pos.array[i].copy(top[i].pos); lights.dir.array[i].copy(top[i].dir); lights.col.array[i].copy(top[i].col).multiplyScalar(2.2 * now.get(top[i].id)); lights.optics.array[i].copy(top[i].optics); } else lights.col.array[i].set(0, 0, 0); }
       if (hangarRig) movers.slice(0, 5).forEach((mv, i) => {
         const tilt = 0.15 + Math.abs(Math.sin(mv.group.rotation.z)) * 17;   // a tilted truss reaches higher and lower at its ends
         lights.shadowMin.array[i + 1].set(mv.mid[0] - 17, mv.group.position.y - tilt, mv.mid[2] - 0.15);
@@ -507,7 +515,9 @@ export function buildWorld(venue, scene, quality = { crowd: 1, beams: 28, shine:
       const doorWanted = look.controls?.door && hasDoor ? 1 : 0, doorStep = dt / 14;   // a hangar door opens slowly
       env.door = Math.max(0, Math.min(1, env.door + Math.sign(doorWanted - env.door) * Math.min(doorStep, Math.abs(doorWanted - env.door))));
       const doorLight = env.door * (0.4 + env.day * 0.6 + env.sunset * 0.4);   // an open door lets the outside in
-      house.intensity = daylight * Math.pow(look.hall, 4) + env.day * 2.4 + env.sunset * 0.9 + doorLight * 0.5;
+      env.roof += ((look.controls?.skylights ? 1 : 0) - env.roof) * Math.min(1, dt / 1.5); env.uRoof.value = env.roof;   // the skylights' covers, opened or closed (Settings → Show)
+      const roofLight = 0.2 + env.roof * 0.8;   // with the skylights covered the day comes in through the door, and little else
+      house.intensity = daylight * Math.pow(look.hall, 4) + (env.day * 2.4 + env.sunset * 0.9) * roofLight + doorLight * 0.5;
       house.color.copy(nightSky).lerp(DAY_SKY, env.day).lerp(SUNSET_SKY, env.sunset); house.groundColor.copy(nightGround).lerp(DAY_GROUND, env.day).lerp(SUNSET_GROUND, env.sunset);
       if (look.work) { house.intensity += 2.6; house.color.lerp(WORK_SKY, 0.85); house.groundColor.lerp(WORK_GROUND, 0.85); }   // the work lights: the hall lit evenly, to look at how it is built
       env.uDay.value = env.day; env.uSunset.value = env.sunset; env.uDoor.value = env.door; env.uSunHaze.value = Math.min(1.6, env.haze);

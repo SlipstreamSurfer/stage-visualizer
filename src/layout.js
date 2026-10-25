@@ -43,7 +43,9 @@ export function heightAt(profile, x) {
 // a big top's canvas from its edge (0) to its point (1): [how far in, how high]
 const TENT = [[0, 0], [0.38, 0.42], [0.7, 0.78], [0.9, 0.95], [0.988, 1]];
 
-export function layout(venue) {
+// options: a choice for each of the venue's variants ({ stageHeads: 'row24' }); a variant not chosen is its first
+export function layout(venue, options = {}) {
+  if (venue.variants) venue = { ...venue, rig: [...venue.rig, ...Object.entries(venue.variants).flatMap(([key, v]) => v.choices[options[key] in v.choices ? options[key] : Object.keys(v.choices)[0]].rig)] };
   const { width: W, depth: D, height: H, shape = 'box' } = venue.plan, sv = venue.stage, kind = sv.kind || 'end', crowd = venue.crowd || { count: 0 };
   // how far the roof rises above the eaves
   const roof = typeof venue.shell?.roof === 'object' ? venue.shell.roof : { type: venue.shell?.roof || 'flat' };

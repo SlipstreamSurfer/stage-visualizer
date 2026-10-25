@@ -192,3 +192,25 @@ export const STYLES = {
   'Concert & ambient': { looks: L('softCurtains', 'rakeStage', 'walls', 'softFans'), trusses: T('High', 'Arch'), pace: 2.5, lit: 0.45 },
 };
 export const styleOf = (moodKey, family) => STYLES[moodKey] || STYLES[family] || STYLES.techno;
+
+// The stage's row of heads along the front of the deck (Settings → Show → Stage heads), played as one instrument, as
+// on the big techno stages: a curtain straight up, a fan, a V crossing over the booth, a wave or a sweep running
+// along the row, crossing pairs, a chase, a sunburst on the drop and, at a peak, beams low over the crowd. A look:
+// where each beam points (f the head, f.u its place along the row from 0 to 1, p where it stands, k the clocks), which
+// heads are lit (a gate, as for the hall heads) and how the two colours are spread.
+const ROW_UP = 14.2;   // the height the beams are aimed at: just under the roof
+const rowLook = (name, tiers, aim, gate = 'all', colour = 'mono') => ({ name, tiers, aim, gate, colour });
+export const ROW_LOOKS = {
+  curtain: rowLook('Curtain', ['calm', 'mid'], (f, p) => [p[0], ROW_UP, p[2] + 2.5]),
+  fan: rowLook('Fan', ['calm', 'mid', 'big'], (f, p) => [p[0] * 2.4, ROW_UP, p[2] + 7], 'all', 'sides'),
+  vee: rowLook('V over the booth', ['mid', 'big'], (f, p) => [-p[0] * 0.9, ROW_UP, p[2] + 3.5], 'all', 'sides'),
+  wave: rowLook('Wave', ['mid', 'big'], (f, p, k) => [p[0], ROW_UP, p[2] + 4 + Math.sin(k.phase * TAU / 8 - f.u * TAU * 1.5) * 9]),
+  sweep: rowLook('Sweep', ['mid', 'big'], (f, p, k) => [p[0] + Math.sin(k.phase * TAU / 16 - f.u * 2) * 10, ROW_UP, p[2] + 5]),
+  pairs: rowLook('Crossing pairs', ['mid', 'big'], (f, p) => [p[0] + (f.hangarSlot % 2 ? 6 : -6), ROW_UP, p[2] + 5], 'alternate', 'alternate'),
+  chase: rowLook('Chase', ['calm', 'mid', 'big'], (f, p) => [p[0], ROW_UP, p[2] + 3], 'chase'),
+  sunburst: rowLook('Sunburst', ['big'], (f, p) => [p[0] * 3.5, ROW_UP * 0.8, p[2] + 9], 'all', 'centreWhite'),
+  crowd: rowLook('Over the crowd', ['big'], (f, p, k) => [p[0] * 1.4 + Math.sin(k.m * 0.4) * 4, 4.6, p[2] + 24], 'centre'),   // over the heads, never into the eyes
+};
+export const ROW_TIERS = Object.fromEntries(['calm', 'mid', 'big'].map(tier => [tier, Object.keys(ROW_LOOKS).filter(k => k !== 'sunburst' && ROW_LOOKS[k].tiers.includes(tier))]));
+// how far the row is up in each part of a track (in a break it rises with the build-up)
+export const ROW_LEVEL = { calm: 0.45, mid: 0.7, big: 0.95 };

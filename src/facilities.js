@@ -208,8 +208,8 @@ export function buildFacilities(L, ctx) {
       for (let x = -len / 2 + 0.8; x < len / 2 - 0.6; x += 1.45) { p.box(1.25, 2.0, 0.5, x, 1.0, 0.3, black); p.plate(1.05, 1.5, x, 1.1, 0.56, glow(0.035, 0.05, 0.07)); }   // fridges
       for (let x = -len / 2 + 0.5; x < len / 2 - 0.3; x += 0.16) if (Math.random() < 0.8) p.box(0.07, 0.24 + Math.random() * 0.08, 0.07, x, 2.14, 0.3, glow(0.05 + Math.random() * 0.09, 0.035 + Math.random() * 0.04, 0.01 + Math.random() * 0.02));   // bottles on top, lit from behind
       p.box(len, 0.3, 0.2, 0, top - 0.55, 0.3, steel); p.plate(Math.min(3.2, len * 0.4), Math.min(0.95, len * 0.12), 0, top, 0.2, SIGN.bar);
-      for (let x = -len / 2 + 1.2; x < len / 2 - 1; x += 2.3) { p.box(0.02, 0.5, 0.02, x, top - 0.7, d - 0.3, steel); p.box(0.22, 0.16, 0.22, x, top - 1.0, d - 0.3, glow(2.2, 1.3, 0.5)); }
-      p.light(0, 2.5, d - 0.4, 0xffa850, 16 * Math.min(1, len / 12), 15);
+      for (let x = -len / 2 + 1.2; x < len / 2 - 1; x += 2.3) { p.box(0.02, 0.5, 0.02, x, top - 0.7, d - 0.3, steel); p.box(0.22, 0.16, 0.22, x, top - 1.0, d - 0.3, glow(1.0, 0.58, 0.22)); }   // dim pendants: at a night like this a bar glows, it does not light up the hall
+      p.light(0, 2.5, d - 0.4, 0xffa850, 8 * Math.min(1, len / 12), 12);
       for (let x = -len / 2 + 1.5; x < len / 2 - 1; x += 3.2) p.person(x + (Math.random() - 0.5), (0.6 + d - 0.35) / 2 + 0.2, 0, 'staff');
       for (let x = -len / 2 + 0.6; x < len / 2 - 0.4; x += 0.75) { if (Math.random() < 0.72) p.person(x, d + 0.75 + Math.random() * 0.15, Math.PI, 'guest'); if (Math.random() < 0.3) p.person(x + 0.3, d + 1.6 + Math.random() * 0.4, Math.PI + (Math.random() - 0.5), 'guest'); }
       for (let x = -len / 2 + 1; x < len / 2 - 0.5; x += 2.1) p.poi(x, d + 2.15);

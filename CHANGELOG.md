@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.38.0
+
+- The light on the floor and the crowd no longer flickers. It comes from the brightest beams, and which ones used to
+  be picked afresh every frame: a hundred heads pulsing with the kick took turns. Now a beam keeps its place until
+  another is more than twice as bright, and one that comes in fades in (in a peak: 9 changes a second instead of 41).
+- Washes are the colour under the beams, as a lighting designer runs them: a steady level for each part of a track,
+  rising in a build-up and swelling on a drop, never flashing with the kick; in the haze a soft glow, not a beam.
+- The stage's heads stand in one long row of 24 along the front of the deck, in front of the DJ, and play as one
+  instrument: a curtain straight up, a fan, a V over the booth, a wave or a sweep along the row, crossing pairs, a
+  chase, a sunburst on the drop and, at a peak, beams low over the crowd (never into the eyes). Settings → Show →
+  Stage heads: 24, 36, or the three rows of before.
+- The roof is closed: the skylights are covered unless they are opened (Settings → Show), and then the sun falls in.
+- The bars glow instead of lighting up the hall.
+
 ## 0.37.0
 
 - Graphics settings as in a game: Light, Normal, High and Ultra, and every setting on its own under them

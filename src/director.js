@@ -10,7 +10,7 @@
 
 import { PALETTES, RING_NAMES } from './show-controls.js';
 import { SHOW_THEMES } from './show-themes.js';
-import { HEAD_LOOKS, HEAD_TIERS, TRUSS_LOOKS, DEEPEST, PACE, POSITIONS, MOVES, GATES, GATE_GAIN, COLOURS, BEAMS, floorTarget, styleOf } from './hangar-looks.js';
+import { HEAD_LOOKS, HEAD_TIERS, TRUSS_LOOKS, DEEPEST, PACE, POSITIONS, MOVES, GATES, GATE_GAIN, COLOURS, BEAMS, ROW_LOOKS, ROW_TIERS, ROW_LEVEL, floorTarget, styleOf } from './hangar-looks.js';
 import { LightChoreography, CHOREOGRAPHIES } from './light-choreography.js';
 
 const TAU = Math.PI * 2;
@@ -161,6 +161,8 @@ const TIER = { intro: 'calm', low: 'calm', groove: 'mid', peak: 'big', break: 'm
 const SECTION_LEVEL = { intro: 0.55, low: 0.65, groove: 1, peak: 1, break: 1 };
 export const SECTION_NAME = { intro: 'intro', low: 'quiet part', groove: 'groove', peak: 'peak', break: 'break' };
 const ROLES = ['overhead', 'stage', 'wash', 'bars', 'wall', 'roof', 'rings'];
+// how far the washes are up in each part of a track (see the washes in update)
+const WASH_LEVEL = { intro: 0.16, low: 0.14, groove: 0.24, peak: 0.32 };
 const FLOW_NAME = { low: 'quiet', groove: 'full', peak: 'loud' };
 const BREAK_LOOK = { overhead: 1, stage: 0.4, wash: 1, bars: 1, wall: 1, roof: 1, rings: 0.35 }, DROP_LOOK = { overhead: 1, stage: 0.8, wash: 0.7, bars: 0.65, wall: 1, roof: 0.75, rings: 0.5 };
 // in a break: a slow sway that leans further out as the build-up grows
@@ -182,7 +184,7 @@ export class Director {
     Object.assign(this, {
       program: 0, scene: 0, sceneAt: 0, beat: 0, palette: 0, paletteAt: 0, colorIdx: 0, twoTone: 0,
       motion: 0, spin: 0, spinVel: 0, chase: 0, strobeClock: 0, level: 1, laser: 0, smokeAt: -100, haze: 1, visual: 0, house: 0.9, present: 1,
-      col: [1, 1, 1], col2: [1, 1, 1], barLevel: [], drops: 0, kickAt: -10, punch: 0,
+      col: [1, 1, 1], col2: [1, 1, 1], barLevel: [], drops: 0, kickAt: -10, punch: 0, washLevel: 0.15, rowW: 0.5, rowLook: 'curtain',
       coilRun: 0, coilDropAt: -100, coilDropStrength: 0, archPattern: 0, vj: [1, 0, 0], vjBuild: 0, vjDropAt: -100,
       headLook: 'floor', headSet: {}, headTurn: { calm: 0, mid: 3, big: 5 }, headPalette: -1, headAt: -100, headScene: 0, trussLook: 0, trussAt: 0, trussScene: 0, trussPalette: 0, trussTrack: false,
       ringVariant: 0, ringAt: 0, ringScene: -1, ringBreak: false, ringTargets: [...RING_LOOKS[0].drops],
@@ -406,11 +408,18 @@ export class Director {
     const aims = brk ? BREAK_AIM : P;
     if (this.hangarRig) this.hangarLooks(t, TIER[section], brk, controls);
     const headLook = HEAD_LOOKS[this.headLook], s = { beat: this.beat, section, build: m.build, energy: sig.energy, drop: sig.drop, stage: this.hangarStage };
+    // the stage's row of heads (hangar-looks.js): a curtain in a break that fans open with the build-up, a sunburst for
+    // a few seconds after a drop, else the next look for this part of the track at every scene
+    const rowList = ROW_TIERS[TIER[section]] || ROW_TIERS.mid;
+    this.rowLook = brk ? (m.build > 0.5 ? 'fan' : 'curtain') : t - this.vjDropAt < 6 ? 'sunburst' : rowList[(this.scene + this.palette * 2) % rowList.length];
+    const rowLook = ROW_LOOKS[this.rowLook];
+    this.rowW += ((brk ? 0.28 + m.build * 0.5 : ROW_LEVEL[TIER[section]] ?? 0.7) - this.rowW) * ease(1.2);
     this.beamPeak = 0;
     for (const role of ['overhead', 'stage']) for (const f of G[role] || []) {
+      const row = role === 'stage' && f.props?.row;   // one of the stage's row of heads
       let [pan, tilt] = role === 'overhead'
         ? ((f.props?.hangar ? (brk ? aimHangar(f, k, this.beat, section, m.build, sig.energy, sig.drop) : aimLook(headLook, f, k, s)) : null) || aims[role](f, k))
-        : aims[role](f, k);
+        : row ? toward(f.livePos || f.pos, rowLook.aim(f, f.livePos || f.pos, k, s)) : aims[role](f, k);
       if (composition.active) [pan, tilt] = composition.aim(f, pan, tilt);
       if (f.props?.hangar) {
         // Crossfade the requested aim as well as limiting the physical motors.
@@ -432,7 +441,7 @@ export class Director {
       } else { f.ch.pan = pan; f.ch.tilt = tilt; }
       f.ch.slow = f.props?.hangar || (!brk && P.slow);
       let I = brk ? 0.1 + sig.mid * 0.15 + m.build * 0.3 : 0.045 + sig.energy * 0.23 + sig.bass * 0.12 + sig.kick * 0.55 + sig.accent * 0.1;
-      I = (I * this.w[role] * (!brk && P.gate ? P.gate(f, k) : 1) + sig.drop * 0.5) * master * (1 + this.smoke * 0.3);
+      I = (I * (row ? this.rowW : this.w[role]) * (!brk && P.gate && !row ? P.gate(f, k) : 1) + sig.drop * 0.5) * master * (1 + this.smoke * 0.3);
       if (composition.active) {
         I *= composition.gain(f, role, dt);
       } else if (f.props?.hangar) {
@@ -450,7 +459,7 @@ export class Director {
         const beats = sig.beats || 0, pattern = Math.floor(beats / 32) % 6;
         const build = clamp(m.build);
         const buildOn = Math.abs(f.xn) <= 1 - build * 0.85 && (build < 0.65 || bank === 2 || f.row % 3 === 0);
-        const gate = role === 'overhead' ? headLook.gate : 'patterns', counted = calm ? beats / 2 : beats;
+        const gate = role === 'overhead' ? headLook.gate : row ? rowLook.gate : 'patterns', counted = calm ? beats / 2 : beats;
         const on = brk ? buildOn : GATES[gate](f, counted, pattern);
         f.hangarGate = (f.hangarGate ?? 1) + ((on ? 1 : 0) - (f.hangarGate ?? 1)) * ease(0.08);
         const gain = calm || brk ? 1 : GATE_GAIN[gate] ?? ([1, 2, 4].includes(pattern) ? 2.5 : 1.5);
@@ -461,7 +470,7 @@ export class Director {
       f.ch.color = brk ? mix(col, WHITE, m.build) : tint((f.row + Math.round(f.u * 9)) % 2 ? mix(col, col2, this.twoTone) : col);
       if (f.props?.hangar) {
         // The look spreads the two colours (by default the sides swap every 32 beats), through a slow colour fade.
-        const [second, white] = COLOURS[role === 'overhead' ? headLook.colour : 'sides'](f, sig.beats || 0);
+        const [second, white] = COLOURS[role === 'overhead' ? headLook.colour : row ? rowLook.colour : 'sides'](f, sig.beats || 0);
         const target = tint(vivid(mix(mix(col, col2, second), WHITE, white)));
         f.hangarColor = mix(f.hangarColor || f.ch.color, brk ? mix(target, WHITE, clamp(m.build) * 0.35) : target, ease(1.4));
         f.ch.color = f.hangarColor;
@@ -469,7 +478,8 @@ export class Director {
       f.ch.zoom = (brk ? 1 - m.build * 0.4 : 1) * (controls?.beamWidth ?? 1);
       if (f.props?.hangar) f.ch.zoom *= calm || brk ? 1.35 : section === 'peak' ? 0.75 : 0.9;
       f.ch.gobo = !brk && P.gobo ? 1 : 0;
-      if (f.props?.hangar) { f.ch.gobo = !brk && !calm ? 0.7 : 0; f.ch.goboMode = role === 'stage' ? 2 : Math.abs(f.pos[0]) > 18 ? 0 : 1; }
+      if (f.props?.hangar) { f.ch.gobo = !brk && !calm && !row ? 0.7 : 0; f.ch.goboMode = role === 'stage' ? 2 : Math.abs(f.pos[0]) > 18 ? 0 : 1; }
+      if (row) f.ch.zoom *= 0.7;   // the row's beams are tight and clean: sharp lines in the haze
       if (f.props?.hangar && role === 'overhead' && !brk) {   // the look's beam: narrow, wide or with a gobo
         const beam = BEAMS[headLook.beam];
         f.ch.zoom *= beam.zoom; if (beam.gobo !== null) f.ch.gobo = beam.gobo;
@@ -477,8 +487,13 @@ export class Director {
     }
 
     // ----- washes, bars, lasers, the LED wall -----
+    // Washes are the colour under the beams, as a lighting designer runs them: a steady level for the part of the
+    // track that changes over a couple of seconds, rising in a build-up and swelling on a drop, and never flashing with
+    // the kick: that is what the heads do. (Flashing with every kick, they fought the beams for the room.)
+    const washTarget = brk ? 0.1 + m.build * 0.32 : (WASH_LEVEL[section] ?? 0.24) + mood.breathe * sig.mid * 0.25;
+    this.washLevel += (washTarget - this.washLevel) * ease(1.6);
     for (const f of G.wash || []) {
-      f.ch.dim = Math.max((brk ? 0.25 + m.build * 0.3 : 0.12 + sig.energy * 0.3 + sig.kick * 0.25 + mood.breathe * sig.mid) * this.w.wash, mood.wash) * master + sig.lift * 0.3 * master;
+      f.ch.dim = (Math.max(this.washLevel * this.w.wash, mood.wash) + sig.drop * 0.3 + sig.lift * 0.15) * master;
       f.ch.color = tint(f.row % 2 ? col2 : !manualPalette && mood.accent ? mix(col, mood.accent, 0.6) : col);   // a mood can warm its washes against its own colour
     }
     const bars = G.bars || [];

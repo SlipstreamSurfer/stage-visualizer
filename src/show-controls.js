@@ -25,7 +25,8 @@ export function normalizeControls(value) {
   }
   return { levels, coils, showTheme: normalizeTheme(input.showTheme), lightChoreography: normalizeChoreography(input.lightChoreography), ringLook: choice(input.ringLook, ['auto', ...RING_NAMES], 'auto'), palette: choice(input.palette, ['auto', ...Object.keys(PALETTES)], 'auto'), beamWidth: numberIn(input.beamWidth, 1, 0.35, 2), cameraSpeed: numberIn(input.cameraSpeed, 1, 0.15, 1), cameraFollowsLight: input.cameraFollowsLight !== false,
     headLook: choice(input.headLook, ['auto', ...Object.keys(HEAD_LOOKS)], 'auto'), trussLook: choice(input.trussLook, ['auto', ...TRUSS_LOOKS.map(f => f.name)], 'auto'), lookPace: choice(input.lookPace, Object.keys(PACE), 'normal'),
-    timeOfDay: choice(input.timeOfDay, ['night', 'day', 'sunset'], 'night'), door: input.door === true,
+    timeOfDay: choice(input.timeOfDay, ['night', 'day', 'sunset'], 'night'), door: input.door === true, skylights: input.skylights === true,   // the skylights covered unless opened
+    stageHeads: typeof input.stageHeads === 'string' ? input.stageHeads.slice(0, 20) : 'row24',   // the venue's variant of its stage heads (layout.js)
     // how much of the crowd is there (an older false: none), and which layers of the venue show
     crowd: input.crowd === false ? 0 : [1, 0.5, 0.25, 0].includes(input.crowd) ? input.crowd : 1,
     djClock: { mode: choice(object(input.djClock).mode, ['time', 'timer'], 'time'), minutes: numberIn(object(input.djClock).minutes, 60, 1, 600) },

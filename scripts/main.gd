@@ -13,6 +13,7 @@ extends Node3D
 #   --section=NAME     hold a part of the track (intro, groove, build, break, peak), for pictures and measuring
 #   --shot=PATH        save a picture after --wait seconds (default 8) and quit
 #   --bench            measure each setting from the booth, 1080p, no frame limit
+#   --costs            what each effect costs on this computer, against Ultra
 #   --log              print every change of part, blackout and drop
 #   --record [--output=PATH] [--no-audio]   record inputs + optional WAV; R stops recording
 #   --replay=PATH [--fast]                 play every recorded frame; fast requires --headless
@@ -167,6 +168,9 @@ func _ready() -> void:
 		_shot_at = float(args.get("wait", "8"))
 		_fixed_1080p()
 	if args.has("bench"): _bench()
+	if args.has("costs"):
+		args.bench = "1"   # the same quiet start as the bench
+		_costs()
 	if args.has("bright"): env.ambient_light_energy = 0.9
 	if args.has("settings"): settings.open_panel()   # for a picture of the settings screen
 	if args.has("pause"): pause.open()   # pictures of the pause menu and the help
@@ -606,6 +610,56 @@ func _fixed_1080p() -> void:
 
 # The same measurement as SV's local/probe/bench.mjs: 1080p, no frame limit, the median frame through the DJ's
 # eyes and over the DJ's shoulder, each setting in turn, three rounds.
+# --costs: what each effect costs on this computer. From Ultra, one effect at a time is turned off or down, and the
+# GPU time saved is printed, from the DJ's eyes and from front of house (two rounds each, the median of 3 s).
+func _costs() -> void:
+	calibration = null
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	Engine.max_fps = 0
+	_fixed_1080p()
+	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
+	var from: String = args.get("costs-from", "ultra")   # --costs-from=low: what more could go from a lighter preset
+	var base: Dictionary = Quality.PRESETS[from].duplicate()
+	var changes := {"all on (Ultra)": {}, "haze volume off": {"fog": 0}, "haze volume 64": {"fog": 64},
+		"reflections (SSR) off": {"ssr": false}, "ambient occlusion off": {"ssao": false},
+		"indirect light (SSIL) off": {"ssil": false}, "global illumination (SDFGI) off": {"sdfgi": false},
+		"shadows off": {"shadows": 0}, "lamps on surfaces 15 %": {"surface": 0.15}, "lamps on surfaces off": {"surface": 0.0},
+		"crowd 1200": {"crowd": 1200}, "crowd 0": {"crowd": 0}, "glow off": {"glow": false}, "TAA off (FXAA)": {"taa": false},
+		"beams off": {"beams": false}, "scale 70 %": {"scale": 0.7}, "scale 50 %": {"scale": 0.5}, "scale 40 %": {"scale": 0.4}}
+	await get_tree().create_timer(4.0).timeout
+	# in pairs: Ultra just before and just after each change, so the show moving on with the music cancels out
+	var got := {}
+	for cam in [1, 4]:
+		view.select_camera(cam, true)
+		crowd.dj_node.visible = view.shows_dj()
+		await get_tree().create_timer(2.0).timeout
+		for n in changes:
+			if n == "all on (Ultra)": continue
+			var q := base.duplicate()
+			q.merge(changes[n], true)
+			var before: float = await _gpu_median(base, 2.0)
+			var with: float = await _gpu_median(q, 2.0)
+			var after: float = await _gpu_median(base, 2.0)
+			got["%d|%s" % [cam, n]] = (before + after) / 2.0 - with
+			got["%d|base" % cam] = got.get("%d|base" % cam, 0.0) + (before + after) / 2.0
+	print("Godot %s · %s · 1920x1080 · GPU ms saved against %s (DJ eyes / front of house)" % [Engine.get_version_info().string, RenderingServer.get_video_adapter_name(), from.capitalize()])
+	var count := changes.size() - 1
+	print("%-34s %5.1f ms   %5.1f ms" % [from.capitalize(), got["1|base"] / count, got["4|base"] / count])
+	for n in changes:
+		if n != "all on (Ultra)": print("%-34s %+5.1f ms   %+5.1f ms" % [n, got["1|" + n], got["4|" + n]])
+	get_tree().quit()
+
+func _gpu_median(q: Dictionary, seconds: float) -> float:
+	Quality.apply_options(q, env, get_viewport(), rig, crowd)
+	await get_tree().create_timer(0.8).timeout
+	_bench_gpu.clear()
+	_collecting = true
+	await get_tree().create_timer(seconds).timeout
+	_collecting = false
+	var g := _bench_gpu.duplicate()
+	g.sort()
+	return g[g.size() / 2]
+
 func _bench() -> void:
 	calibration = null
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)

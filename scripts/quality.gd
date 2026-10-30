@@ -1,18 +1,29 @@
 class_name Quality
 extends RefCounted
-# Graphics settings as SV has them since 0.37: Light, Normal, High, Ultra, and Automatic, which measures: it starts
-# at Light and goes up as long as the screen's refresh rate is kept.
+# Graphics settings as SV has them: Low, Light, Normal, High, Ultra, and Automatic, which measures: it starts at Low
+# and goes up as long as the screen's rate is kept. The presets follow what each effect costs (main.gd --costs, on a
+# GTX 1660 SUPER at 1080p from Ultra's 16 ms): the render scale saves most (70 %: 5 ms, 50 %: 7.5 ms); SDFGI
+# 2.6-3.9 ms, the haze volume 2, the beams 2-2.4, 3,000 people 2.2, SSR 1.6-2, SSIL 1.7, TAA 0.7-1.6, glow and
+# the lamps on surfaces under 1 ms; shadows 0.2 ms and SSAO next to nothing.
+# Low is for weak integrated graphics: the beams and the glow stay (they are the show), the rest is sparse.
 
-const ORDER := ["light", "normal", "high", "ultra"]
+const ORDER := ["low", "light", "normal", "high", "ultra"]
 const PRESETS := {
-	"light":  {"scale": 0.5, "fog": 0, "surface": 0.15, "shadows": 0, "ssr": false, "ssao": false, "ssil": false, "sdfgi": false, "crowd": 1200, "taa": false, "beam": 0.7},
-	"normal": {"scale": 0.8, "fog": 64, "surface": 0.5, "shadows": 0, "ssr": false, "ssao": true, "ssil": false, "sdfgi": false, "crowd": 2400, "taa": false, "beam": 0.8},
-	"high":   {"scale": 1.0, "fog": 96, "surface": 1.0, "shadows": 0, "ssr": true, "ssao": true, "ssil": false, "sdfgi": false, "crowd": 3000, "taa": true, "beam": 0.75},
-	"ultra":  {"scale": 1.0, "fog": 128, "surface": 1.0, "shadows": 8, "ssr": true, "ssao": true, "ssil": true, "sdfgi": true, "crowd": 3000, "taa": true, "beam": 0.7},
+	"low":    {"scale": 0.5, "fog": 0, "surface": 0.0, "shadows": 0, "ssr": false, "ssao": false, "ssil": false, "sdfgi": false, "crowd": 600, "taa": false, "beam": 0.75},
+	"light":  {"scale": 0.6, "fog": 0, "surface": 0.15, "shadows": 0, "ssr": false, "ssao": true, "ssil": false, "sdfgi": false, "crowd": 1200, "taa": false, "beam": 0.7},
+	"normal": {"scale": 0.8, "fog": 64, "surface": 0.5, "shadows": 4, "ssr": false, "ssao": true, "ssil": false, "sdfgi": false, "crowd": 2400, "taa": false, "beam": 0.8},
+	"high":   {"scale": 1.0, "fog": 96, "surface": 1.0, "shadows": 8, "ssr": true, "ssao": true, "ssil": false, "sdfgi": false, "crowd": 3000, "taa": true, "beam": 0.75},
+	"ultra":  {"scale": 1.0, "fog": 128, "surface": 1.0, "shadows": 12, "ssr": true, "ssao": true, "ssil": true, "sdfgi": true, "crowd": 3000, "taa": true, "beam": 0.7},
 }
 
 static func apply(name: String, env: Environment, vp: Viewport, rig: Rig, crowd: Crowd) -> void:
-	var q: Dictionary = PRESETS[name]
+	apply_options(PRESETS[name], env, vp, rig, crowd)
+
+# Every option on its own (a preset is a set of them): what a settings screen or a measurement can change one by one.
+#   scale 0.4-1 (FSR below 1), fog 0 (off) or the haze volume's size, surface: the share of lamps that light
+#   surfaces, shadows: how many spots cast shadows, ssr ssao ssil sdfgi taa: Godot's screen effects, crowd: people,
+#   beam: how strong the beams are drawn; glow and beams (false hides them) default to on.
+static func apply_options(q: Dictionary, env: Environment, vp: Viewport, rig: Rig, crowd: Crowd) -> void:
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if q.scale < 1.0 else Viewport.SCALING_3D_MODE_BILINEAR
 	vp.scaling_3d_scale = q.scale
 	vp.use_taa = q.taa
@@ -23,8 +34,10 @@ static func apply(name: String, env: Environment, vp: Viewport, rig: Rig, crowd:
 	env.ssao_enabled = q.ssao
 	env.ssil_enabled = q.ssil
 	env.sdfgi_enabled = q.sdfgi
+	env.glow_enabled = q.get("glow", true)
 	rig.configure(q.surface, q.fog > 0, q.shadows)
 	rig.beam_strength = q.beam
+	rig.set_beams_visible(q.get("beams", true))
 	crowd.shown(q.crowd)
 
 # Automatic: a step up every three seconds while the frames keep up with the screen, one back down when not.

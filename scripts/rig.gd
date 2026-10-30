@@ -97,6 +97,7 @@ var beam_strength := 1.0
 var _blinder_glow := 0.0
 var _by_kind := [[], [], []]
 var _mm := []              # per kind: {base, yoke, head, lens, beam}
+var _mm_nodes := {}        # MultiMesh -> the node that draws it
 var _batten_body: MultiMesh
 var _batten_line: MultiMesh
 var _blinder_lamps: MultiMesh
@@ -278,6 +279,10 @@ func _winch(i: int, target: float, dt: float) -> void:
 	_truss_drops[i] = drop
 	_truss_speeds[i] = v
 
+# Draw the beams or not (a measurement of what they cost, or a setting).
+func set_beams_visible(on: bool) -> void:
+	for m in _mm: _mm_nodes[m.beam].visible = on
+
 # How far a point on a hall truss lies from the truss's middle line, towards the back: 0 when straight.
 func _bend(x: float) -> float:
 	return absf(x) / 19.0 * V_DEPTH if shape == "v" else 0.0
@@ -358,6 +363,7 @@ func _multimesh(mesh: Mesh, n: int, material: Material, colors := false, custom 
 	mm.instance_count = n
 	var mi := MultiMeshInstance3D.new()
 	mi.multimesh = mm
+	_mm_nodes[mm] = mi
 	mi.material_override = material
 	mi.extra_cull_margin = 60.0
 	if not cast: mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

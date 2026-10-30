@@ -9,7 +9,7 @@ const DEFAULTS := {"source": "both", "device": "", "track": "", "latency": 0.08,
 	"setup_done": false, "safe": false, "screen": -1, "fullscreen": false, "fps_limit": 60, "camera": 1}
 const SOURCES := ["system", "both", "rekordbox", "file"]
 const SOURCE_LABELS := ["System audio", "System audio + rekordbox", "Rekordbox", "Music file"]
-const QUALITIES := ["auto", "light", "normal", "high", "ultra"]
+const QUALITIES := ["auto", "low", "light", "normal", "high", "ultra"]
 
 var values := DEFAULTS.duplicate()
 var config_path := "user://settings.cfg"

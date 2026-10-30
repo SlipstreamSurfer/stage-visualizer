@@ -113,7 +113,7 @@ func _ready() -> void:
 	add_child(UiStyle.label("2 · Put this in rkbx_link's config", "Subtitle"))
 	_config = TextEdit.new()
 	_config.editable = false
-	_config.custom_minimum_size.y = 110
+	_config.scroll_fit_content_height = true
 	_config.add_theme_color_override("font_readonly_color", UiStyle.TEXT)
 	_config.add_theme_font_size_override("font_size", 20)
 	add_child(_config)

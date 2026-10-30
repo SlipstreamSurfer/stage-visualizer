@@ -93,7 +93,7 @@ func _capture_cameras(directory: String) -> void:
 
 func _capture_all(directory: String) -> void:
 	DirAccess.make_dir_recursive_absolute(directory)
-	var screens := ["menu", "source", "check", "delay", "safety", "settings", "show", "display"]
+	var screens := ["menu", "source", "check", "delay", "safety", "settings", "show", "display", "rekordbox"]
 	if options.has("with-cameras"):
 		for i in range(1, 6): screens.append("camera-%d" % i)
 	for screen in screens:
@@ -105,10 +105,10 @@ func _capture_all(directory: String) -> void:
 			main.view.select_camera(int(screen.get_slice("-", 1)), true)
 			main.crowd.dj_node.visible = main.view.shows_dj()
 		elif screen == "menu": menu.open_panel()
-		elif screen in ["settings", "show", "display"]:
+		elif screen in ["settings", "show", "display", "rekordbox"]:
 			main.settings.open_panel()
 			var tabs: TabContainer = main.settings.find_children("*", "TabContainer", true, false)[0]
-			tabs.current_tab = ["settings", "show", "display"].find(screen)
+			tabs.current_tab = ["settings", "show", "display", "rekordbox"].find(screen)
 		else:
 			_source()
 			wizard._options.source = "both"

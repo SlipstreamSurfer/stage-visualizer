@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.52.0 — A real crowd
+
+- People instead of round figures: jaw, neck, shoulders, sleeves, hands, trousers and shoes, with height, build,
+  hair and dark clothing varying per person. Mostly silhouettes against the light, with rim light on the lit side.
+- Moving to the music: nods and knee dips on the beat, jumps and raised arms with the energy and the hype, each
+  person in their own time; one in thirteen lifts a phone in a break. See [crowd](docs/crowd.md).
+- A concrete floor, with a thin wet sheen on High and Ultra in which the beams and washes reflect.
+- Lighter on the GPU: a person is 686 triangles instead of 1,920 (Normal 6.7 → 5.4 ms, High 13.3 → 10.6 ms).
+
 ## 0.51.0 — Wider beams, real haze
 
 - Beams, spots and washes take the zoom of real fixtures (Robe MegaPointe, BMFL, Martin MAC Aura XB): beams were

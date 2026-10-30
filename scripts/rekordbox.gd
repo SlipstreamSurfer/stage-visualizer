@@ -21,6 +21,7 @@ var packets := 0
 var sender_ip := ""
 var _udp := PacketPeerUDP.new()
 var _clock := 0.0
+var _motion := {}
 var replaying := false
 var replay_live := false
 
@@ -37,6 +38,7 @@ func stop() -> void:
 	error = ""
 	last_packet = -10.0
 	fields.clear()
+	_motion.clear()
 	packets = 0
 	sender_ip = ""
 	replaying = false
@@ -52,7 +54,15 @@ func live() -> bool:
 func status() -> Dictionary:
 	return {"connected": live(), "sender_ip": sender_ip, "packets": packets,
 		"deck": deck(), "seconds_since": maxf(0.0, _clock - last_packet) if packets > 0 else -1.0,
-		"listening": listening, "port": port, "error": error}
+		"listening": listening, "port": port, "error": error,
+		"title": str(value("track/title", "")), "playing": playing()}
+
+# Upstream sends position rather than a playing flag. Only report observed movement.
+func playing() -> Variant:
+	var explicit: Variant = value("transport/playing")
+	if explicit != null: return explicit == 1
+	if not _motion.has(deck()): return null
+	return _clock - float(_motion[deck()]) < 1.5
 
 var active := ""          # the deck the show follows (set by the show); "" = master if sent, else deck 1
 
@@ -92,6 +102,8 @@ func _read(p: PackedByteArray) -> bool:
 	for message in messages:
 		var key: String = message[0].trim_prefix("/")
 		if not _valid_value(key, message[1]): continue
+		if key.ends_with("/time") and fields.has(key) and float(message[1]) > float(fields[key]):
+			_motion[key.get_slice("/", 0)] = _clock
 		fields[key] = message[1]
 		accepted = true
 	return accepted

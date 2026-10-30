@@ -18,7 +18,8 @@ var _preview_error := ""
 var _help_index := 0
 var _taps: Array[float] = []
 var _last_tap := -10.0
-var _local_ips := "127.0.0.1"
+var _rekordbox_open := false
+var _rekordbox_page: RekordboxPage
 var _root: Control
 var _step: Label
 var _heading: Label
@@ -83,11 +84,7 @@ func open_panel(settings: SettingsPanel, listen: Listen, rb: Rekordbox) -> void:
 	_taps.clear()
 	_last_tap = -10.0
 	_preview_error = ""
-	var addresses: Array[String] = []
-	for address in IP.get_local_addresses():
-		if ":" not in address and not address.begins_with("127.") and not address.begins_with("169.254."):
-			addresses.append(address)
-	_local_ips = ", ".join(addresses) if not addresses.is_empty() else "127.0.0.1"
+	_rekordbox_open = false
 	_root.show()
 	_render()
 
@@ -98,6 +95,11 @@ func page_index() -> int:
 	return _page
 
 func back() -> void:
+	if _rekordbox_open:
+		if _rekordbox_page._save.visible: return
+		_rekordbox_open = false
+		_render()
+		return
 	if _page > 0:
 		_page -= 1
 		_render()
@@ -115,6 +117,10 @@ func choose_source(source: String) -> void:
 	_render()
 
 func next() -> void:
+	if _rekordbox_open:
+		_rekordbox_open = false
+		_render()
+		return
 	if _page == 0: return
 	if _page < 3:
 		_page += 1
@@ -122,7 +128,7 @@ func next() -> void:
 		return
 	_options.safe = _safe.button_pressed
 	var changes := {"setup_done": true}
-	for key in ["source", "device", "osc_port", "latency", "safe"]: changes[key] = _options[key]
+	for key in ["source", "device", "osc_port", "latency", "safe", "rekordbox_local"]: changes[key] = _options[key]
 	if _settings.remember_many(changes) != OK:
 		_error.text = "Could not save. Your previous settings are kept. Try again."
 		return
@@ -152,6 +158,23 @@ func _render() -> void:
 	_error.text = ""
 	_next.visible = _page != 0
 	_next.text = "Save and continue" if _page == 3 else "Skip for now" if _page == 2 else "Continue"
+	if _rekordbox_open:
+		_heading.text = "Rekordbox"
+		_next.text = "Back to source check"
+		var scroll := ScrollContainer.new()
+		scroll.custom_minimum_size = Vector2(756, 650)
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		_body.add_child(scroll)
+		_rekordbox_page = RekordboxPage.new()
+		_rekordbox_page.receiver = _rb
+		_rekordbox_page.same_computer = _options.rekordbox_local
+		_rekordbox_page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(_rekordbox_page)
+		_rekordbox_page.port_changed.connect(func(port: int):
+			_options.osc_port = port
+			_start_preview())
+		_rekordbox_page.location_changed.connect(func(local: bool): _options.rekordbox_local = local)
+		return
 	match _page:
 		0: _source_page()
 		1: _check_page()
@@ -197,6 +220,11 @@ func _check_page() -> void:
 		_tempo_label = UiStyle.label("Listening for tempo…", "Hint")
 		_body.add_child(_tempo_label)
 	if _options.source in ["rekordbox", "both"]:
+		var configure := UiStyle.button("Rekordbox connection…")
+		configure.pressed.connect(func():
+			_rekordbox_open = true
+			_render())
+		_body.add_child(configure)
 		_rb_label = UiStyle.label("Waiting for rekordbox…")
 		_body.add_child(_rb_label)
 		_peer_label = _text("", "Hint")
@@ -238,7 +266,7 @@ func source_ready() -> bool:
 func _process(dt: float) -> void:
 	if not is_open(): return
 	_wait += dt
-	if _page == 1: _update_status()
+	if _page == 1 and not _rekordbox_open: _update_status()
 	if _page == 2 and _beat:
 		_beat.value = fposmod(_listen.beat + _options.latency * _listen.bpm / 60.0, 1.0)
 
@@ -252,7 +280,7 @@ func _update_status() -> void:
 		_tempo_label.text = "%.1f BPM · %s" % [audio.bpm, "Beat found ✓" if audio.confidence >= 0.3 else "Learning the beat…"] if audio.bpm > 0 else "Listening for tempo…"
 	if _options.source in ["rekordbox", "both"]:
 		_rb_label.text = "rekordbox found ✓ · deck %s" % rb.deck if rb.connected else "Waiting for rekordbox…"
-		_peer_label.text = "From " + rb.sender_ip if rb.connected and rb.sender_ip != "" else "This PC: %s · UDP %d" % [_local_ips, _options.osc_port]
+		_peer_label.text = "From " + rb.sender_ip if rb.connected and rb.sender_ip != "" else "Open Rekordbox connection for the destination and config."
 		var tempo := float(_rb.value("bpm/current", 0.0))
 		if rb.connected and tempo > 0:
 			_tempo_label.text = "%.1f BPM · Beat found ✓" % tempo

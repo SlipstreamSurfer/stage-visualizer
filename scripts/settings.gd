@@ -6,7 +6,7 @@ signal applied(options: Dictionary)
 signal closed
 
 const DEFAULTS := {"source": "both", "device": "", "track": "", "latency": 0.08, "quality": "auto", "genre": "auto", "osc_port": 4460,
-	"setup_done": false, "safe": false, "screen": -1, "fullscreen": false, "fps_limit": 60, "camera": 1}
+	"rekordbox_local": false, "setup_done": false, "safe": false, "screen": -1, "fullscreen": false, "fps_limit": 60, "camera": 1}
 const SOURCES := ["system", "both", "rekordbox", "file"]
 const SOURCE_LABELS := ["System audio", "System audio + rekordbox", "Rekordbox", "Music file"]
 const QUALITIES := ["auto", "light", "normal", "high", "ultra"]
@@ -22,6 +22,9 @@ var _device: OptionButton
 var _track: LineEdit
 var _latency: SpinBox
 var _quality: OptionButton
+var _rekordbox_page: RekordboxPage
+var _rb: Rekordbox
+var _tabs: TabContainer
 var _port: SpinBox
 var _error: Label
 var _dialog: FileDialog
@@ -102,7 +105,7 @@ static func _validated(options: Dictionary) -> Dictionary:
 	var port = options.get("osc_port", DEFAULTS.osc_port)
 	if port is int or (port is float and is_finite(port)):
 		result.osc_port = int(clampf(float(port), 1.0, 65535.0))
-	for key in ["setup_done", "safe", "fullscreen"]:
+	for key in ["setup_done", "safe", "fullscreen", "rekordbox_local"]:
 		if options.get(key) is bool: result[key] = options[key]
 	for key in ["screen", "fps_limit", "camera"]:
 		var number = options.get(key)
@@ -119,6 +122,8 @@ static func _validated(options: Dictionary) -> Dictionary:
 
 # Call at startup and on applied. Unchanged sources keep playing.
 func apply_audio(listen: Listen, rb: Rekordbox) -> Error:
+	_rb = rb
+	if _rekordbox_page: _rekordbox_page.receiver = rb
 	listen.latency = values.latency
 	var missing_device: bool = values.source in ["system", "both"] and values.device != "" and values.device not in AudioServer.get_input_device_list()
 	var result := ERR_UNAVAILABLE if missing_device else OK
@@ -150,6 +155,7 @@ func _ready() -> void:
 	panel.add_child(column)
 	column.add_child(UiStyle.label("Settings", "Title"))
 	var tabs := TabContainer.new()
+	_tabs = tabs
 	tabs.get_tab_bar().add_theme_font_size_override("font_size", UiStyle.BODY)
 	column.add_child(tabs)
 	var sound := VBoxContainer.new()
@@ -161,6 +167,21 @@ func _ready() -> void:
 	var display := VBoxContainer.new()
 	display.name = "Display"
 	tabs.add_child(display)
+	var rb_scroll := ScrollContainer.new()
+	rb_scroll.name = "Rekordbox"
+	rb_scroll.custom_minimum_size.y = 700
+	rb_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	tabs.add_child(rb_scroll)
+	_rekordbox_page = RekordboxPage.new()
+	_rekordbox_page.receiver = _rb
+	_rekordbox_page.same_computer = values.rekordbox_local
+	_rekordbox_page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rb_scroll.add_child(_rekordbox_page)
+	_rekordbox_page.port_changed.connect(func(port: int):
+		_port.value = port)
+	tabs.tab_changed.connect(func(index: int):
+		if index == rb_scroll.get_index() and is_instance_valid(_rb) and not _rb.listening:
+			_rb.start(int(_port.value)))
 	tabs.custom_minimum_size.y = 470
 	_source = OptionButton.new()
 	for text in SOURCE_LABELS: _source.add_item(text)
@@ -204,6 +225,10 @@ func _ready() -> void:
 	_port.step = 1
 	_port.rounded = true
 	_port_row = _row(sound, "Rekordbox port", _port)
+	_port.value_changed.connect(func(port: float):
+		_rekordbox_page._port.set_value_no_signal(port)
+		_rekordbox_page._refresh()
+		if is_open() and is_instance_valid(_rb): _rb.start(int(port)))
 	_quality = OptionButton.new()
 	for choice in QUALITIES: _quality.add_item("Automatic" if choice == "auto" else choice.capitalize())
 	_row(show_options, "Quality", _quality)
@@ -273,6 +298,10 @@ func _sync() -> void:
 	_latency.value = values.latency * 1000.0
 	_quality.select(QUALITIES.find(values.quality))
 	_port.value = values.osc_port
+	_rekordbox_page.same_computer = values.rekordbox_local
+	_rekordbox_page._location.select(0 if values.rekordbox_local else 1)
+	_rekordbox_page._port.set_value_no_signal(values.osc_port)
+	_rekordbox_page._refresh()
 	_safe.button_pressed = values.safe
 	_fullscreen.button_pressed = values.fullscreen
 	_fps.select(SvDisplay.FPS_LIMITS.find(values.fps_limit))
@@ -298,7 +327,7 @@ func _apply() -> void:
 	var options := values.duplicate()
 	options.merge({"source": SOURCES[_source.selected], "genre": Show.GENRE_ORDER[_genre.selected], "device": _device.get_selected_metadata(),
 		"track": _track.text.strip_edges(), "latency": _latency.value / 1000.0,
-		"quality": QUALITIES[_quality.selected], "osc_port": int(_port.value),
+		"quality": QUALITIES[_quality.selected], "osc_port": int(_port.value), "rekordbox_local": _rekordbox_page.same_computer,
 		"safe": _safe.button_pressed, "fullscreen": _fullscreen.button_pressed,
 		"screen": _screen.get_selected_metadata(), "fps_limit": SvDisplay.FPS_LIMITS[_fps.selected], "camera": _camera.selected + 1}, true)
 	if options.source == "file":
@@ -320,6 +349,8 @@ func _apply() -> void:
 func open_panel() -> void:
 	_sync()
 	_root.show()
+	if _tabs.current_tab == 3 and is_instance_valid(_rb) and not _rb.listening:
+		_rb.start(int(_port.value))
 	_source.grab_focus()
 
 func show_error(message: String) -> void:
@@ -327,6 +358,11 @@ func show_error(message: String) -> void:
 	_error.text = message
 
 func close_panel() -> void:
+	if is_instance_valid(_rb):
+		if values.source in ["both", "rekordbox"]:
+			if _rb.port != values.osc_port: _rb.start(values.osc_port)
+		else: _rb.stop()
+	_rekordbox_page._save.hide()
 	_dialog.hide()
 	_root.hide()
 	closed.emit()
@@ -337,7 +373,7 @@ func is_open() -> bool:
 func _input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo): return
 	if is_open() and event.keycode == KEY_ESCAPE:
-		if _dialog.visible: return
+		if _dialog.visible or _rekordbox_page._save.visible: return
 		close_panel()
 	elif shortcuts_enabled and not is_open() and event.keycode == KEY_P: open_panel()
 	else: return

@@ -31,6 +31,11 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	if "--rekordbox-shots" in OS.get_cmdline_user_args():
+		await _rekordbox_shots()
+		return
+	_test_rekordbox_helpers()
+	if "--udp" in OS.get_cmdline_user_args(): await _test_rekordbox_page_udp()
 	for option in ["film", "shot", "bench", "replay", "seconds", "track", "record", "check", "eye", "settings", "moment-at"]:
 		check(AppMenu.should_skip({option: "test"}), "Test option must skip menu: " + option)
 	check(not AppMenu.should_skip({}), "Normal launch uses menu")
@@ -113,6 +118,13 @@ func _run() -> void:
 	wizard._update_status()
 	check(wizard._help_next.visible and not wizard._help_label.text.is_empty(), "Source help after ten seconds")
 	check(SetupWizard.help_steps("rekordbox", false, false, 5566)[-1].contains("5566"), "Help uses selected UDP port")
+	wizard._rekordbox_open = true
+	wizard._render()
+	check(wizard._rekordbox_page.is_visible_in_tree(), "Source opens shared Rekordbox page")
+	wizard._rekordbox_page._location.item_selected.emit(0)
+	check(wizard._options.rekordbox_local, "Source keeps computer choice")
+	wizard.back()
+	check(not wizard._rekordbox_open and wizard.page_index() == 1, "Connection Back returns to source check")
 	listen.level = 0.1
 	listen.bpm = 120.0
 	listen.confidence = 0.9
@@ -205,3 +217,128 @@ func _run() -> void:
 	rb.free()
 	print("app: %d checks, %d failures" % [checks, failures])
 	quit(0 if failures == 0 else 1)
+
+func _test_rekordbox_helpers() -> void:
+	var interfaces := [
+		{"name": "docker0", "addresses": ["172.17.0.1"]},
+		{"name": "tun0", "addresses": ["10.8.0.2"]},
+		{"name": "Ethernet", "friendly": "Hyper-V Virtual Ethernet", "addresses": ["192.168.1.4"]},
+		{"name": "wlan0", "addresses": ["127.0.0.1", "169.254.1.2", "::1", "192.168.1.23", "192.168.1.24"]}]
+	var addresses := RekordboxPage.candidates(interfaces)
+	check(addresses.size() == 2 and addresses[0].ip == "192.168.1.23", "Keep LAN choices and exclude virtual, loopback and link-local addresses")
+	var ranked := RekordboxPage.candidates([
+		{"name": "eth0", "addresses": ["192.168.1.24"]},
+		{"name": "wlan0", "default": true, "addresses": ["192.168.1.23"]}])
+	check(ranked[0].ip == "192.168.1.23", "Default route ranks first")
+	check(RekordboxPage.candidates([]).is_empty(), "Offline has no invented destination")
+	check(RekordboxPage.network("192.168.1.23", 24) == "192.168.1.0/24", "Derive local network from real prefix")
+	check(RekordboxPage.network("192.168.1.130", 25) == "192.168.1.128/25", "Subnet is not assumed to be /24")
+	var config := RekordboxPage.config_text("192.168.1.23", 5566)
+	for line in ["osc.enabled true", "osc.source 0.0.0.0:4450", "osc.destination 192.168.1.23:5566", "osc.phrase_output_format string", "osc.msg.master/phrase true", "osc.msg.n/phrase true", "osc.msg.master/beat/subdiv 1", "osc.msg.n/time true"]:
+		check(line in config.split("\n"), "Exact config line: " + line)
+	check("osc.destination 127.0.0.1:4460" in RekordboxPage.config_text("127.0.0.1", 4460), "Same computer destination")
+	check("sudo ufw allow from 192.168.1.0/24 to any port 5566 proto udp" in RekordboxPage.firewall_help("Linux", "ufw", "192.168.1.0/24", 5566), "Scoped ufw command")
+	var firewalld := RekordboxPage.firewall_help("Linux", "firewalld", "192.168.1.0/24", 5566, "home")
+	check("--zone=home" in firewalld and "--permanent" in firewalld and "source address=192.168.1.0/24 port port=5566 protocol=udp accept" in firewalld, "Runtime and persistent firewalld rules")
+	check("localport=5566 remoteip=LocalSubnet profile=private" in RekordboxPage.firewall_help("Windows", "", "", 5566), "Windows rule is local network only")
+	check("System Settings → Network → Firewall" in RekordboxPage.firewall_help("macOS", "", "", 5566), "Mac firewall guidance")
+	check("sudo" not in RekordboxPage.firewall_help("Linux", "ufw", "", 5566), "Unknown mask does not invent an unsafe subnet")
+
+func _test_rekordbox_page_udp() -> void:
+	var rb := Rekordbox.new()
+	root.add_child(rb)
+	var page := RekordboxPage.new()
+	page.receiver = rb
+	root.add_child(page)
+	var probe := PacketPeerUDP.new()
+	check(probe.bind(0, "127.0.0.1") == OK, "Reserve test port")
+	var port := probe.get_local_port()
+	probe.close()
+	rb.start(port)
+	check("nothing arrived" in RekordboxPage.connection_text(rb.status()), "Page initially waits")
+	var sender := PacketPeerUDP.new()
+	sender.set_dest_address("127.0.0.1", port)
+	var osc = load("res://tools/test_rekordbox.gd").new()
+	sender.put_packet(osc.bundle([osc.message("/1/time", 1.0), osc.message("/1/track/title", "Test track")]))
+	await create_timer(0.05).timeout
+	rb.update(0.1)
+	sender.put_packet(osc.message("/1/time", 1.2))
+	await create_timer(0.05).timeout
+	rb.update(0.1)
+	var text := RekordboxPage.connection_text(rb.status())
+	check("127.0.0.1" in text and "Deck 1 playing" in text and "Test track" in text, "Live page includes sender, observed playback and title")
+	rb.update(1.6)
+	check("last received" in RekordboxPage.connection_text(rb.status()), "Stale connection reports age")
+	probe.bind(0, "127.0.0.1")
+	var next_port := probe.get_local_port()
+	probe.close()
+	var settings := SettingsPanel.new()
+	settings.config_path = Session.local_path().path_join("rb-port-settings.cfg")
+	settings.load_settings()
+	settings.set_values({"source": "rekordbox", "osc_port": port})
+	root.add_child(settings)
+	settings._rb = rb
+	settings._rekordbox_page.receiver = rb
+	settings.open_panel()
+	settings._tabs.current_tab = 3
+	settings._rekordbox_page._port.value = next_port
+	check(rb.port == next_port and rb.listening, "Settings port previews immediately")
+	settings.close_panel()
+	check(rb.port == port and rb.listening, "Settings Back restores saved port")
+	settings.free()
+	page.port_changed.connect(rb.start)
+	page._port.value = next_port
+	check(rb.port == next_port and rb.listening and rb.packets == 0, "Page port change rebinds immediately and clears status")
+	sender.put_packet(osc.message("/1/time", 2.0))
+	await create_timer(0.05).timeout
+	rb.update(0.1)
+	check(rb.packets == 0, "Old port no longer receives")
+	sender.set_dest_address("127.0.0.1", next_port)
+	sender.put_packet(osc.message("/1/track/title", "New port"))
+	await create_timer(0.05).timeout
+	rb.update(0.1)
+	check(rb.status().connected and rb.status().title == "New port", "New port receives")
+	page.same_computer = true
+	page._refresh()
+	check(page.destination() == "127.0.0.1:%d" % next_port, "Page local mode uses loopback")
+	var file := Session.local_path().path_join("rkbx-config-test.txt")
+	page.save_config(file)
+	check(FileAccess.get_file_as_string(file) == page._config.text, "Saved config matches preview")
+	DirAccess.remove_absolute(file)
+	sender.close()
+	osc.free()
+	page.free()
+	rb.free()
+
+func _rekordbox_shots() -> void:
+	root.size = Vector2i(1280, 1080)
+	root.mode = Window.MODE_MAXIMIZED
+	UiStyle.configure_window(root)
+	var settings := SettingsPanel.new()
+	settings.config_path = Session.local_path().path_join("shot-settings.cfg")
+	settings.shortcuts_enabled = false
+	root.add_child(settings)
+	var rb := Rekordbox.new()
+	root.add_child(rb)
+	settings._rb = rb
+	settings._rekordbox_page.receiver = rb
+	settings.open_panel()
+	settings._tabs.current_tab = 3
+	var page := settings._rekordbox_page
+	page.addresses = [{"ip": "192.168.1.23", "name": "Wi-Fi", "network": "192.168.1.0/24"}]
+	page._refresh()
+	await process_frame
+	await process_frame
+	await RenderingServer.frame_post_draw
+	root.get_texture().get_image().save_png(Session.local_path().path_join("rekordbox-waiting.png"))
+	rb.fields = {"1/track/title": "Test track", "1/transport/playing": 1}
+	rb.sender_ip = "192.168.1.40"
+	rb.packets = 3
+	rb.last_packet = rb._clock
+	rb.listening = true
+	await process_frame
+	await RenderingServer.frame_post_draw
+	root.get_texture().get_image().save_png(Session.local_path().path_join("rekordbox-connected.png"))
+	settings.free()
+	rb.free()
+	quit()

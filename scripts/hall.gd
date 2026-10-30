@@ -1,6 +1,6 @@
 class_name Hall
 extends Node3D
-# The hall: a hangar of 44 by 76 metres and 15 high, steel portal frames every 9.5 metres on a concrete base.
+# The hall: a hangar of 44 by 76 metres and 15 high, braced steel roof trusses every 9.5 metres on a concrete base.
 # One stage across the full width of the short end at -Z (10 deep, 1.6 high), the booth in its middle, the PA
 # hung either side, subs on the floor in front, a barrier. Metres, Y up, the crowd towards +Z.
 
@@ -19,10 +19,13 @@ const BARRIER := -24.0
 var screens: Array[ShaderMaterial] = []
 var _floor: StandardMaterial3D
 var _wet_floor := false
+var _hall_materials: Array[ShaderMaterial] = []
+var _hall_rig: Rig
+var _return_level := 0.0
 
 func build() -> void:
 	var black := Kit.mat(Color(0.018, 0.018, 0.02), 0.8)
-	var frame := Kit.mat(Color(0.1, 0.105, 0.11), 0.45, 0.7)
+	var frame := _hall_material(Color(0.17, 0.20, 0.19), 0.73, 0.12, 0.3)
 	var boxes := Kit.Batch.new(Kit.unit_box(), frame)
 	var dark := Kit.Batch.new(Kit.unit_box(), black)
 
@@ -33,26 +36,26 @@ func build() -> void:
 	ground.mesh = pm
 	ground.material_override = _concrete()
 	add_child(ground)
-	var steel := _cladding()
-	var plinth := Kit.mat(Color(0.28, 0.27, 0.25), 0.9)
-	plinth.uv1_triplanar = true
-	for s in [-1.0, 1.0]:
-		Kit.box(self, Vector3(0.3, H, D), Vector3(s * (W / 2 + 0.15), H / 2, 0), steel)
-		Kit.box(self, Vector3(0.2, 2.9, D), Vector3(s * (W / 2 - 0.1), 1.45, 0), plinth)
-	Kit.box(self, Vector3(W, H, 0.3), Vector3(0, H / 2, BACK - 0.15), steel)
-	Kit.box(self, Vector3(W, H, 0.3), Vector3(0, H / 2, D / 2 + 0.15), steel)
-	var door := Kit.mat(Color(0.17, 0.18, 0.19), 0.5, 0.6)
-	for i in 6: Kit.box(self, Vector3(27 / 6.0 - 0.06, 12.6, 0.12), Vector3(-13.5 + (i + 0.5) * 27 / 6.0, 6.3, D / 2 - 0.06), door)
-	boxes.add(Kit.block(Vector3(28, 0.5, 0.4), Vector3(0, 12.85, D / 2 - 0.2)))
-	Kit.box(self, Vector3(W, 0.3, D), Vector3(0, H + 0.15, 0), Kit.mat(Color(0.13, 0.13, 0.14), 0.85))
-	var z := -D / 2
-	while z <= D / 2 + 0.01:
-		for s in [-1.0, 1.0]: boxes.add(Kit.block(Vector3(0.45, H, 0.3), Vector3(s * (W / 2 - 0.45), H / 2, z)))
-		boxes.add(Kit.block(Vector3(W - 0.9, 0.7, 0.3), Vector3(0, H - 0.5, z)))
-		boxes.add(Kit.block(Vector3(0.18, 1.6, 0.18), Vector3(-W / 2 + 1.2, H - 1.4, z), 0.0))
-		boxes.add(Kit.block(Vector3(0.18, 1.6, 0.18), Vector3(W / 2 - 1.2, H - 1.4, z), 0.0))
-		z += 9.5
-	for x in range(-18, 19, 4): boxes.add(Kit.block(Vector3(0.12, 0.2, D), Vector3(x, H - 0.25, 0)))
+	var metal := Kit.Batch.new(Kit.unit_box(), _hall_material(Color(0.12, 0.15, 0.16), 0.6, 0.3, 0.35))
+	var trim := Kit.Batch.new(Kit.unit_box(), _hall_material(Color(0.23, 0.25, 0.24), 0.58, 0.35, 0.25))
+	var glass := Kit.Batch.new(Kit.unit_box(), Kit.mat(Color(0.018, 0.027, 0.031), 0.38))
+	var concrete := Kit.Batch.new(Kit.unit_box(), _hall_material(Color(0.21, 0.20, 0.18), 0.96, 0.0, 0.35))
+	for side: float in [-1.0, 1.0]:
+		for bay in 8:
+			concrete.add(Kit.block(Vector3(0.2, 2.9, 9.47), Vector3(side * 21.9, 1.45, -33.25 + bay * 9.5)))
+		concrete.add(Kit.block(Vector3(W, 2.9, 0.2), Vector3(0, 1.45, side * 37.9)))
+		for bay in 9:
+			concrete.add(Kit.block(Vector3(0.85, 0.5, 0.9), Vector3(side * 21.55, 0.25, -38.0 + bay * 9.5)))
+	_envelope()
+	_structure(boxes, trim)
+	_windows(boxes, glass)
+	_services(metal, trim, dark)
+	_openings(boxes, dark, metal, glass)
+	_production_deck(boxes, dark)
+	concrete.build(self).name = "ConcretePlinth"
+	metal.build(self).name = "HallServices"
+	trim.build(self).name = "HallSecondarySteel"
+	glass.build(self).name = "ClosedRooflightsAndWindows"
 
 	# the stage across the full width, its black skirt, the booth's riser
 	dark.add(Kit.block(Vector3(6, RISER, 3.2), Vector3(0, DECK + RISER / 2, BOOTH_Z - 0.6)))
@@ -60,7 +63,6 @@ func build() -> void:
 	# One solid deck: no second skin crossing the riser or sharing the stage's faces.
 	Kit.box(self, Vector3(W - 0.4, DECK, FRONT - BACK), Vector3(0, DECK / 2, (FRONT + BACK) / 2), deck_top).name = "StageDeck"
 	_curtain()
-	_house_lights()
 	_booth(black)
 	_pa(dark)
 	_hazers(boxes, dark)
@@ -131,47 +133,176 @@ func _curtain() -> void:
 	cloth.material_override = material
 	add_child(cloth)
 
-# Small familiar details give the dark hangar a human scale.
-func _house_lights() -> void:
-	var door := Kit.mat(Color(0.08, 0.09, 0.09), 0.85)
+# The building is independent of the show trusses: nine braced, clear-span roof girders.
+func _structure(frame: Kit.Batch, trim: Kit.Batch) -> void:
+	for bay in 9:
+		var z := -D / 2.0 + bay * 9.5
+		for side: float in [-1.0, 1.0]:
+			var x := side * 21.55
+			# I-section columns, base plates and the girder seats.
+			frame.add(Kit.block(Vector3(0.42, 14.65, 0.045), Vector3(x, 7.325, z)))
+			for dx in [-0.24, 0.24]:
+				frame.add(Kit.block(Vector3(0.045, 14.65, 0.48), Vector3(x + dx, 7.325, z)))
+			trim.add(Kit.block(Vector3(0.75, 0.08, 0.8), Vector3(x, 0.04, z)))
+			frame.add(Kit.block(Vector3(0.9, 0.18, 0.65), Vector3(side * 21.25, 12.16, z)))
+		for y in [12.3, 14.65]:
+			frame.add(Kit.block(Vector3(42.5, 0.22, 0.24), Vector3(0, y, z)))
+		for panel in 12:
+			var x0 := -21.0 + panel * 3.5
+			var x1 := x0 + 3.5
+			var low := Vector3(x0, 12.41, z)
+			var high := Vector3(x1, 14.54, z)
+			if panel % 2 == 1:
+				low.x = x1
+				high.x = x0
+			_member(frame, low, high, 0.13, 0.15)
+			if panel % 2 == 0:
+				frame.add(Kit.block(Vector3(0.12, 2.13, 0.15), Vector3(x0, 13.475, z)))
+		# Attachment plates and open clevises on the bottom chord, above the lighting grid.
+		for x in [-14.0, -7.0, 0.0, 7.0, 14.0]:
+			trim.add(Kit.block(Vector3(0.32, 0.06, 0.38), Vector3(x, 12.16, z)))
+			for dx in [-0.10, 0.10]:
+				trim.add(Kit.block(Vector3(0.045, 0.20, 0.08), Vector3(x + dx, 12.03, z)))
+			trim.add(Kit.block(Vector3(0.24, 0.04, 0.08), Vector3(x, 11.94, z)))
+	# Z purlins: web and opposite flanges, running between the transverse frames.
+	for i in 23:
+		var x := -20.9 + i * 1.9
+		trim.add(Kit.block(Vector3(0.018, 0.20, D), Vector3(x, 14.87, 0)))
+		for side: float in [-1.0, 1.0]:
+			trim.add(Kit.block(Vector3(0.085, 0.018, D), Vector3(x + side * 0.038, 14.87 + side * 0.09, 0)))
+	# Roof-plane X bracing and matching wall bracing in the end bays.
+	for z0 in [-38.0, 28.5]:
+		for side: float in [-1.0, 1.0]:
+			_member(trim, Vector3(0, 14.52, z0), Vector3(side * 21.0, 14.52, z0 + 9.5), 0.045, 0.045)
+			_member(trim, Vector3(side * 21.0, 14.52, z0), Vector3(0, 14.52, z0 + 9.5), 0.045, 0.045)
+			_member(frame, Vector3(side * 21.72, 3.1, z0), Vector3(side * 21.72, 12.2, z0 + 9.5), 0.075, 0.075)
+			_member(frame, Vector3(side * 21.72, 12.2, z0), Vector3(side * 21.72, 3.1, z0 + 9.5), 0.075, 0.075)
+	for side: float in [-1.0, 1.0]:
+		for y in [3.0, 6.1, 9.2, 12.0]:
+			trim.add(Kit.block(Vector3(0.10, 0.16, D), Vector3(side * 21.85, y, 0)))
+
+# A rectangular steel member, with its local Y along the load path.
+func _member(batch: Kit.Batch, a: Vector3, b: Vector3, width: float, depth: float) -> void:
+	var t := Kit.tube(a, b, 1.0)
+	t.basis.x *= width
+	t.basis.z *= depth
+	batch.add(t)
+
+# One inward-facing surface for the coated wall and roof liners, with metre-based UVs.
+func _envelope() -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for bay in 8:
+		var z0 := -D / 2.0 + bay * 9.5
+		var z1 := z0 + 9.5
+		var shade := 0.94 + 0.02 * (bay % 4)
+		for side: float in [-1.0, 1.0]:
+			var x := side * W / 2.0
+			_hall_quad(st, [Vector3(x, 2.9, z0), Vector3(x, H, z0), Vector3(x, H, z1), Vector3(x, 2.9, z1)], Vector3(-side, 0, 0), [Vector2(z0, 2.9), Vector2(z0, H), Vector2(z1, H), Vector2(z1, 2.9)], Color(shade, shade, shade))
+		_hall_quad(st, [Vector3(-W / 2, H, z0), Vector3(W / 2, H, z0), Vector3(W / 2, H, z1), Vector3(-W / 2, H, z1)], Vector3.DOWN, [Vector2(z0, -W / 2), Vector2(z0, W / 2), Vector2(z1, W / 2), Vector2(z1, -W / 2)], Color(0.82, 0.85, 0.88))
+	for side: float in [-1.0, 1.0]:
+		var z := side * D / 2.0
+		_hall_quad(st, [Vector3(-W / 2, 2.9, z), Vector3(W / 2, 2.9, z), Vector3(W / 2, H, z), Vector3(-W / 2, H, z)], Vector3(0, 0, -side), [Vector2(-W / 2, 2.9), Vector2(W / 2, 2.9), Vector2(W / 2, H), Vector2(-W / 2, H)], Color.WHITE)
+	st.index()
+	st.generate_tangents()
+	var shell := MeshInstance3D.new()
+	shell.name = "HallLiner"
+	shell.mesh = st.commit()
+	shell.material_override = _cladding()
+	add_child(shell)
+
+func _hall_quad(st: SurfaceTool, corners: Array, normal: Vector3, uv: Array, color: Color) -> void:
+	var order := [0, 1, 2, 0, 2, 3]
+	if (corners[2] - corners[0]).cross(corners[1] - corners[0]).dot(normal) < 0:
+		order = [0, 2, 1, 0, 3, 2]
+	for i in order:
+		st.set_color(color)
+		st.set_normal(normal)
+		st.set_uv(uv[i] / Vector2(1.2, 6.0))
+		st.add_vertex(corners[i])
+
+# Closed rooflights and clerestory windows: opaque black backing, no exterior light.
+func _windows(frame: Kit.Batch, glass: Kit.Batch) -> void:
+	for bay in 8:
+		var z := -33.25 + bay * 9.5
+		for x in [-8.0, 8.0]:
+			glass.add(Kit.block(Vector3(2.3, 0.035, 6.0), Vector3(x, 14.97, z)))
+			for dx in [-1.18, 1.18]:
+				frame.add(Kit.block(Vector3(0.08, 0.10, 6.15), Vector3(x + dx, 14.91, z)))
+			for dz in [-3.0, -1.0, 1.0, 3.0]:
+				frame.add(Kit.block(Vector3(2.3, 0.10, 0.075), Vector3(x, 14.91, z + dz)))
+		if bay % 2 == 0:
+			for side: float in [-1.0, 1.0]:
+				var t := Transform3D(Basis(Vector3.UP, -side * PI / 2.0), Vector3(side * 21.94, 9.9, z))
+				glass.add(t * Kit.block(Vector3(6.2, 1.6, 0.04), Vector3.ZERO))
+				for y in [-0.84, 0.84]: frame.add(t * Kit.block(Vector3(6.35, 0.07, 0.12), Vector3(0, y, 0.08)))
+				for x in [-3.14, -1.05, 1.05, 3.14]: frame.add(t * Kit.block(Vector3(0.07, 1.6, 0.12), Vector3(x, 0, 0.08)))
+
+# Ducts sit in the upper web space; trays are along the walls, clear of the show trusses.
+func _services(metal: Kit.Batch, trim: Kit.Batch, dark: Kit.Batch) -> void:
+	for side: float in [-1.0, 1.0]:
+		for bay in 8:
+			var z := -33.25 + bay * 9.5
+			metal.add(Kit.block(Vector3(0.9, 0.55, 9.35), Vector3(side * 16.0, 14.15, z)))
+			trim.add(Kit.block(Vector3(1.0, 0.64, 0.08), Vector3(side * 16.0, 14.15, z - 4.68)))
+			# The vertical drop stays against the wall, beyond the rig's footprint.
+			if bay in [1, 6]:
+				metal.add(Kit.block(Vector3(0.65, 3.6, 0.7), Vector3(side * 21.35, 11.8, z)))
+				metal.add(Kit.block(Vector3(5.35, 0.55, 0.7), Vector3(side * 18.675, 13.8, z)))
+				for i in 6:
+					dark.add(Kit.block(Vector3(0.03, 0.035, 0.55), Vector3(side * 20.99, 10.15 + i * 0.13, z)))
+		# Two longitudinal cable trays, with raised lips and repeated hanger rods.
+		for y in [7.1, 10.8]:
+			metal.add(Kit.block(Vector3(0.46, 0.045, D - 1.0), Vector3(side * 21.4, y, 0)))
+			for x in [21.15, 21.65]: trim.add(Kit.block(Vector3(0.025, 0.16, D - 1.0), Vector3(side * x, y + 0.07, 0)))
+		for bay in 9:
+			var z := -38.0 + bay * 9.5
+			trim.add(Kit.block(Vector3(0.03, 3.5, 0.03), Vector3(side * 21.4, 12.7, z)))
+
+# Exit fittings share one draw; no house lights, only dim green signs.
+func _openings(frame: Kit.Batch, dark: Kit.Batch, metal: Kit.Batch, glass: Kit.Batch) -> void:
 	var signs := StandardMaterial3D.new()
 	signs.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	signs.albedo_color = Color(0.55, 0.55, 0.55)
 	signs.albedo_texture = _exit_texture()
-	var fixtures := Kit.Batch.new(Kit.unit_box(), Kit.glowing(Color(0.6, 0.7, 0.8), 0.6), false)
-	for side in [-1.0, 1.0]:
-		for z in [-16.0, 16.0, 31.0]:
-			Kit.box(self, Vector3(0.04, 2.25, 1.15), Vector3(side * 21.77, 1.125, z), door)
-			_exit_sign(Vector3(side * 21.72, 2.65, z), -side * PI / 2.0, signs)
-		for z in [-24.0, -5.0, 14.0, 33.0]:
-			fixtures.add(Kit.block(Vector3(0.12, 0.1, 0.6), Vector3(side * 21.55, 4.0, z)))
-			_house_light(Vector3(side * 21.0, 3.8, z), 6.5, 0.18)
-		Kit.box(self, Vector3(1.15, 2.25, 0.04), Vector3(side * 17.0, 1.125, 37.78), door)
-		_exit_sign(Vector3(side * 17.0, 2.65, 37.72), PI, signs)
-		fixtures.add(Kit.block(Vector3(0.7, 0.1, 0.15), Vector3(side * 9.0, 7.0, 37.5)))
-		_house_light(Vector3(side * 9.0, 6.8, 36.9), 9.0, 0.24)
-	fixtures.build(self)
-
-func _house_light(pos: Vector3, reach: float, power: float) -> void:
-	var light := OmniLight3D.new()
-	light.position = pos
-	light.omni_range = reach
-	light.omni_attenuation = 1.8
-	light.light_color = Color(0.65, 0.75, 0.85)
-	light.light_energy = power
-	light.light_volumetric_fog_energy = 0.0
-	light.shadow_enabled = false
-	add_child(light)
-
-func _exit_sign(pos: Vector3, yaw: float, material: Material) -> void:
-	var sign := MeshInstance3D.new()
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.8, 0.4)
-	sign.mesh = quad
-	sign.material_override = material
-	sign.position = pos
-	sign.rotation.y = yaw
-	sign.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(sign)
+	var sign_batch := Kit.Batch.new(quad, signs, false)
+	for side: float in [-1.0, 1.0]:
+		for z in [-16.0, 16.0, 31.0]:
+			var t := Transform3D(Basis(Vector3.UP, -side * PI / 2.0), Vector3(side * 21.72, 0, z))
+			_door(t, frame, dark, metal, glass)
+			sign_batch.add(t * Transform3D(Basis.IDENTITY, Vector3(0, 2.65, 0.10)))
+		var rear := Transform3D(Basis(Vector3.UP, PI), Vector3(side * 17.0, 0, 37.83))
+		_door(rear, frame, dark, metal, glass)
+		sign_batch.add(rear * Transform3D(Basis.IDENTITY, Vector3(0, 2.65, 0.10)))
+	# Six shut sliding leaves, with jambs and the overhead running rail.
+	for i in 6:
+		var x := -13.5 + (i + 0.5) * 4.5
+		metal.add(Kit.block(Vector3(4.44, 10.6, 0.12), Vector3(x, 5.3, 37.9)))
+		for y in [0.15, 3.5, 7.0, 10.5]: frame.add(Kit.block(Vector3(4.44, 0.07, 0.08), Vector3(x, y, 37.79)))
+	frame.add(Kit.block(Vector3(28, 0.35, 0.35), Vector3(0, 10.95, 37.7)))
+	for x in [-13.7, 13.7]: frame.add(Kit.block(Vector3(0.22, 10.8, 0.35), Vector3(x, 5.4, 37.7)))
+	sign_batch.build(self).name = "ExitSigns"
+
+func _door(t: Transform3D, frame: Kit.Batch, dark: Kit.Batch, metal: Kit.Batch, glass: Kit.Batch) -> void:
+	dark.add(t * Kit.block(Vector3(1.2, 2.3, 0.07), Vector3(0, 1.15, 0)))
+	for x in [-0.65, 0.65]: frame.add(t * Kit.block(Vector3(0.06, 2.4, 0.12), Vector3(x, 1.2, 0.035)))
+	frame.add(t * Kit.block(Vector3(1.36, 0.06, 0.12), Vector3(0, 2.4, 0.035)))
+	glass.add(t * Kit.block(Vector3(0.28, 0.5, 0.025), Vector3(0, 1.8, 0.05)))
+	metal.add(t * Kit.block(Vector3(0.9, 0.045, 0.06), Vector3(0, 1.05, 0.09)))
+
+# A small rear production deck, beyond the crowd and all camera positions.
+func _production_deck(frame: Kit.Batch, dark: Kit.Batch) -> void:
+	dark.add(Kit.block(Vector3(7.0, 0.6, 3.0), Vector3(0, 0.3, 34.0)))
+	for side: float in [-1.0, 1.0]:
+		for z in [32.6, 34.0, 35.4]: frame.add(Kit.block(Vector3(0.045, 1.1, 0.045), Vector3(side * 3.45, 1.15, z)))
+		for y in [1.15, 1.7]: frame.add(Kit.block(Vector3(0.045, 0.045, 2.9), Vector3(side * 3.45, y, 34.0)))
+		for i in 3: dark.add(Kit.block(Vector3(0.8, 0.2 * (i + 1), 0.3), Vector3(side * 3.0, 0.1 * (i + 1), 32.1 - i * 0.3)))
+	# An unlit console and equipment cases, without another screen or light source.
+	for x in [-1.5, 1.5]:
+		dark.add(Kit.block(Vector3(1.8, 0.85, 0.9), Vector3(x, 1.025, 34.0)))
+		frame.add(Kit.block(Vector3(1.8, 0.08, 0.95), Vector3(x, 1.49, 34.0)))
 
 # Door, running figure and direction arrow, readable without a font.
 func _exit_texture() -> ImageTexture:
@@ -232,18 +363,43 @@ func _update_floor() -> void:
 	_floor.metallic_specular = 0.42 if wet else 0.18
 	_floor.normal_scale = 0.09 if wet else 0.22
 
-# Steel cladding with vertical ribs every 20 cm.
-func _cladding() -> StandardMaterial3D:
-	var img := Image.create(64, 4, false, Image.FORMAT_RGB8)
-	for x in 64:
-		var s := cos(x / 64.0 * TAU * 2.0)
-		for y in 4: img.set_pixel(x, y, Color(0.5 + 0.45 * s, 0.5, 0.75))
-	var m := Kit.mat(Color(0.19, 0.195, 0.2), 0.5, 0.55)
-	m.normal_enabled = true
-	m.normal_texture = ImageTexture.create_from_image(img)
-	m.uv1_triplanar = true
-	m.uv1_scale = Vector3(2.5, 2.5, 2.5)
+# Baked corrugation, panel seams and finish variation. Plain UVs need one sample per map.
+func _cladding() -> ShaderMaterial:
+	var albedo := Image.create(192, 128, true, Image.FORMAT_RGB8)
+	var normals := Image.create(192, 128, true, Image.FORMAT_RGB8)
+	for y in 128:
+		for x in 192:
+			var phase := float(x) / 192.0 * TAU * 6.0
+			var grain := sin(x * 12.9898 + y * 78.233) * 43758.5453
+			grain -= floorf(grain)
+			var wear := 0.83 + 0.10 * grain + 0.035 * sin(y * 0.11)
+			if x < 2 or y < 2: wear *= 0.65
+			albedo.set_pixel(x, y, Color(wear, wear, wear))
+			var n := Vector3(-cos(phase) * 0.42, 0, 1).normalized()
+			normals.set_pixel(x, y, Color(n.x * 0.5 + 0.5, 0.5, n.z * 0.5 + 0.5))
+	albedo.generate_mipmaps()
+	normals.generate_mipmaps()
+	var m := _hall_material(Color(0.18, 0.205, 0.20), 0.82, 0.04, 1.0)
+	m.set_shader_parameter("profiled", true)
+	m.set_shader_parameter("panel_color", ImageTexture.create_from_image(albedo))
+	m.set_shader_parameter("panel_normal", ImageTexture.create_from_image(normals))
 	return m
+
+func _hall_material(color: Color, rough: float, metal: float, gain: float) -> ShaderMaterial:
+	var material := Kit.shader("res://shaders/hall_surface.gdshader", {"surface_color": color, "surface_roughness": rough, "surface_metallic": metal, "return_gain": gain})
+	_hall_materials.append(material)
+	return material
+
+# Read the existing show output after main updates it. No new lights or changes to the rig.
+func _update_return(dt: float) -> void:
+	if not is_instance_valid(_hall_rig):
+		for sibling in get_parent().get_children():
+			if sibling is Rig: _hall_rig = sibling
+	if not is_instance_valid(_hall_rig): return
+	var level := minf(_hall_rig.room_level, 16.0)
+	_return_level = maxf(level, lerpf(_return_level, level, 1.0 - exp(-dt * 8.0))) if level > 0.01 else 0.0
+	var reflected := Vector3(_hall_rig.room_color.r, _hall_rig.room_color.g, _hall_rig.room_color.b) * _return_level * 0.12
+	for material in _hall_materials: material.set_shader_parameter("show_return", reflected)
 
 # Dimensions in metres; local +Z is the back of a unit (away from the DJ).
 # Official reference images and limits are recorded in docs/booth.md.
@@ -459,6 +615,7 @@ func _djm_a9(at: Vector3) -> void:
 	_gear_disc(p, 0.01, 0.003, Vector3(0.158, 0.085, -0.198), Kit.glowing(Color(0.08, 0.3, 1), 0.7))
 
 func _process(dt: float) -> void:
+	_update_return(dt)
 	if not is_instance_valid(_booth_rb):
 		for sibling in get_parent().get_children():
 			if sibling is Rekordbox: _booth_rb = sibling

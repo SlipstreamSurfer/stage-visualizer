@@ -1,30 +1,16 @@
-# The fast Hangar checks on every pull request and on main, and a guard that every commit of a pull request
-# carries a GitHub noreply address, so no private e-mail address reaches the public history.
+# A guard that every commit of a pull request carries a GitHub noreply address, so no private e-mail address
+# reaches the public history.
 name: Checks
 
 on:
   pull_request:
-  push:
-    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  test:
-    name: npm test
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - run: npm test
-
   noreply:
     name: Commit addresses
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -8,171 +8,107 @@
 </p>
 
 <p align="center">
-  <strong>Turn your music into a live 3D light show.</strong><br>
-  A festival hangar with 92 moving heads, haze, reflections and 2,600 dancing people — all inside your browser.
+  <strong>Stand behind the decks of a hangar show. The light follows what you play.</strong><br>
+  A full-width festival stage, 182 moving heads, haze and a crowd, lit live from your music.
 </p>
 
 <p align="center">
-  <a href="https://github.com/SlipstreamSurfer/stage-visualizer/releases/latest">Latest release</a> ·
   <a href="#start">Get started</a> ·
-  <a href="#connect-music">Connect music</a> ·
-  <a href="docs/macos-audio.md">macOS audio setup</a> ·
+  <a href="#music">Connect music</a> ·
+  <a href="#keys">Keys</a> ·
   <a href="LICENSE">MIT license</a>
 </p>
 
-![Hangar from front of house: white LED arches, red and white moving-light beams and a dancing crowd](docs/screenshots/hangar-overview.jpg)
+![The drop: the whole rig opens in white over the crowd](docs/screenshots/hangar-drop.jpg)
 
-<p align="center"><em>Hangar · the main stage of Stage Visualizer</em></p>
+SV is for someone who DJs at home and wants the real thing around them: one hall, one stage over the full width, one
+DJ booth with two CDJ-3000X players and a DJM-A9. Play from rekordbox or any music on your computer, and a lighting
+designer runs the show: a mood for every genre, one palette per track, looks held for a phrase, a build-up that
+lowers the trusses, and a drop that opens the whole rig.
 
-**Hangar** is the single public venue and the main stage for developing SV.
-Choose from **48 moods**: each kind of music plays the rig its own way, and a track keeps its colours from its first
-kick to its last. With Spotify on Linux the show knows when a new track starts; with rekordbox it reads the decks.
-Graphics presets from Light to Ultra, measured on your own computer, keep it smooth on anything from a laptop chip to
-a gaming card. WebGPU renders the show when available; WebGL provides a fallback.
-
-| Music | Light show | Your controls |
-| --- | --- | --- |
-| Spotify (Linux), rekordbox, local tracks, audio inputs and system audio | 92 moving heads, a row of 24 on the stage, washes, haze, floor reflections and a dancing crowd | A camera around the DJ, nine views, level faders and a switch for every light group |
-| Audio processed locally in your browser | Automatic scenes shaped by the incoming music | Fine tuning, saved presets and keyboard effects |
+From 0.50 SV is built with **Godot 4.7** and runs on Windows, macOS and Linux. The browser version lives on in the
+history of this repository, up to [v0.40.1](https://github.com/SlipstreamSurfer/stage-visualizer/tree/v0.40.1).
 
 <table>
   <tr>
-    <td width="50%"><a href="docs/screenshots/hangar-dj-booth.jpg"><img src="docs/screenshots/hangar-dj-booth.jpg" alt="Hangar from behind the DJ booth, looking across the decks and crowd" width="100%"></a></td>
-    <td width="50%"><a href="docs/screenshots/hangar-controls.jpg"><img src="docs/screenshots/hangar-controls.jpg" alt="The console along the bottom: sound, show, level faders, fixture switches and effects" width="100%"></a></td>
+    <td width="50%"><img src="docs/screenshots/hangar-booth.jpg" alt="Through the DJ's eyes: two CDJ-3000X players with live deck screens and a DJM-A9, the rig crossing over the crowd" width="100%"></td>
+    <td width="50%"><img src="docs/screenshots/hangar-break.jpg" alt="A break: the stage row stands as a curtain of light and the trusses come down" width="100%"></td>
   </tr>
   <tr>
-    <td align="center"><strong>From the DJ booth</strong><br>Decks, crowd and the lighting rig.</td>
-    <td align="center"><strong>One console</strong><br>Every control for the show, always in the same place.</td>
+    <td align="center"><strong>Through the DJ's eyes</strong><br>The decks show what rekordbox plays.</td>
+    <td align="center"><strong>The break</strong><br>A curtain of light; the trusses come down.</td>
   </tr>
   <tr>
-    <td width="50%"><a href="docs/screenshots/hangar-start.jpg"><img src="docs/screenshots/hangar-start.jpg" alt="The start screen with the Stage Visualizer logo, sound source, picture quality and Start the show" width="100%"></a></td>
-    <td width="50%"><a href="docs/screenshots/hangar-settings.jpg"><img src="docs/screenshots/hangar-settings.jpg" alt="Settings open on Lights: look presets, colour palette and a level per light group" width="100%"></a></td>
+    <td width="50%"><img src="docs/screenshots/setup.jpg" alt="First start: choose your source" width="100%"></td>
+    <td width="50%"><img src="docs/screenshots/pause-menu.jpg" alt="The pause menu over the running show" width="100%"></td>
   </tr>
   <tr>
-    <td align="center"><strong>Start the show</strong><br>Pick your sound and picture while the venue builds.</td>
-    <td align="center"><strong>Graphics as in a game</strong><br>A preset, or every setting on its own.</td>
+    <td align="center"><strong>First start</strong><br>Choose your source and see that it works.</td>
+    <td align="center"><strong>Escape</strong><br>A menu; the show goes on.</td>
   </tr>
 </table>
 
-*Actual screenshots of the Hangar demo in 0.40, at Ultra. Click the smaller images to view them at full size.*
-
 ## Start
 
-Install **Node.js 24 LTS or newer** and use a current Chrome or Edge browser.
-No build step or npm dependencies are needed; three.js is included.
+1. Install [Godot 4.7.2](https://godotengine.org/download/) (standard version).
+2. Clone this repository and start it:
 
 ```sh
-git clone https://github.com/SlipstreamSurfer/stage-visualizer.git
-cd stage-visualizer
-npm start
+./start.sh
 ```
 
-Open <http://127.0.0.1:8765/>. The show starts with a silent demonstration.
-On macOS you can also double-click `Start-SV-Mac.command` after installing Node.js.
+or open the folder in Godot and press Play. The first time, SV asks for your music source, checks that it works,
+sets the delay with a few taps and asks about flashing light. After that it opens on the start screen.
 
-## Connect music
+To make an app for Windows, macOS or Linux, see [builds](docs/builds.md).
 
-One choice says how you play, under **Sound** in the controls and on the start screen:
+## Music
 
-- **System audio:** whatever the computer plays (Spotify, a browser, any player).
-- **Rekordbox:** you play yourself. The sound comes in through a virtual cable or an audio interface; track, tempo
-  and phrase data from [rkbx_link](https://github.com/grufkork/rkbx_link) arrive on UDP 4460, which the server
-  receives by itself.
-- **Audio file:** select or drag in a local track, with pause, seek and restart, and optional Good/Wrong marks.
-- **Other input:** a microphone, audio interface or any virtual input.
+- **System audio**: whatever plays on your computer. On macOS route it through BlackHole, see [macOS](docs/mac.md).
+- **rekordbox**: through [rkbx_link](https://github.com/grufkork/rkbx_link), OSC on port 4460. SV then knows the
+  beats, the phrases and the decks, sees a drop coming and lands it on the first beat of the Chorus.
+- **Both**: rekordbox for the timing, the sound for the energy.
 
-**Settings → Sound** shows the steps for the chosen way on this computer, macOS, Windows or Linux, in the names those
-systems use (BlackHole 2ch and a Multi-Output Device on a Mac, VB-Cable or screen sharing with system audio on
-Windows, the PipeWire input on Linux), and ticks off what SV can see: the device found, sound coming in, rekordbox
-data arriving. The connect button takes the right device by itself. See also the
-[macOS audio setup guide](docs/macos-audio.md).
+## Keys
 
-## Control the show
+| Key | What |
+|---|---|
+| Esc | Pause menu (the show goes on) |
+| ? or F1 | All keys |
+| B | Blackout on / off |
+| Space | Strobe while held |
+| N | Blinders while held |
+| L | Next look |
+| G | Next genre (Shift: back) |
+| 1–5 | Camera: the DJ's eyes, over the shoulder, in the crowd, front of house, stage side |
+| T | The one is here (tap on the first beat) |
+| [ ] | Lights earlier / later |
+| S | Gentle strobes |
+| I | Info screen |
+| H | Hide everything |
+| P | Settings |
 
-The page opens on a start screen: choose the sound source and the picture quality while the venue builds behind
-it, then **Start the show**. That click connects the sound, so the browser does not ask for another one. A reload in
-the same tab goes straight back to the show.
+A DJ controller can work the same buttons: Pause menu → DJ controller → Learn, then press a pad.
 
-During the show one console along the bottom holds everything you use live, always in the same place and without
-scrolling: **Sound** (source, tempo, connect), **Track** (while a file plays), **Show** (mood, theme, pace of changes,
-camera and freeze), **Levels** (faders for light, glow, haze, hall light, beam width, sound sensitivity and camera
-speed), **Fixtures** (a switch for every light group and effect) and **Effects** (strobe, blinder, blackout, CO2,
-pyro, confetti). **Settings** (the gear, or **S**) holds what you set once: choreography, hall heads and truss
-formation, look presets, colour palette and a level per light group, graphics and extra smoke, screen content,
-presets, the audio input device and the keyboard shortcuts. Venue changes preserve the active audio stream. A newer
-tab with the show pauses the older ones.
+## Inside
 
-**Graphics** (Settings → Picture) work as in a game: **Light**, **Normal**, **High** and **Ultra**, and under them every
-setting on its own: resolution, sharpness on high-resolution screens, frame rate (30, 60 or the screen's), how many
-people are drawn and how finely, how many beams light the surfaces, glints, reflections, glow, haze clouds and the
-lights mirrored in the hall's sealed concrete floor. Every
-setting changes the picture at once. **Automatic** measures your computer the first time: from Light up, a preset at
-a time, as long as the picture keeps your screen's pace, and it keeps the best one (**Measure this computer again**
-after a new graphics card). When frames take too long the picture first draws fewer pixels and sharpens again when
-there is room; automatic steps down a preset only after that.
+- **Hall**: a hangar of 44 × 76 m, 15 m high, haze, a crowd of 3,000.
+- **Rig**: five hall trusses in a V on chain hoists, a truss at the back, towers behind the DJ, delay towers and
+  side towers: beams, spots with gobos, washes, strobe battens and blinders.
+- **Show**: SV's lighting director, with 36 genres from Beatport, 25 looks for the heads, 15 truss formations and
+  9 looks for the stage row ([how it works](docs/choreografie.md)).
+- **Graphics**: Light to Ultra, or Auto, measured on your own computer.
 
-Look presets include Standard, Calm, Cinematic and Energetic; moving a fader makes a custom look.
-
-**Time of day** (Settings → Show) puts the show at night, by day or at sunset; the **skylights** are covered unless
-you open them, and then sunlight falls through them into the haze; the **hangar door** can open onto the airfield
-outside, by day and by night. **Stage heads** sets up the stage's own moving heads: one long row of 24 (or 36) along
-the front of the deck, played as one instrument (a curtain, fans, a V over the booth, waves, sweeps, chases and a
-sunburst on the drop), or the three rows of before. **Show theme** combines wall images, light colours and arch/laser patterns:
-Industrial, Hypnotic or Melodic; the wall develops within the theme through quiet passages, builds and peaks.
-**Light choreography → Composed show** adds stage openings, slow hall waves and held light pictures, and the
-automatic camera shows each composition. The hall heads have 25 looks and change them within a track and for every new track, the hall trusses hold one of
-15 formations for minutes, in every mood; **Hall heads**, **Truss formation** and **Changes** pin them or set the pace. Select **Original show** to use the previous light patterns. See [Hangar themes and choreography](docs/hangar-themes.md).
-Every kind of music plays the rig its own way (the stage's row, the washes, the hall heads and trusses), while the
-colours can come from any of them; a track keeps its palette from its first kick to its last.
-
-**Camera → Around the DJ** (the default) keeps the camera over the DJ's shoulder and goes out with the music: the whole
-room on a drop, the DJ's own eyes in a build-up, now and then the crowd at the start of a phrase, and back. With
-rekordbox as the source (you play it yourself) it stays at the DJ. **Around the hall** cuts round the whole venue.
-
-Browser presets save your preferred settings. **Restore a balanced starting point** resets the show.
-
-Hold **Space** for strobe and **B** for blinders. **K** triggers confetti,
-**C** CO2 and **V** pyro where enabled. **H** hides the console, **S** opens the settings and **Esc** closes them; **F** toggles
-fullscreen; **1–9** select cameras and **0** selects automatic cameras.
-**W** lets you walk round yourself: W A S D to walk, the mouse to look (click the picture first), **E** and **Q** up
-and down, Shift to go faster, **L** for the work lights, **Esc** to stop; the walking panel copies a link to the spot
-you stand on. Settings → Picture can switch the people in the hall off for a lighter picture.
-Effects unavailable in a venue are marked. Releasing a hold or leaving the
-window releases held effects.
-
-Optional file-playback feedback is saved locally under `rec/feedback/` by the
-local server. Music is processed locally; feedback and presets are not uploaded
-to a remote service. Keep local music and feedback out of source control.
-
-## Optional OSC diagnostics
-
-`npm run rekordbox` enables a local OSC receiver on UDP 4460, with a diagnostic
-page at <http://127.0.0.1:8765/rekordbox.html>. A compatible external sender is
-required. This product does not install or modify DJ software. The diagnostics
-display track and timing data; the public show follows its audio input.
-See [OSC diagnostics](docs/rekordbox-connection.md).
-
-## Development
+## Record and replay
 
 ```sh
-npm test
-npm run listen -- track.mp3
-npm run check -- track.mp3
+./start.sh -- --record
+./start.sh -- --replay=local/sessions/NAME.jsonl
 ```
 
-`npm test` runs the fast Hangar and audio-engine checks. Use `npm run test:browser`
-for one real Hangar render, generated audio, camera controls and quality changes.
-`npm run test:audio` adds the longer listening and mix regressions.
-`npm run test:extended` runs the longer regression checks when audio, rendering
-or playback changes warrant them. Every browser check uses Hangar.
-
-Browser checks require Chrome, Edge or Chromium; `BROWSER_PATH` selects an
-executable. The Hangar WebGL check uses the native GPU on macOS, and on Linux
-when a GPU is available; set `SV_TEST_SOFTWARE=1` to explicitly use the much slower
-software renderer. Other platforms use the software renderer by default. Tests use generated audio and synthetic fixtures. Audio-analysis
-commands need ffmpeg. See [CONTRIBUTING.md](CONTRIBUTING.md).
+A session keeps the music's values for every frame and, when it can, a WAV copy. See [sessions](docs/sessions.md)
+and [automatic checks](docs/show-checks.md).
 
 ## License
 
-[MIT](LICENSE). Bundled three.js is also MIT-licensed; see
-[vendor/three/LICENSE](vendor/three/LICENSE).
+[MIT](LICENSE). Atkinson Hyperlegible is under the [SIL Open Font License](fonts/OFL.txt).

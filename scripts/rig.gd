@@ -12,10 +12,13 @@ extends Node3D
 # of them. The show sets every fixture's target, colour, level, gobo and zoom; update() moves and lights them.
 
 enum { BEAM, SPOT, WASH }
+# The three kinds, after real fixtures: a hybrid beam (as a Robe MegaPointe in beam mode, 1.8-21 degrees), a spot
+# (as a BMFL, 5-55) and a wash (as a MAC Aura, 10-60). angle: the core's half angle at zoom 1, in degrees (the show's
+# zoom multiplies it); light: the half angle of the light it throws on surfaces; len: how far its beam is drawn.
 const KINDS := [
-	{"angle": 1.6, "light": 2.6, "energy": 90.0, "len": 55.0, "speed": 7.0, "follow": 9.0, "r": 0.12, "body": 0.38, "lens": 0.085, "base": Vector3(0.36, 0.13, 0.3), "strength": 0.45, "sharp": 2.5},
-	{"angle": 4.0, "light": 5.5, "energy": 85.0, "len": 45.0, "speed": 3.5, "follow": 5.0, "r": 0.17, "body": 0.55, "lens": 0.12, "base": Vector3(0.48, 0.18, 0.38), "strength": 0.3, "sharp": 2.0},
-	{"angle": 14.0, "light": 17.0, "energy": 30.0, "len": 20.0, "speed": 3.0, "follow": 4.5, "r": 0.2, "body": 0.3, "lens": 0.18, "base": Vector3(0.45, 0.16, 0.36), "strength": 0.05, "sharp": 1.3},
+	{"angle": 2.6, "light": 2.9, "energy": 90.0, "len": 62.0, "speed": 7.0, "follow": 9.0, "r": 0.12, "body": 0.38, "lens": 0.085, "base": Vector3(0.36, 0.13, 0.3), "strength": 1.3, "halo": 2.2},
+	{"angle": 6.0, "light": 6.5, "energy": 85.0, "len": 50.0, "speed": 3.5, "follow": 5.0, "r": 0.17, "body": 0.55, "lens": 0.12, "base": Vector3(0.48, 0.18, 0.38), "strength": 0.7, "halo": 1.8},
+	{"angle": 15.0, "light": 18.0, "energy": 30.0, "len": 24.0, "speed": 3.0, "follow": 4.5, "r": 0.2, "body": 0.3, "lens": 0.18, "base": Vector3(0.45, 0.16, 0.36), "strength": 0.1, "halo": 1.4},
 ]
 const TRUSS_Z := [-20.0, -10.0, 0.0, 10.0, 20.0]
 const TRUSS_Y := [11.5, 10.4, 11.5, 10.4, 11.5]
@@ -82,6 +85,8 @@ var truss_rolls := PackedFloat32Array([0, 0, 0, 0, 0])     # a truss whose two h
 var _truss_drops := PackedFloat32Array([0, 0, 0, 0, 0])
 var _truss_speeds := PackedFloat32Array([0, 0, 0, 0, 0])
 var strobe := 0.0          # the hall's strobe light, 0..1 this frame
+var room_color := Color.WHITE   # the light of the show on the room itself: walls, floor, crowd and the haze
+var room_level := 0.0           # as SV in the browser: about 2 quiet, 5-10 a groove, 30 on a kick, 100 in a strobe flash
 var blinder := 0.0         # 0..1; the lamps glow and fade like tungsten
 var laser_level := 0.0
 var laser_color := Color(0.1, 1.0, 0.2)
@@ -236,7 +241,7 @@ func build() -> void:
 	for p in [Vector3(0, 9, Hall.BACK + 2), Vector3(0, 3, F - 0.5), Vector3(0, 10.5, -8), Vector3(0, 10, 22)]:
 		var o := OmniLight3D.new()
 		o.position = p
-		o.omni_range = 38
+		o.omni_range = 30
 		o.light_energy = 0.0
 		o.light_color = Color(0.92, 0.95, 1.0)
 		o.light_volumetric_fog_energy = 0.12
@@ -376,18 +381,18 @@ func _kind_batches(kind: int) -> Dictionary:
 	lens.radial_segments = 20
 	var cone := CylinderMesh.new()
 	cone.height = K.len
-	cone.bottom_radius = K.lens * 0.8
-	cone.top_radius = K.lens * 0.8 + tan(deg_to_rad(K.angle)) * K.len
+	cone.bottom_radius = K.lens * 0.8 * K.halo   # the mesh holds the core and its scattered halo
+	cone.top_radius = (K.lens * 0.8 + tan(deg_to_rad(K.angle)) * K.len) * K.halo
 	cone.radial_segments = 24
 	cone.rings = 1
 	cone.cap_top = false
 	cone.cap_bottom = false
-	var beam_mat := Kit.shader("res://shaders/beam.gdshader", {"beam_length": K.len, "strength": K.strength, "sharp": K.sharp})
+	var beam_mat := Kit.shader("res://shaders/beam.gdshader", {"beam_length": K.len, "strength": K.strength, "lens_radius": K.lens * 0.8, "spread": tan(deg_to_rad(K.angle)), "halo": K.halo})
 	return {
 		"base": _multimesh(base, n, _body),
 		"yoke": _multimesh(_yoke_mesh(K.r), n, _body),
 		"head": _multimesh(head, n, _body),
-		"lens": _multimesh(lens, n, Kit.shader("res://shaders/lens.gdshader", {"gain": 9.0}), true, false, false),
+		"lens": _multimesh(lens, n, Kit.shader("res://shaders/lens.gdshader", {"gain": 16.0}), true, false, false),
 		"beam": _multimesh(cone, n, beam_mat, true, true, false),
 	}
 
@@ -500,7 +505,7 @@ func update(dt: float, beat: float) -> void:
 			m.lens.set_instance_color(i, Color(c.r, c.g, c.b, 1.0))
 			m.beam.set_instance_color(i, Color(c.r, c.g, c.b, beam_strength if f.level > 0.003 else 0.0))
 			f.gobo_angle += f.spin * TAU * beat_dt
-			m.beam.set_instance_custom_data(i, Color(f.gobo, f.gobo_angle, 0, 0))
+			m.beam.set_instance_custom_data(i, Color(f.gobo, f.gobo_angle, z, 0))
 			var lit := f.surface and f.level > 0.01
 			f.light.visible = lit
 			if lit:
@@ -520,7 +525,7 @@ func update(dt: float, beat: float) -> void:
 		_batten_line.set_instance_custom_data(i, Color(b.strobe, b.chase, b.chase_amount, 0))
 	for o in _strobe_lights:
 		o.visible = strobe > 0.02
-		o.light_energy = 26.0 * strobe
+		o.light_energy = 16.0 * strobe
 	# tungsten: up fast, down slowly
 	_blinder_glow = maxf(blinder, _blinder_glow - dt * (1.5 if _blinder_glow > 0.3 else 0.6))
 	var g := Color(1.0, 0.5, 0.18) * _blinder_glow * _blinder_glow

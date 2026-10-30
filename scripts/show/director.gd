@@ -769,6 +769,9 @@ func _direct(dt: float) -> void:
 		rig.truss_targets[i] = want
 		rig.truss_rolls[i] = 0.0 if brk else L.truss_roll(_truss_look, i)
 
+	# the room itself: how much of all this lands on walls, floor and crowd, and in what colour
+	rig.room_color = col.lerp(Color.WHITE, maxf(flash, blind * 0.7))
+	rig.room_level = (1.5 + sig.energy * 7.0 + sig.kick * 26.0 + sig.build * 6.0 + sig.lift * 14.0 + flash * 100.0 + blind * 50.0) * master
 	hall_look = [head_name, truss_name, L.ROW_LOOKS[row_look][0]]
 	status = ("build-up" if sig.build > 0.45 else "break") if brk else SECTION_NAME.get(sec, sec) + " · " + head_name
 	_shown = [col, col2]

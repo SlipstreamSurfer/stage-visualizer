@@ -225,6 +225,20 @@ func _environment() -> void:
 	we.environment = env
 	add_child(we)
 
+# The show's light on the room (SV in the browser: hall light and fog colour from director.room): the hall's
+# surfaces take a little of the show's colour, the haze glows with it, a kick lifts both and a strobe flashes the room.
+var _room_level := 0.0
+func _room(dt: float) -> void:
+	if args.has("bright"): return
+	_room_level = maxf(rig.room_level, lerpf(_room_level, rig.room_level, 1.0 - exp(-dt * 8.0)))
+	var c := rig.room_color
+	env.ambient_light_color = c
+	# strobes and blinders light the room through their own lamps (Rig); here only the show's glow, capped
+	var level := minf(_room_level, 30.0)
+	env.ambient_light_energy = 0.02 + level * 0.0014
+	var glow := (0.004 + level * 0.0008) * float(show.mood.get("haze", 1.0))
+	env.volumetric_fog_emission = Color(c.r * glow, c.g * glow, c.b * glow)
+
 func _hud() -> void:
 	hud = Hud.new()
 	add_child(hud)
@@ -308,6 +322,7 @@ func _frame(dt: float, live: bool) -> void:
 		print("%.2fs beat %.2f · %s%s%s · %s countin %.1f" % [_clock, show.beat, show.section, " · DROP" if show.dropped else "", " · blackout" if show.blackout > 0.0 else "", show.phrase, show.countin])
 	var t2 := Time.get_ticks_usec()
 	rig.update(dt, show.beat)
+	_room(dt)
 	var t3 := Time.get_ticks_usec()
 	view.update(dt, show)
 	_frames += 1

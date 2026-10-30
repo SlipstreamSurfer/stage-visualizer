@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.54.0 — Downloads, built on GitHub
+
+- Every change is tested on GitHub: Godot 4.7.2 (checked against its official checksums) runs all checks
+  headless.
+- Every release builds the app for Windows, macOS (Universal) and Linux with Godot's official export templates,
+  tests it, and attaches the packages with their SHA-256 sums. See [builds](docs/builds.md) for how to open an
+  unsigned app on macOS and Windows.
+- README: pictures of the hangar, the booth and the drop as they are now.
+
 ## 0.53.0 — The hangar itself
 
 - An industrial hangar around the show, after festival halls such as Drumsheds and the Gashouder and the steel of

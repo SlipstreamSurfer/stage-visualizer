@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.55.0 — Rekordbox from another computer, good on every computer
+
+- Rekordbox can run on another computer: Settings → Rekordbox (or Source → Rekordbox connection…) shows the
+  address SV listens on, writes the lines for rkbx_link's config to copy or save, shows live what arrives, and
+  helps with the firewall on Linux, macOS and Windows. See [rekordbox](docs/rekordbox.md).
+- A new Low preset for weak and built-in graphics: a quarter of the pixels and a smaller crowd, but the beams and
+  the glow stay, because they are the show.
+- The presets are rebuilt from what each effect costs (`--costs` measures it on your own computer): shadows and
+  ambient occlusion are almost free and now start at Light and Normal. See [quality](docs/quality.md).
+- Automatic starts at Low and steps up while the frames keep up with the screen.
+
 ## 0.54.0 — Downloads, built on GitHub
 
 - Every change is tested on GitHub: Godot 4.7.2 (checked against its official checksums) runs all checks

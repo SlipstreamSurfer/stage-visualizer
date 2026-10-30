@@ -68,7 +68,8 @@ To make an app for Windows, macOS or Linux, see [builds](docs/builds.md).
 
 - **System audio**: whatever plays on your computer. On macOS route it through BlackHole, see [macOS](docs/mac.md).
 - **rekordbox**: through [rkbx_link](https://github.com/grufkork/rkbx_link), OSC on port 4460. SV then knows the
-  beats, the phrases and the decks, sees a drop coming and lands it on the first beat of the Chorus.
+  beats, the phrases and the decks, sees a drop coming and lands it on the first beat of the Chorus. rekordbox can
+  run on this computer or another one on your network: see [rekordbox](docs/rekordbox.md).
 - **Both**: rekordbox for the timing, the sound for the energy.
 
 ## Keys
@@ -100,7 +101,7 @@ A DJ controller can work the same buttons: Pause menu → DJ controller → Lear
   side towers: beams, spots with gobos, washes, strobe battens and blinders.
 - **Show**: SV's lighting director, with 36 genres from Beatport, 25 looks for the heads, 15 truss formations and
   9 looks for the stage row ([how it works](docs/choreografie.md)).
-- **Graphics**: Light to Ultra, or Auto, measured on your own computer.
+- **Graphics**: Low to Ultra, or Auto, measured on your own computer.
 
 ## Record and replay
 

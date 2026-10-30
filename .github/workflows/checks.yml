@@ -4,12 +4,15 @@ name: Checks
 
 on:
   pull_request:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   noreply:
+    if: github.event_name == 'pull_request'
     name: Commit addresses
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -32,3 +35,33 @@ jobs:
             exit 1
           fi
           echo "All commits use a noreply address."
+
+  tests:
+    name: Godot 4.7.2 tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      XDG_DATA_HOME: ${{ github.workspace }}/local/build-data
+      XDG_CONFIG_HOME: ${{ github.workspace }}/local/build-config
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: local/downloads
+          key: godot-4.7.2-editor-${{ runner.os }}-${{ hashFiles('tools/install_export_templates.py') }}
+      - name: Install verified standard editor
+        run: python3 tools/install_export_templates.py --editor-only
+      - name: Import and run every AGENTS.md check
+        run: tools/build.sh --test-only
+      - name: Keep import and test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: local/builds/logs/
+          if-no-files-found: ignore

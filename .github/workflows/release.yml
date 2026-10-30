@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Test, package and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      XDG_DATA_HOME: ${{ github.workspace }}/local/build-data
+      XDG_CONFIG_HOME: ${{ github.workspace }}/local/build-config
+      BUILD_VERSION: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: local/downloads
+          key: godot-4.7.2-release-${{ runner.os }}-${{ hashFiles('tools/install_export_templates.py') }}
+      - name: Install verified editor and official export templates
+        run: python3 tools/install_export_templates.py --editor
+      - name: Import, test, export and smoke-test Linux
+        run: tools/build.sh
+      - name: Publish packages to the tag's release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version=${RELEASE_TAG#v}
+          created=false
+          if ! gh release view "$RELEASE_TAG" --json tagName >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --draft --title "SV $version" --generate-notes
+            created=true
+          fi
+          gh release upload "$RELEASE_TAG" --clobber \
+            "local/builds/SV-$version-windows.zip" \
+            "local/builds/SV-$version-linux.tar.gz" \
+            "local/builds/SV-$version-macos.zip" \
+            local/builds/SHA256SUMS
+          if "$created"; then
+            gh release edit "$RELEASE_TAG" --draft=false
+          fi
+      - name: Keep build and test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-logs
+          path: local/builds/logs/
+          if-no-files-found: ignore

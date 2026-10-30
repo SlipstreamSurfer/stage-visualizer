@@ -9,7 +9,7 @@
 
 <p align="center">
   <strong>Stand behind the decks of a hangar show. The light follows what you play.</strong><br>
-  A full-width festival stage, 182 moving heads, haze and a crowd, lit live from your music.
+  A full-width festival stage in an industrial hangar, 182 moving heads, haze and a crowd of 3,000, lit live from your music.
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
   <a href="LICENSE">MIT license</a>
 </p>
 
-![The drop: the whole rig opens in white over the crowd](docs/screenshots/hangar-drop.jpg)
+![The hangar from the crowd: steel roof girders in the haze, beams crossing over raised hands](docs/screenshots/hangar-hall.jpg)
 
 SV is for someone who DJs at home and wants the real thing around them: one hall, one stage over the full width, one
 DJ booth with two CDJ-3000X players and a DJM-A9. Play from rekordbox or any music on your computer, and a lighting
@@ -31,12 +31,12 @@ history of this repository, up to [v0.40.1](https://github.com/SlipstreamSurfer/
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/hangar-booth.jpg" alt="Through the DJ's eyes: two CDJ-3000X players with live deck screens and a DJM-A9, the rig crossing over the crowd" width="100%"></td>
-    <td width="50%"><img src="docs/screenshots/hangar-break.jpg" alt="A break: the stage row stands as a curtain of light and the trusses come down" width="100%"></td>
+    <td width="50%"><img src="docs/screenshots/hangar-booth.jpg" alt="Through the DJ's eyes: two CDJ-3000X players and a DJM-A9, the stage row and the hall heads in front" width="100%"></td>
+    <td width="50%"><img src="docs/screenshots/hangar-drop.jpg" alt="The drop: the whole rig opens, blinders light the crowd" width="100%"></td>
   </tr>
   <tr>
     <td align="center"><strong>Through the DJ's eyes</strong><br>The decks show what rekordbox plays.</td>
-    <td align="center"><strong>The break</strong><br>A curtain of light; the trusses come down.</td>
+    <td align="center"><strong>The drop</strong><br>The whole rig opens; blinders light the crowd.</td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/setup.jpg" alt="First start: choose your source" width="100%"></td>
@@ -47,6 +47,8 @@ history of this repository, up to [v0.40.1](https://github.com/SlipstreamSurfer/
     <td align="center"><strong>Escape</strong><br>A menu; the show goes on.</td>
   </tr>
 </table>
+
+*Actual screenshots of 0.53 at Ultra.*
 
 ## Start
 
@@ -92,7 +94,8 @@ A DJ controller can work the same buttons: Pause menu → DJ controller → Lear
 
 ## Inside
 
-- **Hall**: a hangar of 44 × 76 m, 15 m high, haze, a crowd of 3,000.
+- **Hall**: an industrial hangar of 44 × 76 m, 15 m high: steel girders and columns, cladding, exits, haze, a
+  concrete floor that shines when wet, and a crowd of 3,000 that moves to the music.
 - **Rig**: five hall trusses in a V on chain hoists, a truss at the back, towers behind the DJ, delay towers and
   side towers: beams, spots with gobos, washes, strobe battens and blinders.
 - **Show**: SV's lighting director, with 36 genres from Beatport, 25 looks for the heads, 15 truss formations and

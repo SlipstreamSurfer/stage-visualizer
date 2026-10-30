@@ -55,20 +55,18 @@ input, het Multi-Output Device de output. Begin met 80 ms Audio delay en stel op
 
 Download de Apple Silicon-versie van [rkbx_link](https://github.com/grufkork/rkbx_link).
 Mac-ondersteuning is experimenteel; controleer daar of jouw exacte Rekordbox-versie wordt
-ondersteund. Stel in het meegeleverde `config` de juiste `keeper.rekordbox_version` en
-`keeper.decks` in. Zet `osc.enabled` op `true`, bestemming `osc.destination` op
-`127.0.0.1:4460`, en schakel phrase-berichten voor het masterdeck in
-(`osc.msg.master/phrase true`). Start Rekordbox met een geanalyseerde track en start daarna
-rkbx_link volgens zijn Mac-instructies.
+ondersteund. Open in SV **Settings → Rekordbox**, of kies **Rekordbox connection…** in Source.
+Kies **This computer** voor dezelfde Mac (`127.0.0.1`), of **Another computer**
+voor rekordbox op een ander apparaat. SV toont zijn netwerkadres en maakt de OSC-regels.
+Kopieer ze of sla ze op, en voeg ze samen met het bestaande `config` naast rkbx_link.
+Kies daarin zelf de juiste `keeper.rekordbox_version` en `keeper.decks`; start rkbx_link opnieuw.
+Zie [Rekordbox stap voor stap](rekordbox.md).
 
-Zet `osc.phrase_output_format` op `string`. Numerieke uitvoer heeft maar vijf families:
-1 Intro, 2 Verse/Up, 3 Chorus, 4 Bridge/Down, 5 Outro. SV herkent die families, maar kan
-bij 2 niet bepalen of het een Verse of een Up was. String-uitvoer bewaart bijvoorbeeld
-`Up 1` en geeft de show de volledige opbouwinformatie.
-
-Kies in SV **System audio + rekordbox** voor BlackHole plus exacte timing/frases, of
-**Rekordbox** voor alleen OSC; houd de poort op 4460. rkbx_link stuurt timing en metadata,
-geen audiostream. Gebruik op dezelfde Mac één SV-instantie per UDP-poort.
+SV vraagt string-uitvoer voor frases en schakelt timing en frases voor master en losse decks in.
+Kies **System audio + rekordbox** voor BlackHole plus timing/frases, of **Rekordbox** voor
+alleen OSC. rkbx_link stuurt geen audiostream. Laat inkomende verbindingen voor SV toe
+wanneer macOS dat vraagt; controleer anders **Systeeminstellingen → Netwerk → Firewall → Opties**.
+Gebruik op dezelfde Mac één SV-instantie per UDP-poort.
 
 ## Nog op de Mac controleren
 

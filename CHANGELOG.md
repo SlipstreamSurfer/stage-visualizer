@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.53.0 — The hangar itself
+
+- An industrial hangar around the show, after festival halls such as Drumsheds and the Gashouder and the steel of
+  single-storey industrial buildings: nine steel roof girders on I-section columns, Z purlins under a closed
+  profiled roof, end-bay wind bracing, ventilation trunks and cable trays. See [hall](docs/hall.md).
+- Walls of cladding on a concrete plinth, closed windows, doors and exits with their green signs.
+- Dark, real materials that only light up with the show: the roof and the columns read through the haze.
+- No extra cost: Light 3.1 → 2.9 ms, Normal and High unchanged.
+
 ## 0.52.0 — A real crowd
 
 - People instead of round figures: jaw, neck, shoulders, sleeves, hands, trousers and shoes, with height, build,

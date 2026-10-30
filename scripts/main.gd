@@ -339,14 +339,14 @@ func _frame(dt: float, live: bool) -> void:
 			print("cpu per frame: listen %.2f ms · show %.2f ms · rig %.2f ms" % [_prof[0] / _prof[3] / 1000.0, _prof[1] / _prof[3] / 1000.0, _prof[2] / _prof[3] / 1000.0])
 			_prof = [0, 0, 0, 0]
 	if not args.has("replay") and not (args.has("bench") or args.has("shot") or args.has("film") or args.has("nosteady")) and (calibration == null or calibration.done):
-		var sc := steady.sample(dt, DisplayServer.screen_get_refresh_rate())
+		var sc := steady.sample(dt, _pace())
 		if sc > 0.0:
 			var vp := get_viewport()
 			vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if sc < 0.999 else Viewport.SCALING_3D_MODE_BILINEAR
 			vp.scaling_3d_scale = sc
-			if args.has("profile"): print("steady: scale %d%%" % roundi(sc * 100.0))
+			if args.has("profile"): print("steady: scale %d%% (typical frame %.1f ms, may take %.1f ms)" % [roundi(sc * 100.0), steady.typical * 1000.0, 1000.0 / _pace()])
 	if calibration and not calibration.done:
-		var l := calibration.step(dt, DisplayServer.screen_get_refresh_rate())
+		var l := calibration.step(dt, _pace())
 		if l != level: _set_level(l)
 	if _collecting:
 		_bench_frames.append(dt)
@@ -497,6 +497,13 @@ func _back() -> void:
 func _on_camera(index: int) -> void:
 	crowd.dj_node.visible = view.shows_dj()
 	if _app and not session.replaying: _remember("camera", index)
+
+# The frames a second SV may show: the screen's rate, or the frame limit when that is lower (with a limit of 60 on a
+# 144 Hz screen, every frame takes 16.7 ms by design and is not slow).
+func _pace() -> float:
+	var screen := DisplayServer.screen_get_refresh_rate()
+	if screen <= 0.0: screen = 60.0
+	return minf(screen, float(Engine.max_fps)) if Engine.max_fps > 0 else screen
 
 func _remember(key: String, value: Variant) -> void:
 	if settings.remember(key, value) != OK: _say("Could not save settings", 5.0)

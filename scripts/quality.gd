@@ -55,28 +55,45 @@ class Calibration:
 # A steady picture, as SV in the browser has it (steady.js): when frames take longer than the screen allows, draw
 # fewer pixels (down to 40 %), and more again when there is room for three seconds, up to what the setting asks.
 # Most of a frame is pixels (beams, haze, glow), so a slightly softer picture keeps the pace where a full one stutters.
+# But only when it helps: when a step down does not make frames faster, the time goes elsewhere (the processor, or
+# a screen that paces slower than it says), so the step is undone and it waits half a minute before trying again.
 class Steady:
 	var top := 1.0
 	var scale := 1.0
+	var typical := 0.0
 	var _times: Array[float] = []
 	var _room := 0.0
+	var _before := 0.0     # the typical frame before the last step down, 0 when there was none
+	var _hold := 0.0       # seconds to wait before trying a step down again
 
 	func reset(preset_scale: float) -> void:
 		top = preset_scale
 		scale = preset_scale
 		_times.clear()
 		_room = 0.0
+		_before = 0.0
+		_hold = 0.0
 
 	# Returns a new scale when it should change, else -1.
 	func sample(dt: float, refresh: float) -> float:
+		_hold = maxf(0.0, _hold - dt)
 		_times.append(dt)
 		if _times.size() < 45: return -1.0
 		var sorted := _times.duplicate()
 		sorted.sort()
-		var typical: float = sorted[sorted.size() / 2]
+		typical = sorted[sorted.size() / 2]
 		_times.clear()
 		var frame := 1.0 / maxf(refresh, 30.0)
-		if typical > frame * 1.12 and scale > 0.4:
+		if _before > 0.0:
+			var helped := typical < _before * 0.93
+			_before = 0.0
+			if not helped:
+				_hold = 30.0
+				_room = 0.0
+				scale = minf(top, scale + 0.06)
+				return scale
+		if typical > frame * 1.12 and scale > 0.4 and _hold <= 0.0:
+			_before = typical
 			scale = maxf(0.4, scale - 0.06)
 			_room = 0.0
 			return scale

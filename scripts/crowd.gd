@@ -2,7 +2,7 @@ class_name Crowd
 extends Node3D
 # The crowd: up to 3,000 people from the barrier to the back, densest at the front, all facing the stage.
 # And the DJ, shown only when the camera is over the DJ's shoulder; from the DJ's own eyes, the DJ is you.
-# One mesh, drawn as a MultiMesh; the shader moves them (person.gdshader).
+# One indexed surface and MultiMesh draw; all movement stays in person.gdshader.
 
 var mm: MultiMesh
 var dj: MultiMesh
@@ -18,12 +18,24 @@ func build(count: int) -> void:
 	mm.instance_count = count
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
+	var occupied := {}
 	var placed := 0
 	while placed < count:
 		var z := rng.randf_range(Hall.BARRIER + 0.45, 30.0)
 		var x := rng.randf_range(-20.6, 20.6)
 		if not _clear_of_towers(x, z): continue
 		if rng.randf() > exp(-(z - Hall.BARRIER) / 30.0): continue   # fewer further back
+		# Leave shoulder room, so heads and torsos do not merge into the same silhouette.
+		var cell := Vector2i(floori(x / 0.6), floori(z / 0.6))
+		var pos := Vector2(x, z)
+		var clear := true
+		for dx in range(-1, 2):
+			for dz in range(-1, 2):
+				for other: Vector2 in occupied.get(cell + Vector2i(dx, dz), []):
+					if pos.distance_squared_to(other) < 0.58 * 0.58: clear = false
+		if not clear: continue
+		if not occupied.has(cell): occupied[cell] = []
+		occupied[cell].append(pos)
 		var size := Vector3(rng.randf_range(0.86, 1.18), rng.randf_range(0.89, 1.12), rng.randf_range(0.9, 1.15))
 		var t := Transform3D(Basis(Vector3.UP, PI + rng.randf_range(-0.65, 0.65)).scaled(size), Vector3(x, 0, z))
 		mm.set_instance_transform(placed, t)
@@ -34,7 +46,7 @@ func build(count: int) -> void:
 	var mi := MultiMeshInstance3D.new()
 	mi.multimesh = mm
 	mi.material_override = mat
-	mi.extra_cull_margin = 0.6
+	mi.extra_cull_margin = 1.0
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
 	# the DJ, behind the decks, facing the crowd
@@ -64,79 +76,79 @@ static func _clear_of_towers(x: float, z: float) -> bool:
 func shown(n: int) -> void:
 	mm.visible_instance_count = mini(n, mm.instance_count)
 
-# A single surface: tapered clothes, shoes, neck, head, hair and jointed arms.
-# Colour: r = upper/lower arm, g = side, b = clothing region (0.35 phone, 0.625 screen).
+# One indexed surface for every person, including clothes, hands and phone.
+# Colour: r = arm joint, g = side, b = material (0.35 phone, 0.625 screen).
 static func person_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var parts := []
 	for side in [-1.0, 1.0]:
-		parts.append([_capsule(0.095, 0.83), Transform3D(Basis.IDENTITY, Vector3(side * 0.105, 0.49, 0)), Color(0, 0, 0.25)])
-		parts.append([_sphere(0.1), Transform3D(Basis.IDENTITY.scaled(Vector3(0.95, 0.65, 1.55)), Vector3(side * 0.105, 0.075, 0.05)), Color(0, 0, 0.75)])
-	parts.append([_torso(), Transform3D.IDENTITY, Color(0, 0, 0)])
-	parts.append([_capsule(0.065, 0.16), Transform3D(Basis.IDENTITY, Vector3(0, 1.47, 0)), Color(0, 0, 1)])
-	parts.append([_sphere(0.115), Transform3D(Basis.IDENTITY.scaled(Vector3(0.94, 1.1, 0.95)), Vector3(0, 1.62, 0)), Color(0, 0, 1)])
-	parts.append([_sphere(0.116), Transform3D(Basis.IDENTITY.scaled(Vector3(1.0, 0.7, 1.0)), Vector3(0, 1.69, -0.015)), Color(0, 0, 0.5)])
+		parts.append([_loft([Vector3(0.065, 0.12, 0.065), Vector3(0.083, 0.48, 0.085), Vector3(0.105, 0.87, 0.105)]), Vector3(side * 0.108, 0, 0), Color(0, 0, 0.25)])
+		parts.append([_loft([Vector3(0.075, 0.025, 0.135), Vector3(0.078, 0.09, 0.14), Vector3(0.06, 0.14, 0.08)]), Vector3(side * 0.108, 0, 0.035), Color(0, 0, 0.75)])
+	parts.append([_loft([Vector3(0.18, 0.84, 0.115), Vector3(0.185, 1.04, 0.12), Vector3(0.245, 1.36, 0.125), Vector3(0.205, 1.40, 0.105), Vector3(0.085, 1.46, 0.075)]), Vector3.ZERO, Color(0, 0, 0)])
+	parts.append([_loft([Vector3(0.06, 1.43, 0.06), Vector3(0.058, 1.54, 0.058)]), Vector3.ZERO, Color(0, 0, 1)])
+	# Jaw, temples and crown, rather than a ball on the shoulders. Local +Z faces the stage.
+	parts.append([_loft([Vector3(0.055, 1.50, 0.065), Vector3(0.09, 1.54, 0.085), Vector3(0.108, 1.65, 0.10), Vector3(0.08, 1.73, 0.075), Vector3(0.025, 1.755, 0.025)]), Vector3.ZERO, Color(0, 0, 1)])
+	parts.append([_loft([Vector3(0.109, 1.665, 0.101), Vector3(0.085, 1.735, 0.08), Vector3(0.025, 1.765, 0.025)]), Vector3(0, 0, -0.008), Color(0, 0, 0.5)])
+	parts.append([_loft([Vector3(0.023, 1.58, 0.015), Vector3(0.018, 1.62, 0.035), Vector3(0.012, 1.65, 0.008)], 4), Vector3(0, 0, 0.09), Color(0, 0, 1)])
 	for side in [-1.0, 1.0]:
 		var g := 0.0 if side < 0.0 else 1.0
-		parts.append([_capsule(0.073, 0.36), Transform3D(Basis(Vector3.BACK, side * 0.1), Vector3(side * 0.255, 1.27, 0)), Color(1, g, 0)])
-		parts.append([_capsule(0.059, 0.31), Transform3D(Basis.IDENTITY, Vector3(side * 0.275, 0.99, 0)), Color(0.5, g, 1)])
-		parts.append([_sphere(0.064), Transform3D(Basis.IDENTITY, Vector3(side * 0.275, 0.82, 0)), Color(0.5, g, 1)])
-	# The phone follows the right wrist through the same elbow/shoulder transforms.
-	# The shader collapses it for the other 96%, keeping one opaque surface/draw.
+		parts.append([_loft([Vector3(0.063, 1.12, 0.063), Vector3(0.079, 1.30, 0.08), Vector3(0.075, 1.39, 0.075)], 6), Vector3(side * 0.255, 0, 0), Color(1, g, 0)])
+		parts.append([_loft([Vector3(0.04, 0.85, 0.04), Vector3(0.058, 1.06, 0.06), Vector3(0.063, 1.12, 0.063)], 6), Vector3(side * 0.255, 0, 0), Color(0.5, g, 1)])
+		parts.append([_loft([Vector3(0.034, 0.77, 0.025), Vector3(0.047, 0.81, 0.036), Vector3(0.04, 0.87, 0.03)], 6), Vector3(side * 0.255, 0, 0), Color(0.5, g, 1)])
 	var phone := BoxMesh.new()
-	phone.size = Vector3(0.085, 0.16, 0.014)
-	parts.append([phone, Transform3D(Basis.IDENTITY, Vector3(0.275, 0.735, 0.0)), Color(0.5, 1, 0.35)])
-	var screen := BoxMesh.new()
-	screen.size = Vector3(0.071, 0.133, 0.002)
-	parts.append([screen, Transform3D(Basis.IDENTITY, Vector3(0.275, 0.735, -0.008)), Color(0.5, 1, 0.625)])
+	phone.size = Vector3(0.075, 0.145, 0.012)
+	parts.append([phone, Vector3(0.255, 0.745, 0), Color(0.5, 1, 0.35)])
+	var screen := QuadMesh.new()
+	screen.size = Vector2(0.063, 0.125)
+	# A single front-facing screen on the back of the hand, visible from the crowd.
+	screen.orientation = PlaneMesh.FACE_Z
+	parts.append([screen, Vector3(0.255, 0.745, -0.007), Color(0.5, 1, 0.625)])
 	for part in parts:
 		var arrays: Array = part[0].get_mesh_arrays() if part[0] is PrimitiveMesh else part[0].surface_get_arrays(0)
-		var t: Transform3D = part[1]
-		var nb := t.basis.inverse().transposed()
 		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		var norms: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-		var idx := PackedInt32Array()
-		if arrays[Mesh.ARRAY_INDEX] != null: idx = arrays[Mesh.ARRAY_INDEX]
-		if idx.is_empty():
-			for i in verts.size(): idx.append(i)
+		var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
 		for i in idx:
 			st.set_color(part[2])
-			st.set_normal((nb * norms[i]).normalized())
-			st.add_vertex(t * verts[i])
+			# QuadMesh faces +Z by default; the phone screen faces the audience (+world Z).
+			var v := verts[i]
+			var n := norms[i]
+			if part[0] == screen:
+				v.x = -v.x
+				v.z = -v.z
+				n.z = -n.z
+			st.set_normal(n)
+			st.add_vertex(v + part[1])
 	st.index()
 	return st.commit()
 
-static func _torso() -> ArrayMesh:
+# Elliptical rings with flat end caps: fewer triangles than capsules, and a clothed outline.
+static func _loft(rings: Array, sides := 8) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rings := [Vector3(0.18, 0.85, 0.115), Vector3(0.20, 1.08, 0.13), Vector3(0.23, 1.35, 0.125), Vector3(0.15, 1.45, 0.09)]
 	for j in range(rings.size() - 1):
-		for i in 8:
-			var a := i * TAU / 8.0
-			var b := (i + 1) * TAU / 8.0
-			var lower: Vector3 = rings[j]
-			var upper: Vector3 = rings[j + 1]
+		var lower: Vector3 = rings[j]
+		var upper: Vector3 = rings[j + 1]
+		for i in sides:
+			var a := (i + 0.5) * TAU / sides
+			var b := (i + 1.5) * TAU / sides
 			var v0 := Vector3(cos(a) * lower.x, lower.y, sin(a) * lower.z)
 			var v1 := Vector3(cos(a) * upper.x, upper.y, sin(a) * upper.z)
 			var v2 := Vector3(cos(b) * upper.x, upper.y, sin(b) * upper.z)
 			var v3 := Vector3(cos(b) * lower.x, lower.y, sin(b) * lower.z)
 			for v in [v0, v2, v1, v0, v3, v2]: st.add_vertex(v)
 	st.generate_normals()
+	# Keep the soles, collar and cuffs flat, without rounding their side normals.
+	for end in [0, rings.size() - 1]:
+		var ring: Vector3 = rings[end]
+		for i in sides:
+			var a := (i + 0.5) * TAU / sides
+			var b := (i + 1.5) * TAU / sides
+			var v0 := Vector3(cos(a) * ring.x, ring.y, sin(a) * ring.z)
+			var v1 := Vector3(cos(b) * ring.x, ring.y, sin(b) * ring.z)
+			for v in [Vector3(0, ring.y, 0), v1 if end == 0 else v0, v0 if end == 0 else v1]:
+				st.set_normal(Vector3.DOWN if end == 0 else Vector3.UP)
+				st.add_vertex(v)
+	st.index()
 	return st.commit()
-
-static func _capsule(r: float, h: float) -> CapsuleMesh:
-	var c := CapsuleMesh.new()
-	c.radius = r
-	c.height = h
-	c.radial_segments = 8
-	c.rings = 2
-	return c
-
-static func _sphere(r: float) -> SphereMesh:
-	var s := SphereMesh.new()
-	s.radius = r
-	s.height = r * 2
-	s.radial_segments = 10
-	s.rings = 6
-	return s

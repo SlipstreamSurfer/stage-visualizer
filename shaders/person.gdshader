@@ -1,5 +1,5 @@
-// One surface and material for the crowd. Colour: r = arm joint, g = side, b = body region.
-// INSTANCE_CUSTOM: x = timing/build, y = movement, z = hands threshold, w = appearance.
+// One opaque surface for all people. Colour: r = joint, g = side, b = material.
+// INSTANCE_CUSTOM: x = timing, y = energy, z = hands threshold, w = appearance.
 shader_type spatial;
 
 global uniform float sv_beat;
@@ -8,66 +8,92 @@ global uniform float sv_hands;
 global uniform float sv_phones;
 varying vec3 tint;
 varying float screen_light;
+varying float skin_part;
 
 void vertex() {
 	vec4 c = INSTANCE_CUSTOM;
 	float side = COLOR.g * 2.0 - 1.0;
-	float build = mix(0.88, 1.12, fract(c.x * 13.71));
 	float region = COLOR.b;
-	bool screen_part = region > 0.6 && region < 0.65;
-	bool phone_part = (region > 0.3 && region < 0.4) || screen_part;
-	// One in 25 in every quality level. c.z > 1 identifies the DJ, who has no phone.
-	float owns_phone = (INSTANCE_ID % 25 == 0 && c.z < 1.0) ? 1.0 : 0.0;
-	float phone_up = owns_phone * smoothstep(0.08 + c.x * 0.15, 0.75 + c.x * 0.15, clamp(sv_phones, 0.0, 1.0));
-	if (phone_part) {
-		vec3 wrist = vec3(0.275, 0.82, 0.0);
-		VERTEX = wrist + (VERTEX - wrist) * phone_up;
-	}
-	screen_light = (screen_part ? 1.0 : 0.0) * phone_up * (1.6 + 0.4 * sv_energy);
-	bool hair_part = region > 0.4 && region < 0.6;
-	if (hair_part) {
-		float hair_size = mix(0.15, 1.3, fract(c.w * 17.13));
-		VERTEX = vec3(0.0, 1.65, 0.0) + (VERTEX - vec3(0.0, 1.65, 0.0)) * hair_size;
-	}
-	float ph = sv_beat + c.x * 0.23;
-	float up = smoothstep(c.z, c.z + 0.25, sv_hands);
 	float arm = step(0.1, COLOR.r);
 	float lower_arm = arm * (1.0 - step(0.75, COLOR.r));
-	// Different elbows and shoulders, with one hand often lower than the other.
+	bool screen_part = region > 0.6 && region < 0.65;
+	bool phone_part = (region > 0.3 && region < 0.4) || screen_part;
+	bool hair_part = region > 0.4 && region < 0.6;
+	float head = (VERTEX.y > 1.49 && arm < 0.5) ? 1.0 : 0.0;
+	float ph = sv_beat + c.x * 0.18;
+	float pulse = sin(ph * 6.283185);
+	float energy = clamp(sv_energy, 0.0, 1.0) * c.y;
+	// Some people watch, others film. The DJ (z > 1) keeps both hands at the decks.
+	float owns_phone = (INSTANCE_ID % 13 == 0 && c.z < 1.0) ? 1.0 : 0.0;
+	float phone_up = owns_phone * smoothstep(0.12 + c.x * 0.2, 0.7 + c.x * 0.2, sv_phones);
+	if (phone_part) {
+		vec3 wrist = vec3(0.255, 0.81, 0.0);
+		VERTEX = wrist + (VERTEX - wrist) * phone_up;
+	}
+	screen_light = (screen_part ? 1.0 : 0.0) * phone_up;
+	skin_part = region > 0.9 ? 1.0 : 0.0;
+	if (hair_part) {
+		// Cropped hair through to a fuller crown; the skull stays intact underneath.
+		float hair_height = mix(0.4, 1.5, fract(c.w * 17.13));
+		VERTEX.y = 1.665 + (VERTEX.y - 1.665) * hair_height;
+		NORMAL.y /= hair_height;
+	}
+	float nod = (0.035 + energy * 0.16) * pulse;
+	vec2 neck = vec2(1.49, 0.0);
+	vec2 rel_head = VERTEX.yz - neck;
+	VERTEX.yz = mix(VERTEX.yz, neck + mat2(vec2(cos(nod), sin(nod)), vec2(-sin(nod), cos(nod))) * rel_head, head);
+	NORMAL.yz = mix(NORMAL.yz, mat2(vec2(cos(nod), sin(nod)), vec2(-sin(nod), cos(nod))) * NORMAL.yz, head);
+	float up = smoothstep(c.z, c.z + 0.28, sv_hands);
 	float phone_arm = phone_up * step(0.5, COLOR.g);
-	float bend = mix((0.15 + 0.55 * fract(c.x * 19.4 + side)) + up * 0.65, 0.2, phone_arm);
+	float bend = mix(0.18 + 0.65 * fract(c.x * 19.4 + side * 0.31) + up * 0.5, 0.12, phone_arm);
 	vec2 elbow = vec2(1.12, 0.0);
-	vec2 forearm = VERTEX.yz - elbow;
-	vec2 folded = elbow + vec2(forearm.x * cos(bend) + forearm.y * sin(bend), -forearm.x * sin(bend) + forearm.y * cos(bend));
-	VERTEX.yz = mix(VERTEX.yz, folded, lower_arm);
-	NORMAL.yz = mix(NORMAL.yz, vec2(NORMAL.y * cos(bend) + NORMAL.z * sin(bend), -NORMAL.y * sin(bend) + NORMAL.z * cos(bend)), lower_arm);
-	float a = side * (0.06 + up * mix(1.9, 2.75, fract(c.w * 11.3 + side * 0.37)) + c.y * 0.12 * sin(ph * 3.14159 + side));
-	a = mix(a, 2.9, phone_arm);
-	vec2 shoulder = vec2(0.23 * side, 1.43);
-	vec2 rel = VERTEX.xy - shoulder;
-	vec2 turned = shoulder + vec2(rel.x * cos(a) - rel.y * sin(a), rel.x * sin(a) + rel.y * cos(a));
-	VERTEX.xy = mix(VERTEX.xy, turned, arm);
-	NORMAL.xy = mix(NORMAL.xy, vec2(NORMAL.x * cos(a) - NORMAL.y * sin(a), NORMAL.x * sin(a) + NORMAL.y * cos(a)), arm);
-	VERTEX.x *= build;
-	NORMAL.x /= build;
-	float bounce = (0.5 - 0.5 * cos(6.28318 * ph)) * (0.012 + 0.055 * sv_energy) * c.y;
-	VERTEX.y -= bounce * smoothstep(0.15, 0.95, VERTEX.y);
-	float sway = sin(sv_beat * 1.5708 + c.x * 40.0) * (0.012 + 0.022 * c.y);
+	mat2 fold = mat2(vec2(cos(bend), -sin(bend)), vec2(sin(bend), cos(bend)));
+	VERTEX.yz = mix(VERTEX.yz, elbow + fold * (VERTEX.yz - elbow), lower_arm);
+	NORMAL.yz = mix(NORMAL.yz, fold * NORMAL.yz, lower_arm);
+	float a = side * (0.07 + up * mix(2.05, 2.8, fract(c.w * 11.3 + side * 0.37)) + energy * 0.11 * sin(ph * 3.141593 + side));
+	a = mix(a, 2.95, phone_arm);
+	vec2 shoulder = vec2(0.23 * side, 1.40);
+	mat2 lift = mat2(vec2(cos(a), sin(a)), vec2(-sin(a), cos(a)));
+	VERTEX.xy = mix(VERTEX.xy, shoulder + lift * (VERTEX.xy - shoulder), arm);
+	NORMAL.xy = mix(NORMAL.xy, lift * NORMAL.xy, arm);
+	// Independent shoulder width, depth and head proportions, on top of instance height.
+	float build = mix(0.82, 1.20, fract(c.w * 13.71));
+	float width = mix(build, mix(0.92, 1.10, fract(c.x * 9.7)), head);
+	float depth = mix(0.82, 1.22, fract(c.w * 5.31));
+	VERTEX.x *= width;
+	VERTEX.z *= depth;
+	NORMAL.x /= width;
+	NORMAL.z /= depth;
+	// A knee dip on each beat, then airborne on energetic drops; some jump every other beat.
+	float dip = (0.5 - 0.5 * cos(ph * 6.283185)) * (0.01 + 0.045 * energy);
+	float excitement = max(sv_energy, sv_hands * smoothstep(0.25, 0.5, sv_energy));
+	float jumping = smoothstep(0.72, 0.96, excitement) * smoothstep(0.28, 0.75, c.y) * (1.0 - phone_up) * step(c.z, 1.0);
+	float jump_phase = ph * (fract(c.w * 8.3) > 0.55 ? 0.5 : 1.0);
+	float flight = max(0.0, sin(jump_phase * 6.283185));
+	float jump = flight * flight * (0.12 + c.y * 0.20) * jumping;
+	VERTEX.y -= dip * smoothstep(0.1, 0.95, VERTEX.y);
+	VERTEX.y += jump;
+	float sway = sin(sv_beat * 1.570796 + c.x * 40.0) * (0.009 + 0.022 * c.y);
+	float forward_sway = sin(sv_beat * 0.785398 + c.w * 30.0) * 0.018 * c.y;
 	VERTEX.x += sway * VERTEX.y;
-	VERTEX.z += sin(sv_beat * 0.7854 + c.w * 30.0) * 0.02 * c.y * VERTEX.y;
-	NORMAL.y -= sway * NORMAL.x;
+	VERTEX.z += forward_sway * VERTEX.y;
+	NORMAL.y -= sway * NORMAL.x + forward_sway * NORMAL.z;
 	NORMAL = normalize(NORMAL);
 	float k = fract(c.w * 7.31);
-	vec3 skin = mix(vec3(0.66, 0.47, 0.36), vec3(0.14, 0.085, 0.055), fract(c.w * 3.17));
-	vec3 cloth = k < 0.48 ? vec3(0.025, 0.028, 0.032) : k < 0.65 ? vec3(0.09, 0.11, 0.13) : k < 0.79 ? vec3(0.12, 0.055, 0.045) : k < 0.9 ? vec3(0.08, 0.12, 0.09) : vec3(0.36, 0.33, 0.28);
-	vec3 pants = mix(vec3(0.02, 0.024, 0.03), vec3(0.075, 0.095, 0.13), fract(c.x * 5.3));
-	vec3 hair = mix(vec3(0.018, 0.012, 0.008), vec3(0.27, 0.17, 0.075), fract(c.w * 23.8));
-	vec3 shoes = mix(vec3(0.018), vec3(0.35, 0.34, 0.32), step(0.8, fract(c.w * 12.9)));
-	tint = screen_part ? vec3(0.55, 0.75, 1.0) : phone_part ? vec3(0.012, 0.014, 0.018) : region > 0.9 ? skin : region > 0.65 ? shoes : hair_part ? hair : region > 0.15 ? pants : cloth;
+	vec3 skin = mix(vec3(0.43, 0.27, 0.18), vec3(0.085, 0.045, 0.028), fract(c.w * 3.17));
+	vec3 cloth = k < 0.45 ? vec3(0.018, 0.022, 0.028) : k < 0.65 ? vec3(0.045, 0.065, 0.085) : k < 0.80 ? vec3(0.085, 0.03, 0.025) : k < 0.93 ? vec3(0.035, 0.065, 0.045) : vec3(0.13, 0.115, 0.09);
+	vec3 pants = mix(vec3(0.012, 0.016, 0.022), vec3(0.045, 0.06, 0.08), fract(c.x * 5.3));
+	vec3 hair = mix(vec3(0.009, 0.006, 0.004), vec3(0.10, 0.055, 0.02), fract(c.w * 23.8));
+	vec3 shoes = mix(vec3(0.012), vec3(0.16, 0.15, 0.14), step(0.85, fract(c.w * 12.9)));
+	tint = screen_part ? vec3(0.42, 0.62, 0.85) : phone_part ? vec3(0.008) : skin_part > 0.5 ? skin : region > 0.65 ? shoes : hair_part ? hair : region > 0.15 ? pants : cloth;
 }
 
 void fragment() {
 	ALBEDO = tint;
-	ROUGHNESS = 0.9;
-	EMISSION = tint * screen_light;
+	ROUGHNESS = mix(0.94, 0.67, skin_part);
+	SPECULAR = 0.25;
+	// Lit cloth edges follow the actual rig, including its dark side. Only screens emit.
+	RIM = 0.18;
+	RIM_TINT = 0.7;
+	EMISSION = tint * screen_light * 1.5;
 }

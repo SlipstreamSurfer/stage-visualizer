@@ -17,6 +17,8 @@ const BARRIER := -24.0
 
 @export_enum("Two decks:2", "Festival — four decks:4") var booth_decks := 2
 var screens: Array[ShaderMaterial] = []
+var _floor: StandardMaterial3D
+var _wet_floor := false
 
 func build() -> void:
 	var black := Kit.mat(Color(0.018, 0.018, 0.02), 0.8)
@@ -184,31 +186,51 @@ func _exit_texture() -> ImageTexture:
 		image.fill_rect(Rect2i(103 + i, 20 + i, 3, 25 - i * 2), Color(0.8, 0.95, 0.85))
 	return ImageTexture.create_from_image(image)
 
-# Polished concrete: grey, worn in places, enough shine to show the beams in it.
+# Matte concrete on Light/Normal; a thin wet sheen when the existing SSR pass is enabled.
 func _concrete() -> StandardMaterial3D:
-	var m := Kit.mat(Color(0.3, 0.295, 0.29), 0.38)
+	var m := Kit.mat(Color(0.23, 0.225, 0.215), 0.94)
+	m.metallic_specular = 0.18
 	var n := FastNoiseLite.new()
-	n.frequency = 0.015
-	n.fractal_octaves = 5
+	n.seed = 52
+	n.frequency = 0.025
+	n.fractal_octaves = 3
 	var rough := NoiseTexture2D.new()
 	rough.noise = n
 	rough.seamless = true
-	rough.width = 512
-	rough.height = 512
+	rough.width = 256
+	rough.height = 256
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(0.72, 0.72, 0.72))
+	ramp.set_color(1, Color.WHITE)
+	rough.color_ramp = ramp
 	m.roughness_texture = rough
 	var bumps := NoiseTexture2D.new()
 	var nb := FastNoiseLite.new()
-	nb.frequency = 0.08
+	nb.seed = 53
+	nb.frequency = 0.12
+	nb.fractal_octaves = 2
 	bumps.noise = nb
+	bumps.width = 256
+	bumps.height = 256
 	bumps.seamless = true
 	bumps.as_normal_map = true
-	bumps.bump_strength = 1.5
+	bumps.bump_strength = 0.7
 	m.normal_enabled = true
 	m.normal_texture = bumps
-	m.normal_scale = 0.2
-	m.uv1_triplanar = true
-	m.uv1_scale = Vector3(0.1, 0.1, 0.1)
+	m.normal_scale = 0.22
+	# The plane already has UVs. Avoid three texture samples per map for a flat floor.
+	m.uv1_scale = Vector3(W / 4.0, D / 4.0, 1)
+	_floor = m
 	return m
+
+func _update_floor() -> void:
+	var environment := get_world_3d().environment
+	var wet := environment != null and environment.ssr_enabled
+	if wet == _wet_floor or _floor == null: return
+	_wet_floor = wet
+	_floor.roughness = 0.36 if wet else 0.94
+	_floor.metallic_specular = 0.42 if wet else 0.18
+	_floor.normal_scale = 0.09 if wet else 0.22
 
 # Steel cladding with vertical ribs every 20 cm.
 func _cladding() -> StandardMaterial3D:
@@ -444,6 +466,7 @@ func _process(dt: float) -> void:
 	_booth_tick += dt
 	if _booth_tick < 0.05: return
 	_booth_tick = 0.0
+	_update_floor()
 	var linked := is_instance_valid(_booth_rb) and _booth_rb.live()
 	for face in _deck_faces:
 		var d: String = face.deck

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.51.0 — Wider beams, real haze
+
+- Beams, spots and washes take the zoom of real fixtures (Robe MegaPointe, BMFL, Martin MAC Aura XB): beams were
+  as thin as a Sharpy; now about 3.5–10° with the show's zoom. See [beams](docs/beams.md).
+- A beam shows as in haze: a bright core with a scattered halo, as bright along its length as its light is dense,
+  glowing more when it is aimed towards you. Lenses flare.
+- The room takes the show's light: the haze glows in the show's colour and lifts on a kick, capped so a drop does
+  not turn on the house lights. A strobe flash in the hall is white, not flat grey.
+- Steady picture: it measured against the screen instead of the frame limit, and kept lowering the scale when that
+  did not help (on Ultra down to 40 %). It now only lowers the scale when frames get faster.
+
 ## 0.50.0 — SV in Godot
 
 Stage Visualizer moves from the browser to Godot 4.7 and runs as an app on Windows, macOS and Linux.

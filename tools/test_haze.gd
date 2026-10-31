@@ -64,6 +64,7 @@ func _run() -> void:
 	app.rig = rig
 	app.show = show
 	app.env = environment
+	app.crowd = Crowd.new()
 	rig.room_level = 8.0
 	rig.room_color = Color(0.1,0.4,0.8)
 	show.tune.haze = 0.0
@@ -77,6 +78,7 @@ func _run() -> void:
 	show.tune.haze = 1.0
 	app._room(0.1)
 	check(is_equal_approx(environment.ambient_light_energy,ambient), "Haze must not brighten the room's ambient light")
+	app.crowd.free()
 	app.free()
 	desk.free()
 	rig.free()

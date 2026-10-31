@@ -287,6 +287,15 @@ const STYLES := {
 		"row": ["curtain", "wave"], "rowLevel": 0.6, "wash": 1.4},
 }
 
+# Techno (Raw / Deep / Hypnotic) is one Beatport genre but three ways of playing: the raw, the deep and the hypnotic
+# styles above are put together for it, so a track draws on all their looks, formations and rows.
+const RAW_DEEP_STYLE := {
+	"looks": ["pillars", "cross", "softCurtains", "floor", "ripple", "tunnel", "crossTrusses", "snake", "scatter", "rakeStage", "spiral",
+		"walls", "curtains", "softFans", "sky", "converge", "circles", "skyCircles"],
+	"trusses": ["High", "Low", "Canopy", "Arch", "Tilted", "Rising to the back", "Twisted", "Valley", "Falling to the back", "Front low", "Middle low"],
+	"pace": 0.75, "lit": 0.75, "row": ["chase", "curtain", "pairs", "wave", "crowd", "vee", "sweep", "fan"], "rowLevel": 0.85, "wash": 0.8,
+}
+
 static func style_of(mood_key: String, family: String) -> Dictionary:
 	if STYLES.has(mood_key): return STYLES[mood_key]
 	if STYLES.has(family): return STYLES[family]

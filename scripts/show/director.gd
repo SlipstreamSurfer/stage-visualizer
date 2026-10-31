@@ -56,7 +56,7 @@ const MOODS := {
 	"downtempo": {"calm": true, "palettes": [[0xff9a40, 0x30a0a0], [0xa050d0, 0xff7a50], [0x3060c0, 0xffc070]], "decay": 2.4, "speed": 0.2, "breathe": 0.7, "level": 0.75, "blinder": 0.2, "sceneMin": 60.0},
 	"djtools": {"palettes": [[0xffffff, 0x3a6bff], [0xffffff, 0xffa030]], "decay": 8.0, "speed": 0.6, "strobes": false},
 	"techno": {"family": "Techno", "palettes": [[0xffffff, 0xff2a1a, 0x3a6bff, 0xff2a1a], [0xffffff, 0x3a6bff, 0x20d0ff, 0x3a6bff], [0xffa030, 0xffffff, 0xff2a1a, 0xffffff]]},
-	"raw": {"family": "Techno", "palettes": [[0xffffff, 0x8fb4ff, 0xffffff, 0xb01810], [0xffffff, 0xb01810], [0xffffff, 0xffb060]], "decay": 10.0, "speed": 0.5, "haze": 1.1, "paletteHold": 360.0},
+	"raw": {"family": "Techno", "palettes": [[0xffffff, 0x8fb4ff, 0xffffff, 0xb01810], [0xffffff, 0xb01810], [0xffffff, 0xffb060]], "decay": 10.0, "speed": 0.5, "haze": 1.1, "paletteHold": 360.0, "sceneKicks": 32, "sceneMin": 12.0},
 	"electro": {"family": "Techno", "palettes": [[0x20e0ff, 0xff2030, 0xffffff, 0x20e0ff], [0xffffff, 0x3050ff, 0xff2030, 0xffffff]], "decay": 10.0, "speed": 0.9},
 	"hard": {"family": "Hard", "palettes": [[0xff1a10, 0xffffff], [0xffffff, 0x3a6bff], [0xff1a10, 0xff7a10], [0xc020ff, 0xffffff]], "decay": 11.0, "speed": 1.4, "level": 1.1, "sceneMin": 20.0, "strobeRate": 1.4, "strobeAt": 0.4, "paletteHold": 180.0},
 	"harddance": {"family": "Hard", "palettes": [[0xff1a10, 0xffffff, 0x60ff20, 0xffffff], [0xffffff, 0xff20a0, 0x2060ff, 0xff20a0], [0xffe020, 0xff1a10]], "decay": 14.0, "speed": 1.6, "level": 1.15, "sceneMin": 18.0, "strobeRate": 1.6, "strobeAt": 0.35, "paletteHold": 150.0},
@@ -95,6 +95,29 @@ const WASH_LEVEL := {"intro": 0.16, "low": 0.14, "groove": 0.24, "peak": 0.32}
 const BREAK_LOOK := {"overhead": 1.0, "stage": 0.4, "wash": 1.0, "bars": 1.0}
 const DROP_LOOK := {"overhead": 1.0, "stage": 0.8, "wash": 0.7, "bars": 0.65}
 const WARM := Color(1.0, 0.78, 0.56)
+
+# Techno (Raw / Deep / Hypnotic) plays three or four colours at a time that belong together, not two:
+# cold steel and red for the raw, blues and violets for the deep, ice and cyan for the hypnotic, a warm one now and then.
+const RAW_DEEP := "techno-raw-deep-hypnotic"
+
+# For Raw / Deep / Hypnotic a look is a position, and the way it moves, which heads are lit, how the colours are spread
+# and how the beam looks are drawn apart, as on a lighting desk (one stack each). Every third scene plays the look as
+# it was designed; the others combine it with a movement, a gate, a colour spread and a beam of their own.
+const STACK_MOVES := ["still", "sway", "breathe", "snake", "tiltWave", "panWave", "circle", "eight"]
+const STACK_GATES := ["all", "chase", "across", "frontBack", "centre", "alternate", "trusses", "patterns"]
+const STACK_CALM_GATES := ["all", "across", "centre", "chase"]   # a calm part never thins the rig out to a few heads
+const STACK_COLOURS := ["sides", "alternate", "trusses", "depth", "centreWhite", "mono"]
+const STACK_BEAMS := ["normal", "narrow", "wide", "gobo"]
+const RAW_DEEP_PALETTES := [
+	[0xdfe8ff, 0x3a6bff, 0x2040e0, 0xb01810],
+	[0xb01810, 0xffa030, 0xffffff, 0x5020a0],
+	[0x10a0b0, 0x2040e0, 0x7030d0, 0xdff0ff],
+	[0xc02a80, 0x4030c0, 0x20d0ff],
+	[0xff7a1a, 0x2a40d0, 0xffffff, 0x10a0a0],
+	[0x20d0ff, 0xffffff, 0x3a40e0, 0xff2a8a],
+	[0x20c080, 0x1a4a90, 0xdff0ff, 0x7030d0],
+	[0xffb060, 0xb01810, 0x5a30c0],
+]
 
 var mood: Dictionary = {}
 var mood_key := ""
@@ -163,11 +186,15 @@ var _head_at := -100.0
 var _head_scene := 0
 var _head_fresh := false
 var _style_key := ""
+var _multi_was := false
+var _head_recent: Array = []   # the head looks that played last (Raw / Deep / Hypnotic does not repeat them at once)
 var _truss_look := 0
 var _truss_at := 0.0
 var _truss_scene := 0
 var _truss_palette := 0
 var _truss_track := false
+var stack_name := ""   # the head look's movement, gate, colour spread and beam now
+var colours_in_use: Array = [Color.WHITE, Color.WHITE]   # the colours the heads are asked for now (two, or more for Raw / Deep / Hypnotic)
 var flash := 0.0
 var blind := 0.0
 # The DJ's own buttons (keys or a controller), on top of the automatic show, as `manual` in the browser's director:
@@ -228,6 +255,45 @@ func _palette_pool(key: String) -> Array:
 	_pools[key] = pool
 	return pool
 
+func _multi() -> bool:
+	return genre == RAW_DEEP
+
+# [move, gate, colour, beam] for the head look now: its own, or a combination that follows from the scene, the track's
+# palette and the look (no chance in it, so a replay plays the same).
+func _stack(look: Array, tier: String) -> Array:
+	var own: Array = [look[3], look[4], look[5], look[6]]
+	if not _multi() or _scene % 3 == 0: return own
+	var h := absi(hash(_head_look))
+	var gates: Array = STACK_CALM_GATES if tier == "calm" else STACK_GATES
+	return [STACK_MOVES[(h + _scene * 3 + _palette) % STACK_MOVES.size()], gates[(floori(h / 7.0) + _scene * 2 + _palette * 5) % gates.size()],
+		STACK_COLOURS[(floori(h / 13.0) + _scene + _palette * 2) % STACK_COLOURS.size()], STACK_BEAMS[(floori(h / 17.0) + _scene * 3 + _palette) % STACK_BEAMS.size()]]
+
+func _style() -> Dictionary:
+	return L.RAW_DEEP_STYLE if _multi() else L.style_of(mood_key, mood.family)
+
+# One colour of the palette for a head: the look's spread (sides, alternate, trusses, depth) over all the palette's
+# colours instead of two, and the dominant colour of a "mono" look moves on every 64 beats.
+func _spread(name: String, h: L.Head, beats: float, pal: Array) -> Color:
+	var n := pal.size()
+	var side := 0 if h.fx.mount.x < 0.0 else 1
+	match name:
+		"sides", "centreWhite": return pal[(floori(beats / 32.0) + side) % n]
+		"alternate": return pal[(h.slot + floori(beats / 64.0)) % n]
+		"trusses": return pal[(h.row + floori(beats / 64.0)) % n]
+		"depth":
+			var at := L.depth(h.fx.mount) * (n - 1)
+			var i := mini(floori(at), n - 1)
+			return pal[i].lerp(pal[mini(i + 1, n - 1)], at - i)
+	return pal[floori(beats / 64.0) % n]
+
+# A break need not be the same floor scan every time: the heads take a curtain or a rake towards the stage,
+# and lean further out as the build-up grows.
+func _break_target(h: L.Head, p: Vector3, k: Dictionary, s: Dictionary, sig: Dictionary) -> Vector3:
+	var variant := (_scene + _palette) % 3
+	if variant == 0: return L.floor_target(h, p, k, _beat, "break", sig.build, sig.energy, sig.drop)
+	var t: Vector3 = L.move("breathe", L.position("curtain", h, p, k, s), h, p, k) if variant == 1 else L.move("sway", L.position("rakeStage", h, p, k, s), h, p, k)
+	return t.lerp(Vector3(t.x, 13.0, t.z), clampf(sig.build, 0.0, 1.0) * 0.5)
+
 func _mood_key() -> String:
 	if MOOD_OF.has(genre): return MOOD_OF[genre]
 	if bpm > 160.0: return "dnb"
@@ -237,7 +303,8 @@ func _mood_key() -> String:
 func _set_mood(key: String) -> void:
 	mood = _mood(key)
 	mood_key = key
-	_pool = _palette_pool(key)
+	_multi_was = _multi()
+	_pool = RAW_DEEP_PALETTES.map(func(p): return p.map(func(h): return _hex(h))) if _multi() else _palette_pool(key)
 	_palette = 0
 	_flow = {}
 	_pick_program("intro")
@@ -410,7 +477,7 @@ func _start_track(sec: String) -> void:
 # The heads' look and the trusses' formation. A new palette is the show hearing a new track: it gets two looks of
 # its own for each part of a track, others than the last one had, and the show moves between them at scene cues.
 func _hangar_looks(tier: String, brk: bool) -> void:
-	var style := L.style_of(mood_key, mood.family)
+	var style := _style()
 	var chosen: Dictionary = L.PACE.normal
 	var pace_k := float(style.pace) / maxf(0.25, float(tune.pace))
 	var track := _palette != _head_palette
@@ -426,13 +493,24 @@ func _hangar_looks(tier: String, brk: bool) -> void:
 			for key in style.looks:
 				if L.HEAD_LOOKS.has(key) and part in L.HEAD_LOOKS[key][1]: own.append(key)
 			var list: Array = own if own.size() >= 2 else L.head_tier(part)
-			_head_set[part] = [list[_head_turn[part] % list.size()], list[(_head_turn[part] + 1) % list.size()]]
-			_head_turn[part] += 2
+			if _multi():   # six looks of its own for each part of a track, not two
+				var six := []
+				for i in mini(6, list.size()): six.append(list[(_head_turn[part] + i) % list.size()])
+				_head_set[part] = six
+				_head_turn[part] += six.size()
+			else:
+				_head_set[part] = [list[_head_turn[part] % list.size()], list[(_head_turn[part] + 1) % list.size()]]
+				_head_turn[part] += 2
 	_head_scene = _scene
-	if not brk and (_head_fresh or (cue and _t - _head_at >= chosen.head * pace_k) or not tier in L.HEAD_LOOKS[_head_look][1]):
+	if not brk and (_head_fresh or (cue and _t - _head_at >= chosen.head * pace_k * (0.35 if _multi() else 1.0)) or not tier in L.HEAD_LOOKS[_head_look][1]):
 		var choices: Array = _head_set[tier]
 		var next: String = choices[(choices.find(_head_look) + 1) % choices.size()]
+		if _multi():   # the next one that did not play just now
+			var fresh := choices.filter(func(c): return c != _head_look and not c in _head_recent)
+			if not fresh.is_empty(): next = fresh[0]
 		if next != _head_look:
+			_head_recent.push_front(_head_look)
+			if _head_recent.size() > 2: _head_recent.resize(2)
 			_head_look = next
 			_head_at = _t
 		_head_fresh = false
@@ -494,7 +572,7 @@ func _direct(dt: float) -> void:
 	_t += dt
 	if _heads.is_empty(): _cast()
 	var key := _mood_key()
-	if key != mood_key: _set_mood(key)
+	if key != mood_key or _multi() != _multi_was: _set_mood(key)
 	var sig := _signals(dt)
 	if _rb != null and _rb.live(): _told = true
 	elif _listen != null: _told = _listen.title != ""
@@ -581,7 +659,8 @@ func _direct(dt: float) -> void:
 	_level += (SECTION_LEVEL.get(sec, 1.0) - _level) * ease.call(1.5)
 	# a track keeps its colours from its first kick to its last: one palette, the same two of its colours
 	var pal: Array = _pool[_palette % _pool.size()]
-	var pair := floori(_palette / float(_pool.size())) * 2
+	var multi := _multi()
+	var pair := 0 if multi else floori(_palette / float(_pool.size())) * 2
 	_col = _col.lerp(pal[pair % pal.size()], ease.call(1.1))
 	_col2 = _col2.lerp(pal[(pair + 1) % pal.size()], ease.call(1.1))
 	var col := _col
@@ -616,7 +695,7 @@ func _direct(dt: float) -> void:
 	var look: Array = L.HEAD_LOOKS[_head_look]
 	var stage_z := Rig.TRUSS_Z[0] - 8.0   # over the booth
 	var s := {"beat": _beat, "section": sec, "build": sig.build, "energy": sig.energy, "drop": sig.drop, "stage": stage_z}
-	var style := L.style_of(mood_key, mood.family)
+	var style := _style()
 	var tier_row := L.row_tier(tier)
 	var own := []
 	for r in style.get("row", []):
@@ -638,9 +717,12 @@ func _direct(dt: float) -> void:
 	var e_gate: float = ease.call(0.08)
 	var cue := "%d:%d" % [_scene, floori((_beat - 1) / 16.0)]
 	# what is the same for every head this frame, worked out once
-	var look_gate: String = look[4]
-	var look_colour: String = look[5]
-	var look_beam: Array = L.BEAMS[look[6]]
+	var stack := _stack(look, tier)
+	var look_move: String = stack[0]
+	var look_gate: String = stack[1]
+	var look_colour: String = stack[2]
+	var look_beam: Array = L.BEAMS[stack[3]]
+	stack_name = "%s · %s · %s · %s" % stack
 	var row_gate: String = row_def[2]
 	var row_colour: String = row_def[3]
 	var pattern_gain := 2.5 if pattern in [1, 2, 4] else 1.5
@@ -666,8 +748,8 @@ func _direct(dt: float) -> void:
 		var role: String = "stage" if row else h.role
 		var a: Vector2
 		if h.role == "overhead":
-			if brk: a = _toward(p, L.floor_target(h, p, k, _beat, sec, sig.build, sig.energy, sig.drop))
-			else: a = _toward(p, L.move(look[3], L.position(look[2], h, p, k, s), h, p, k))
+			if brk: a = _toward(p, _break_target(h, p, k, s, sig) if multi else L.floor_target(h, p, k, _beat, sec, sig.build, sig.energy, sig.drop))
+			else: a = _toward(p, L.move(look_move, L.position(look[2], h, p, k, s), h, p, k))
 		elif row: a = _toward(p, L.row_aim(row_look, h, p, k))
 		else: a = _program_aim("break" if brk else P.name, h.hanging, h, k)
 		# crossfade the asked aim as well as limiting the motors; a head dims while it travels far
@@ -711,7 +793,7 @@ func _direct(dt: float) -> void:
 		# the look spreads the two colours, through a slow colour fade
 		var cname: String = look_colour if h.role == "overhead" else row_colour if row else "sides"
 		var share := L.colour(cname, h, beats)
-		var target := _vivid(col.lerp(col2, share.x).lerp(Color.WHITE, share.y))
+		var target := _vivid(_spread(cname, h, beats, pal).lerp(Color.WHITE, share.y)) if multi else _vivid(col.lerp(col2, share.x).lerp(Color.WHITE, share.y))
 		if warm > 0.0: target = target.lerp(WARM, warm)
 		if brk: target = target.lerp(Color.WHITE, white_k)
 		if not h.colored:
@@ -735,6 +817,7 @@ func _direct(dt: float) -> void:
 	# Washes are the colour under the beams: a steady level for the part of the track that changes over a couple of
 	# seconds, rising in a build-up and swelling on a drop, and never flashing with the kick: that is what the heads do.
 	var wash_target: float = (0.1 + sig.build * 0.32 if brk else WASH_LEVEL.get(sec, 0.24) + mood.breathe * sig.mid * 0.25) * style.get("wash", 1.0)
+	if multi and not brk: wash_target *= 0.25 + 0.45 * (0.5 + 0.5 * sin(sig.phase_clock * TAU / 64.0))
 	_wash_level += (wash_target - _wash_level) * ease.call(1.6)
 	for i in _washes.size():
 		var f: Rig.Fixture = _washes[i]
@@ -746,7 +829,7 @@ func _direct(dt: float) -> void:
 		f.zoom = 1.0
 		f.gobo = 0.0
 		f.level = _lamp((maxf(_wash_level * _w.wash, mood.wash) + sig.drop * 0.3 + sig.lift * 0.15) * master) * float(tune.groups.get("wash", 1.0))
-		f.color = tint.call(col2 if i % 2 else col)
+		f.color = tint.call(pal[i % pal.size()] if multi else col2 if i % 2 else col)
 	for i in rig.battens.size():
 		var bt: Rig.Batten = rig.battens[i]
 		_bar_level[i] = _bar_level[i] * exp(-dt * mood.decay)
@@ -754,9 +837,9 @@ func _direct(dt: float) -> void:
 		var run: float = sig.build * pow(0.5 + 0.5 * sin(bt.u * 5.0 + maxi(bt.truss, 0) + _chase), 4.0) if brk else 0.0   # a chase racing along as the build-up grows
 		var hit: float = sig.accent * (0.5 if i % 2 == _beat % 2 else 0.1)
 		bt.level = _lamp(maxf(maxf(maxf(_bar_level[i], breathe), maxf(run, hit)) * _w.bars, maxf(sig.drop, sig.lift * 0.45)) * master) * float(tune.groups.get("batten", 1.0))
-		bt.color = col2 if i % 2 else col
+		bt.color = pal[i % pal.size()] if multi else col2 if i % 2 else col
 		bt.chase_amount = 0.0
-		bt.strobe = flash * strobe_k * (0.0 if manual.blackout else 1.0)
+		bt.strobe = flash * strobe_k * (0.0 if manual.blackout else 1.0) * float(tune.groups.get("batten", 1.0))
 
 	# ----- the trusses on their winches -----
 	# Heavy trusses hold a formation for minutes. In a break they sink further as the build grows, in a measured
@@ -775,6 +858,7 @@ func _direct(dt: float) -> void:
 	hall_look = [head_name, truss_name, L.ROW_LOOKS[row_look][0]]
 	status = ("build-up" if sig.build > 0.45 else "break") if brk else SECTION_NAME.get(sec, sec) + " · " + head_name
 	_shown = [col, col2]
+	colours_in_use = pal.duplicate() if multi else [col, col2]
 
 # SV in the browser draws a level of 1 as a full beam and its renderer is exposed for levels around 0.2 to 0.5;
 # this rig's lamps are linear up to 1. A soft knee keeps the order of things (calm, groove, drop) and lets the

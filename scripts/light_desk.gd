@@ -1,71 +1,195 @@
 class_name LightDesk
 extends CanvasLayer
-# The light desk (D): every group of lights with a switch and a slider, over the show, which goes on. One tap switches
-# a group off, the slider sets how much it may give; W switches the washes alone. Nothing here takes the keyboard, so
-# the show's own keys keep working. The groups are the show's tune.groups, so a recording keeps them.
-# Later this is where smarter controls can go: every row is a switch and a slider, and a row can become any control.
+# Group cards over the running show. D closes, W switches washes; mouse controls never take the show's keys.
+# A card owns its switch and level control, so another control (such as an XY pad) can replace the fader later.
 
-# [group (a tune.groups key), name on the desk]
-const GROUPS := [["wash", "Washes"], ["hall", "Hall beams"], ["front", "Stage row"], ["back", "Towers behind the DJ"],
-	["rear", "Rear truss"], ["side", "Side towers"], ["delay", "Delay towers"], ["roof", "Roof spots"], ["batten", "Bars"]]
+# [tune.groups key, short name, location]
+const GROUPS := [["front", "Stage row", "Stage edge"], ["back", "Back towers", "Behind the DJ"], ["roof", "Roof spots", "Above the stage"],
+	["hall", "Hall beams", "Over the crowd"], ["side", "Side towers", "Along the walls"], ["delay", "Delay towers", "Middle of the hall"],
+	["wash", "Washes", "Ambient light · W"], ["batten", "Bars", "Strobe battens"], ["rear", "Rear truss", "Back of the hall"]]
 
 var light: Show
+var _root: Control
 var _panel: PanelContainer
-var _rows := {}   # group -> {"toggle": CheckButton, "slider": HSlider}
+var _grid: GridContainer
+var _summary: Label
+var _rows := {}   # group -> switch, replaceable level control, value, card, last positive level
+var _card_on: StyleBoxFlat
+var _card_off: StyleBoxFlat
+var _thumb: Texture2D
+var _sync_at := 0.0
 
 func _ready() -> void:
 	layer = 15
-	var root := Control.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(root)
+	_root = Control.new()
+	_root.theme = UiStyle.theme()
+	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_root)
 	_panel = PanelContainer.new()
-	_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
-	_panel.offset_left = -560
-	_panel.offset_right = -24
+	_panel.name = "LightDeskPanel"
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	root.add_child(_panel)
+	_panel.add_theme_stylebox_override("panel", UiStyle.box(UiStyle.PANEL, UiStyle.BORDER, 20))
+	_root.add_child(_panel)
+	_panel.anchor_left = 1.0
+	_panel.anchor_right = 1.0
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
+	column.add_theme_constant_override("separation", 16)
 	_panel.add_child(column)
-	column.add_child(UiStyle.label("Light desk", "Title"))
-	column.add_child(UiStyle.label("D closes. W: washes on / off.", "Hint"))
-	for entry in GROUPS:
-		var key: String = entry[0]
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 12)
-		column.add_child(row)
-		var toggle := CheckButton.new()
-		toggle.text = entry[1]
-		toggle.button_pressed = true
-		toggle.custom_minimum_size.x = 290
-		toggle.focus_mode = Control.FOCUS_NONE
-		row.add_child(toggle)
-		var slider := HSlider.new()
-		slider.min_value = 0.0
-		slider.max_value = 1.0
-		slider.step = 0.05
-		slider.value = 1.0
-		slider.custom_minimum_size = Vector2(190, 34)
-		slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		slider.focus_mode = Control.FOCUS_NONE
-		row.add_child(slider)
-		_rows[key] = {"toggle": toggle, "slider": slider}
-		toggle.toggled.connect(func(_on: bool): _apply(key))
-		slider.value_changed.connect(func(_v: float):
-			if not _rows[key].toggle.button_pressed: _rows[key].toggle.set_pressed_no_signal(true)   # moving a slider puts the group on
-			_apply(key))
-	var all := UiStyle.button("All on")
+	var header := HBoxContainer.new()
+	column.add_child(header)
+	var title := UiStyle.label("Light desk", "Title")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	var close_button := UiStyle.button("Close")
+	close_button.name = "CloseDesk"
+	close_button.focus_mode = Control.FOCUS_NONE
+	close_button.pressed.connect(close)
+	header.add_child(close_button)
+	column.add_child(UiStyle.label("D / Esc closes · W switches washes", "Hint"))
+	_summary = UiStyle.label("", "Hint")
+	_summary.name = "ActiveGroups"
+	_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(_summary)
+	var scroll := ScrollContainer.new()
+	scroll.name = "GroupScroll"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.add_child(scroll)
+	_grid = GridContainer.new()
+	_grid.name = "GroupsGrid"
+	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_grid.add_theme_constant_override("h_separation", 12)
+	_grid.add_theme_constant_override("v_separation", 12)
+	scroll.add_child(_grid)
+	_card_on = UiStyle.box(UiStyle.SURFACE, UiStyle.ACCENT.darkened(0.45), 16)
+	_card_off = UiStyle.box(UiStyle.PANEL, UiStyle.BORDER, 16)
+	_thumb = _fader_thumb()
+	for entry in GROUPS: _group_card(entry)
+	var footer := HBoxContainer.new()
+	column.add_child(footer)
+	var all := UiStyle.button("All on · 100%")
 	all.focus_mode = Control.FOCUS_NONE
-	all.pressed.connect(func(): all_on())
-	column.add_child(all)
+	all.pressed.connect(all_on)
+	footer.add_child(all)
+	var note := UiStyle.label("Levels last for this run", "Hint")
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	note.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	footer.add_child(note)
+	_root.resized.connect(_layout)
+	_grid.minimum_size_changed.connect(_layout)
+	_panel.minimum_size_changed.connect(_layout)
+	_layout()
+	sync()
 	_panel.hide()
+
+func _group_card(entry: Array) -> void:
+	var key: String = entry[0]
+	var card := PanelContainer.new()
+	card.name = key.capitalize().replace(" ", "") + "Card"
+	card.custom_minimum_size = Vector2(240, 148)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_grid.add_child(card)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 8)
+	card.add_child(body)
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 8)
+	body.add_child(header)
+	var labels := VBoxContainer.new()
+	labels.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	labels.add_theme_constant_override("separation", 0)
+	header.add_child(labels)
+	var title := UiStyle.label(entry[1])
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	labels.add_child(title)
+	var location := UiStyle.label(entry[2], "Hint")
+	location.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	labels.add_child(location)
+	var toggle_button := UiStyle.button("ON")
+	toggle_button.toggle_mode = true
+	toggle_button.button_pressed = true
+	toggle_button.custom_minimum_size.x = 72
+	toggle_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	toggle_button.focus_mode = Control.FOCUS_NONE
+	toggle_button.tooltip_text = "Switch " + str(entry[1]).to_lower() + " on or off"
+	toggle_button.add_theme_stylebox_override("pressed", UiStyle.box(UiStyle.ACCENT, Color.TRANSPARENT, 12))
+	toggle_button.add_theme_stylebox_override("hover_pressed", UiStyle.box(UiStyle.ACCENT.lightened(0.12), Color.TRANSPARENT, 12))
+	toggle_button.add_theme_color_override("font_pressed_color", UiStyle.PANEL)
+	toggle_button.add_theme_color_override("font_hover_pressed_color", UiStyle.PANEL)
+	header.add_child(toggle_button)
+	var level := HBoxContainer.new()
+	level.add_theme_constant_override("separation", 8)
+	body.add_child(level)
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = 0.05
+	slider.value = 1.0
+	slider.custom_minimum_size = Vector2(128, 44)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.focus_mode = Control.FOCUS_NONE
+	slider.tooltip_text = str(entry[1]) + " level"
+	var track := UiStyle.box(UiStyle.PANEL, Color.TRANSPARENT, 0)
+	track.content_margin_top = 3
+	track.content_margin_bottom = 3
+	slider.add_theme_stylebox_override("slider", track)
+	var fill := track.duplicate() as StyleBoxFlat
+	fill.bg_color = UiStyle.ACCENT
+	slider.add_theme_stylebox_override("grabber_area", fill)
+	slider.add_theme_stylebox_override("grabber_area_highlight", fill)
+	slider.add_theme_icon_override("grabber", _thumb)
+	slider.add_theme_icon_override("grabber_highlight", _thumb)
+	level.add_child(slider)
+	var value := UiStyle.label("100%")
+	value.custom_minimum_size.x = 64
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	level.add_child(value)
+	_rows[key] = {"toggle": toggle_button, "slider": slider, "value": value, "card": card, "last": 1.0}
+	toggle_button.toggled.connect(func(on: bool):
+		if on and slider.value <= 0.0: slider.set_value_no_signal(_rows[key].last)
+		_apply(key))
+	slider.value_changed.connect(func(v: float):
+		toggle_button.set_pressed_no_signal(v > 0.0)
+		if v > 0.0: _rows[key].last = v
+		_apply(key))
+
+func _layout() -> void:
+	if _grid == null: return
+	var available := _root.size
+	var width := minf(available.x - 32.0, clampf(available.x * 0.56, 560.0, 960.0))
+	_panel.offset_left = -width - 16
+	_panel.offset_right = -16
+	_panel.offset_top = 16
+	_grid.columns = 3 if width >= 840 else 2 if width >= 540 else 1
+	var height := _panel.get_combined_minimum_size().y + _grid.get_combined_minimum_size().y + 8.0
+	_panel.offset_bottom = 16 + minf(available.y - 32.0, height)
+
+static func _fader_thumb() -> Texture2D:
+	var image := Image.create(28, 28, false, Image.FORMAT_RGBA8)
+	for y in 28:
+		for x in 28:
+			var colour := UiStyle.ACCENT
+			colour.a = clampf(13.5 - Vector2(x - 13.5, y - 13.5).length(), 0.0, 1.0)
+			image.set_pixel(x, y, colour)
+	return ImageTexture.create_from_image(image)
+
+func _process(dt: float) -> void:
+	if not is_open(): return
+	_sync_at += dt
+	if _sync_at >= 0.2:
+		_sync_at = 0.0
+		sync()
 
 func is_open() -> bool:
 	return _panel != null and _panel.visible
 
 func open() -> void:
 	sync()
+	_layout()
 	_panel.show()
 
 func close() -> void:
@@ -75,29 +199,52 @@ func toggle() -> void:
 	if is_open(): close()
 	else: open()
 
-# The desk shows what the show has now (also what local/live.json set).
+# Reflect the real show (including external changes), without emitting control signals.
 func sync() -> void:
 	for key in _rows:
 		var level := 1.0 if light == null else float(light.tune.groups.get(key, 1.0))
 		_rows[key].toggle.set_pressed_no_signal(level > 0.0)
-		if level > 0.0: _rows[key].slider.set_value_no_signal(level)
+		if level > 0.0:
+			_rows[key].slider.set_value_no_signal(level)
+			_rows[key].last = level
+		_refresh(key)
+	_update_summary()
 
-# A group on or off with one key or tap; on again gives what its slider says. Returns whether it is on now.
+# On again restores the fader, including its last positive value after dragging down to zero.
 func toggle_group(key: String) -> bool:
-	var toggle: CheckButton = _rows[key].toggle
-	toggle.button_pressed = not toggle.button_pressed   # emits toggled, so _apply runs
-	return toggle.button_pressed
+	sync()
+	var button: BaseButton = _rows[key].toggle
+	button.button_pressed = not button.button_pressed
+	return button.button_pressed
 
 func all_on() -> void:
 	for key in _rows:
 		_rows[key].toggle.set_pressed_no_signal(true)
 		_rows[key].slider.set_value_no_signal(1.0)
+		_rows[key].last = 1.0
 		_apply(key)
 
 func _apply(key: String) -> void:
-	if light == null: return
 	var on: bool = _rows[key].toggle.button_pressed
 	var level: float = _rows[key].slider.value
-	if not on: light.tune.groups[key] = 0.0
-	elif level >= 0.999: light.tune.groups.erase(key)   # the show's own level
-	else: light.tune.groups[key] = level
+	if light != null:
+		if not on: light.tune.groups[key] = 0.0
+		elif level >= 0.999: light.tune.groups.erase(key)
+		else: light.tune.groups[key] = level
+	_refresh(key)
+	_update_summary()
+
+func _refresh(key: String) -> void:
+	var row: Dictionary = _rows[key]
+	var on: bool = row.toggle.button_pressed
+	row.toggle.text = "ON" if on else "OFF"
+	row.value.text = "%d%%" % roundi(row.slider.value * 100.0)
+	row.value.add_theme_color_override("font_color", UiStyle.TEXT if on else UiStyle.MUTED)
+	row.slider.modulate = Color.WHITE if on else Color(0.55, 0.62, 0.67)
+	row.card.add_theme_stylebox_override("panel", _card_on if on else _card_off)
+
+func _update_summary() -> void:
+	var on := 0
+	for row: Dictionary in _rows.values():
+		if row.toggle.button_pressed: on += 1
+	_summary.text = "%d / %d groups on · Automatic show keeps running" % [on, _rows.size()]

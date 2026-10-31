@@ -30,3 +30,19 @@ Optionele helpers:
 
 Kleuren zijn beschikbaar als `UiStyle.TEXT`, `MUTED`, `ACCENT`, `WARNING`, `PANEL`,
 `SURFACE` en `BORDER`. Gebruik tekst naast een kleur voor succes of een probleem.
+
+## Lichttafel
+
+`LightDesk` gebruikt het gedeelde thema op de root. Negen groepskaarten tonen een locatie, een expliciete ON/OFF-knop
+en een fader met percentage. Actieve kaarten hebben een accentrand; uitgeschakelde kaarten behouden hun gekozen
+faderstand. Inschakelen herstelt die stand, ook na het terugschuiven naar nul. Nul wordt altijd als OFF weergegeven.
+
+Het paneel rechts gebruikt drie kolommen op brede layouts, twee op smalle en één bij zeer weinig ruimte. De hoogte
+volgt de inhoud tot de venstergrens; daarna scrollen de kaarten verticaal. De footer blijft bereikbaar. Schakelaars
+zijn minstens 60 logische pixels hoog en faders hebben een klikvlak van 44 pixels. Ze nemen geen toetsenbordfocus,
+zodat de showtoetsen blijven werken. D, Escape en de zichtbare Close-knop sluiten de tafel. All on herstelt alle groepen
+naar 100%. Niveaus gelden alleen voor de huidige run. Externe groepswijzigingen worden ook in het open paneel gevolgd.
+
+Iedere kaart wordt gebouwd door `_group_card`, met de niveauregeling los van de groepsschakelaar. Een XY-pad is nog
+niet geïmplementeerd; deze opbouw laat ruimte om de fader later te vervangen zodra assen en gedrag zijn bepaald.
+`tools/test_light_desk.gd` controleert echte muisklikken, niveauherstel, nulstand en venstergrenzen op vier formaten.

@@ -1,16 +1,19 @@
 # Changelog
 
-## 0.55.2 — Techno Raw / Deep / Hypnotic: more light, a light desk
+## 0.55.2 — A light sequencer, richer techno shows and visual polish
 
 - Techno (Raw / Deep / Hypnotic) has a light sequencer on the beat grid: blocks of 4, 8, 16 or 32 bars, patterns of
   16 steps per bar, a fill at the end of each block, and a new scene on the bar line. See [choreografie](docs/choreografie.md).
-  The other genres are unchanged.
+  Lighting direction for other genres is unchanged.
 - More to look at in this genre: twenty-four head looks (six new) with their own movement, gate, colour spread and
   beam, sixteen palettes of three or four colours, and washes that swell instead of lighting the room all the time.
-- Light desk (**D**): an on / off switch and a fader for each group of lights, and **W** for the washes at once.
-  The settings last for the run.
+- Light desk (**D**): responsive group cards with large on / off switches, percentage faders and level restoration.
+  **W** switches the washes at once. The settings last for the run.
 - The info screen (**I**) shows the version, branch and commit.
-- The delay towers are box trusses with a head bar, and the decks stand closer to the DJ.
+- The delay towers are box trusses with a head bar, mounting rails, clamps, safety loops, outriggers and ballast detail.
+- Flightcase edging, corner protection, handles and routed cables finish the booth; the decks stand closer to the DJ.
+- Rounded crowd heads and shoulders, small ears and subtler skin shading keep the existing single-surface batching,
+  phones and movement. No change to the crowd counts in the graphics presets.
 
 ## 0.55.1 — Rekordbox track changes
 

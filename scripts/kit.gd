@@ -89,6 +89,12 @@ static func unit_box() -> BoxMesh:
 	b.size = Vector3.ONE
 	return b
 
+# A routed cable, built once into a shared tube batch.
+static func cable(batch: Batch, points: Array[Vector3], radius := 0.004) -> void:
+	for i in range(1, points.size()):
+		if points[i - 1].distance_squared_to(points[i]) > 1e-10:
+			batch.add(tube(points[i - 1], points[i], radius))
+
 # A 40 cm box truss from a to b (local to whatever it is built into): four chords and the zigzag between them.
 static func truss(chords: Batch, braces: Batch, a: Vector3, b: Vector3, w := 0.4) -> void:
 	var d := (b - a).normalized()

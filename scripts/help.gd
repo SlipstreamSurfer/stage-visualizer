@@ -3,7 +3,7 @@ extends CanvasLayer
 # Every key on one screen, in groups (? or F1). Escape, ? or F1 closes it.
 
 const GROUPS := [
-	["Show", [["B", "Blackout (on / off)"], ["D", "Light desk: groups on / off, levels"], ["W", "Washes on / off"], ["Space", "Strobe, while held"], ["N", "Blinders, while held"],
+	["Show", [["B", "Blackout (on / off)"], ["D", "Light desk: group cards and levels"], ["W", "Washes on / off"], ["Space", "Strobe, while held"], ["N", "Blinders, while held"],
 		["L", "Next look"], ["G", "Next genre (Shift: back)"], ["S", "Gentle strobes"]]],
 	["Picture", [["1–5", "Camera: eyes, shoulder, crowd, FOH, side"], ["V", "Over the shoulder / the DJ's eyes"], ["C", "Look straight ahead"], ["Drag", "Look around"],
 		["Q", "Quality"], ["F", "Full screen"], ["I", "Info screen"], ["H", "Hide everything"], ["M", "Save this moment"]]],

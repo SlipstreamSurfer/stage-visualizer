@@ -9,8 +9,11 @@ global uniform float sv_phones;
 varying vec3 tint;
 varying float screen_light;
 varying float skin_part;
+varying float face_part;
+varying vec3 rest_position;
 
 void vertex() {
+	rest_position = VERTEX;
 	vec4 c = INSTANCE_CUSTOM;
 	float side = COLOR.g * 2.0 - 1.0;
 	float region = COLOR.b;
@@ -32,6 +35,7 @@ void vertex() {
 	}
 	screen_light = (screen_part ? 1.0 : 0.0) * phone_up;
 	skin_part = region > 0.9 ? 1.0 : 0.0;
+	face_part = head * skin_part;
 	if (hair_part) {
 		// Cropped hair through to a fuller crown; the skull stays intact underneath.
 		float hair_height = mix(0.4, 1.5, fract(c.w * 17.13));
@@ -80,7 +84,7 @@ void vertex() {
 	NORMAL.y -= sway * NORMAL.x + forward_sway * NORMAL.z;
 	NORMAL = normalize(NORMAL);
 	float k = fract(c.w * 7.31);
-	vec3 skin = mix(vec3(0.43, 0.27, 0.18), vec3(0.085, 0.045, 0.028), fract(c.w * 3.17));
+	vec3 skin = mix(vec3(0.43, 0.31, 0.24), vec3(0.085, 0.050, 0.036), fract(c.w * 3.17));
 	vec3 cloth = k < 0.45 ? vec3(0.018, 0.022, 0.028) : k < 0.65 ? vec3(0.045, 0.065, 0.085) : k < 0.80 ? vec3(0.085, 0.03, 0.025) : k < 0.93 ? vec3(0.035, 0.065, 0.045) : vec3(0.13, 0.115, 0.09);
 	vec3 pants = mix(vec3(0.012, 0.016, 0.022), vec3(0.045, 0.06, 0.08), fract(c.x * 5.3));
 	vec3 hair = mix(vec3(0.009, 0.006, 0.004), vec3(0.10, 0.055, 0.02), fract(c.w * 23.8));
@@ -89,11 +93,20 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = tint;
-	ROUGHNESS = mix(0.94, 0.67, skin_part);
-	SPECULAR = 0.25;
+	// Soft socket and brow shadows, anchored before the nod and sway; no painted eyes or emissive skin.
+	float shade = 0.0;
+	if (face_part > 0.5 && rest_position.z > 0.025) {
+		vec2 eye = vec2(abs(rest_position.x) - 0.043, rest_position.y - 1.641) / vec2(0.018, 0.010);
+		vec2 brow = vec2(abs(rest_position.x) - 0.043, rest_position.y - 1.657) / vec2(0.022, 0.005);
+		float front = smoothstep(0.025, 0.075, rest_position.z);
+		shade = front * (0.22 * (1.0 - smoothstep(0.0, 1.0, dot(eye, eye)))
+			+ 0.12 * (1.0 - smoothstep(0.0, 1.0, dot(brow, brow))));
+	}
+	ALBEDO = tint * (1.0 - shade);
+	ROUGHNESS = mix(0.94, 0.80, skin_part);
+	SPECULAR = mix(0.25, 0.20, skin_part);
 	// Lit cloth edges follow the actual rig, including its dark side. Only screens emit.
-	RIM = 0.18;
+	RIM = mix(0.18, 0.08, skin_part);
 	RIM_TINT = 0.7;
 	EMISSION = tint * screen_light * 1.5;
 }

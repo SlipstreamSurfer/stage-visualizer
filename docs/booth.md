@@ -63,3 +63,14 @@ Gecontroleerd met dezelfde Forward+-instellingen en gesimuleerde rekordbox-data:
 
 - Festival, camera 1 (lokale foto): alle vier schermen volledig zichtbaar, inclusief de buitenste spelers.
 - Festival, camera 2 (lokale foto): vier spelers rond de DJM-A9, over de DJ-schouder.
+
+## Flightcase-afwerking
+
+De bestaande tafel heeft metalen randprofielen, hoekbescherming, paneelstijlen, handgrepen en klinknagels.
+Vereenvoudigde stekkers achter de spelers en mixer lopen via kabels naar één zijkant van de booth. Het is geen
+poortgetrouw aansluitschema. Apparaten, tafelhoogte, 18 mm tussenruimtes en rekordbox-koppeling blijven ongewijzigd;
+de afwerking werkt met twee en vier spelers.
+
+De detailgeometrie gebruikt drie statische MultiMesh-batches zonder schaduwen: `BoothTrim`, `BoothHardware` en
+`BoothCables`. Er zijn geen extra lampen of updates per frame. `tools/test_stage_detail.gd` controleert de batches,
+eindige transformaties, plaatsing, tafelhoogte en tussenruimtes in beide boothvarianten.

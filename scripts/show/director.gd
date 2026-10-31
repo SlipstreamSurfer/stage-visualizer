@@ -103,11 +103,11 @@ const RAW_DEEP := "techno-raw-deep-hypnotic"
 # For Raw / Deep / Hypnotic a look is a position, and the way it moves, which heads are lit, how the colours are spread
 # and how the beam looks are drawn apart, as on a lighting desk (one stack each). Every third scene plays the look as
 # it was designed; the others combine it with a movement, a gate, a colour spread and a beam of their own.
-const STACK_MOVES := ["still", "sway", "breathe", "snake", "tiltWave", "panWave", "circle", "eight"]
-const STACK_GATES := ["all", "chase", "across", "frontBack", "centre", "alternate", "trusses", "patterns"]
-const STACK_CALM_GATES := ["all", "across", "centre", "chase"]   # a calm part never thins the rig out to a few heads
-const STACK_COLOURS := ["sides", "alternate", "trusses", "depth", "centreWhite", "mono"]
-const STACK_BEAMS := ["normal", "narrow", "wide", "gobo"]
+const STACK_MOVES := ["still", "sway", "breathe", "snake", "tiltWave", "panWave", "circle", "eight", "pendulum", "drift", "pulse", "stepRow"]
+const STACK_GATES := ["all", "chase", "across", "frontBack", "centre", "alternate", "trusses", "patterns", "outIn", "blocks", "diag", "pairsAlt"]
+const STACK_CALM_GATES := ["all", "across", "centre", "chase", "outIn"]   # a calm part never thins the rig out to a few heads
+const STACK_COLOURS := ["sides", "alternate", "trusses", "depth", "centreWhite", "mono", "bands", "wheel", "mirror", "rows"]
+const STACK_BEAMS := ["normal", "narrow", "wide", "gobo", "tight", "broad"]
 const RAW_DEEP_PALETTES := [
 	[0xdfe8ff, 0x3a6bff, 0x2040e0, 0xb01810],
 	[0xb01810, 0xffa030, 0xffffff, 0x5020a0],
@@ -117,6 +117,14 @@ const RAW_DEEP_PALETTES := [
 	[0x20d0ff, 0xffffff, 0x3a40e0, 0xff2a8a],
 	[0x20c080, 0x1a4a90, 0xdff0ff, 0x7030d0],
 	[0xffb060, 0xb01810, 0x5a30c0],
+	[0xffffff, 0x20d0ff, 0x1a4a90],
+	[0xc02a80, 0xff7a1a, 0x4030c0, 0xffffff],
+	[0x10a0b0, 0xffb060, 0x2040e0],
+	[0x7030d0, 0x20c080, 0xdff0ff, 0x2a40d0],
+	[0xb01810, 0x5a30c0, 0x20d0ff],
+	[0xffa030, 0x2a40d0, 0xdff0ff, 0xb01810],
+	[0x1a4a90, 0x20d0ff, 0xc02a80, 0xffffff],
+	[0xff2a1a, 0xffffff, 0x3a6bff, 0x7030d0],
 ]
 
 var mood: Dictionary = {}
@@ -186,6 +194,16 @@ var _head_at := -100.0
 var _head_scene := 0
 var _head_fresh := false
 var _style_key := ""
+# The light sequencer (sequencer.gd) for Raw / Deep / Hypnotic: blocks of 4, 8, 16 or 32 bars on the beat grid.
+var _blk_start := 0          # the bar the block began on
+var _blk_len := 8            # its length in bars
+var _blk_index := 0
+var _blk_section := ""
+var _seq_step := -1
+var _seq_bar := -1
+var _seq_env := [0.0, 0.0, 0.0, 0.0]    # the hits of the lanes, falling away between them
+var seq_gain := [1.0, 1.0, 1.0, 1.0]    # what each lane does to the light now: 1 when nothing, down to 1 - depth between hits
+var seq_text := ""
 var _multi_was := false
 var _head_recent: Array = []   # the head looks that played last (Raw / Deep / Hypnotic does not repeat them at once)
 var _truss_look := 0
@@ -281,6 +299,36 @@ func _stack(look: Array, tier: String) -> Array:
 	stack_name = "%s · %s · %s · %s" % _stack_now
 	return _stack_now
 
+# The sequencer, once a frame: the bar line and the step of the beat grid, a new block on its first bar (and with it a
+# new scene, and another every eight bars of a long block), and the hits of each lane. The depth of a hit is 45%; with gentle strobes quarter notes and 20%.
+func _sequence(dt: float, grid: float, sec: String) -> void:
+	var bar := floori(grid / 4.0)
+	var step := floori(grid * 4.0)
+	if bar < _blk_start or bar >= _blk_start + _blk_len or sec != _blk_section:
+		var first := _blk_section == "" or bar < _blk_start
+		_blk_index = 0 if first else _blk_index + 1
+		_blk_section = sec
+		_blk_start = bar
+		_blk_len = LightSequencer.length_for(sec, _blk_index)
+		if not first and _t - _scene_at >= 8.0: _next(sec)   # a new block is a new scene, on the bar line
+	elif bar != _seq_bar and (bar - _blk_start) % 8 == 0 and _t - _scene_at >= 8.0:
+		_next(sec)   # a long block keeps its pattern, but the look and the stack change every eight bars
+	_seq_bar = bar
+	if step != _seq_step:
+		_seq_step = step
+		for lane in LightSequencer.LANES:
+			if LightSequencer.hit(LightSequencer.pattern(lane, _blk_index, bar - _blk_start, _blk_len, safe), step): _seq_env[lane] = 1.0
+	var depth := 0.2 if safe else 0.45
+	for lane in LightSequencer.LANES:
+		_seq_env[lane] *= exp(-dt * 5.0)
+		seq_gain[lane] = 1.0 - depth + depth * _seq_env[lane]
+	seq_text = "bar %d of %d · block %d" % [bar - _blk_start + 1, _blk_len, _blk_index + 1]
+
+# Where a beam may be aimed: inside the hall. The moves scale with the distance of their target, so a combination of a far
+# target and a wide move could aim far outside the walls; here it ends at the wall instead.
+static func _inside(v: Vector3) -> Vector3:
+	return Vector3(clampf(v.x, -24.0, 24.0), clampf(v.y, 0.0, 14.5), clampf(v.z, -36.0, 35.0))
+
 func _style() -> Dictionary:
 	return L.RAW_DEEP_STYLE if _multi() else L.style_of(mood_key, mood.family)
 
@@ -293,6 +341,10 @@ func _spread(name: String, h: L.Head, k32: int, k64: int, pal: Array) -> Color:
 		"sides", "centreWhite": return pal[(k32 + side) % n]
 		"alternate": return pal[(h.slot + k64) % n]
 		"trusses": return pal[(h.row + k64) % n]
+		"bands": return pal[mini(floori(L.depth(h.fx.mount) * n), n - 1)]   # a colour for each band of the hall's depth
+		"wheel": return pal[(h.slot + k32) % n]                              # head by head round the palette, a step every eight bars
+		"mirror": return pal[(k32 + floori(absf(h.xn) * n)) % n]            # the same on both sides, out from the middle
+		"rows": return pal[(h.row + k32) % n]                                # truss by truss
 		"depth":
 			var at := L.depth(h.fx.mount) * (n - 1)
 			var i := mini(floori(at), n - 1)
@@ -617,7 +669,7 @@ func _direct(dt: float) -> void:
 		_bar_start = _beat == 1 or first.call(8)
 		# hold a scene for a musical phrase, changing on its first beat; a calm part holds its look twice as long
 		var hold := 2 if calm else 1
-		if first.call(int(mood.sceneKicks) * hold) and _t - _scene_at >= float(mood.sceneMin) * hold: _next(sec)
+		if not _multi() and first.call(int(mood.sceneKicks) * hold) and _t - _scene_at >= float(mood.sceneMin) * hold: _next(sec)
 		var n := rig.battens.size()
 		var pattern := floori((_beat - 1) / 32.0) % 4
 		var middle := (n - 1) / 2.0
@@ -652,6 +704,9 @@ func _direct(dt: float) -> void:
 		elif _bar_start and _t - _pending.at >= 3.0 and _t - _scene_at >= 12.0:
 			_next(sec)
 			_pending = {}
+
+	if _multi() and not brk: _sequence(dt, sig.phase_clock, sec)
+	else: seq_gain = [1.0, 1.0, 1.0, 1.0]
 
 	# the DJ asked for the next look: a new scene now, with the next look and formation
 	if int(manual.looks) != _looks_seen:
@@ -763,7 +818,9 @@ func _direct(dt: float) -> void:
 		var a: Vector2
 		if h.role == "overhead":
 			if brk: a = _toward(p, _break_target(h, p, k, s, sig) if multi else L.floor_target(h, p, k, _beat, sec, sig.build, sig.energy, sig.drop))
-			else: a = _toward(p, L.move(look_move, L.position(look[2], h, p, k, s), h, p, k))
+			else:
+				var target := L.move(look_move, L.position(look[2], h, p, k, s), h, p, k)
+				a = _toward(p, _inside(target) if multi else target)
 		elif row: a = _toward(p, L.row_aim(row_look, h, p, k))
 		else: a = _program_aim("break" if brk else P.name, h.hanging, h, k)
 		# crossfade the asked aim as well as limiting the motors; a head dims while it travels far
@@ -803,6 +860,7 @@ func _direct(dt: float) -> void:
 		var gain: float = gains[gate_name]
 		I *= (h.gate + (1.0 - h.gate) * dropk) * (gain + (1.0 - gain) * dropk)
 		I *= h.move_level + (1.0 - h.move_level) * dropk
+		if multi and not brk: I *= seq_gain[mini(h.bank, 2)] + (1.0 - seq_gain[mini(h.bank, 2)]) * dropk   # lane 0 the centre, 1 the sides, 2 the stage
 		f.level = _lamp(I) * float(faders.get(f.group, 1.0))
 		# the look spreads the two colours, through a slow colour fade
 		var cname: String = look_colour if h.role == "overhead" else row_colour if row else "sides"
@@ -850,7 +908,7 @@ func _direct(dt: float) -> void:
 		var breathe: float = (0.25 + mood.breathe) * sig.mid * (0.5 + 0.5 * sin(_t * 0.8 + i * 0.6)) if mood.breathe > 0.0 or brk else 0.0
 		var run: float = sig.build * pow(0.5 + 0.5 * sin(bt.u * 5.0 + maxi(bt.truss, 0) + _chase), 4.0) if brk else 0.0   # a chase racing along as the build-up grows
 		var hit: float = sig.accent * (0.5 if i % 2 == _beat % 2 else 0.1)
-		bt.level = _lamp(maxf(maxf(maxf(_bar_level[i], breathe), maxf(run, hit)) * _w.bars, maxf(sig.drop, sig.lift * 0.45)) * master) * float(tune.groups.get("batten", 1.0))
+		bt.level = _lamp(maxf(maxf(maxf(_bar_level[i], breathe), maxf(run, hit)) * _w.bars, maxf(sig.drop, sig.lift * 0.45)) * master) * float(tune.groups.get("batten", 1.0)) * (seq_gain[3] if multi and not brk else 1.0)
 		bt.color = pal[i % pal.size()] if multi else col2 if i % 2 else col
 		bt.chase_amount = 0.0
 		bt.strobe = flash * strobe_k * (0.0 if manual.blackout else 1.0) * float(tune.groups.get("batten", 1.0))
@@ -884,4 +942,4 @@ static func _lamp(I: float) -> float:
 const GROUP_LEVEL := {"hall": 1.0, "front": 1.0, "back": 0.9, "rear": 0.85, "side": 0.85, "delay": 0.85, "roof": 0.8}
 
 func scene_text() -> String:
-	return "%s · %s · %s · trusses %s · row %s" % [status, PROGRAMS[_program].name, mood.get("family", ""), truss_name, row_look]
+	return "%s · %s · %s · trusses %s · row %s%s" % [status, PROGRAMS[_program].name, mood.get("family", ""), truss_name, row_look, (" · " + seq_text) if _multi() else ""]

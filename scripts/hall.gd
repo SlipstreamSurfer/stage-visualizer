@@ -22,6 +22,7 @@ var _wet_floor := false
 var _hall_materials: Array[ShaderMaterial] = []
 var _hall_rig: Rig
 var _return_level := 0.0
+var _pa_fronts: Kit.Batch
 
 func build() -> void:
 	var black := Kit.mat(Color(0.018, 0.018, 0.02), 0.8)
@@ -744,12 +745,30 @@ func _monitor_cabinet(parent: Node3D, label: String, size: Vector3, pos: Vector3
 	Kit.box(unit, Vector3(size.x - 0.024, size.y - 0.024, 0.004), Vector3(0, 0, -size.z / 2 + 0.002), grille).name = "Grille"
 	return unit
 
-# The PA: a K2 hang either side over the stage's front, KS28 subs in a line on the floor in front of it.
+# The PA: +Z is the visible grille, towards the audience. The hangs toe in and curve down, not up.
 func _pa(dark: Kit.Batch) -> void:
-	for s in [-1.0, 1.0]: _array(dark, Vector3(s * 16.5, 12.8, FRONT + 0.4), 12, Vector3(1.34, 0.35, 0.56), s * 0.1)
+	var grille := Kit.mat(Color(0.075, 0.08, 0.085), 0.82, 0.25)
+	var image := Image.create(64, 64, true, Image.FORMAT_RGB8)
+	for y in 64:
+		for x in 64:
+			var hole := Vector2((x % 8) - 3.5, (y % 8) - 3.5).length() < 2.6
+			image.set_pixel(x, y, Color(0.17, 0.17, 0.17) if hole else Color(0.65, 0.65, 0.65))
+	image.generate_mipmaps()
+	grille.albedo_texture = ImageTexture.create_from_image(image)
+	grille.uv1_scale = Vector3(8, 3, 1)
+	grille.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_pa_fronts = Kit.Batch.new(Kit.unit_box(), grille, false)
+	for s in [-1.0, 1.0]: _array(dark, Vector3(s * 16.5, 12.8, FRONT + 0.4), 12, Vector3(1.34, 0.35, 0.56), -s * 0.1)
 	for i in 12:
 		var x := -19.25 + i * 3.5
-		for k in 2: dark.add(Kit.block(Vector3(1.34, 0.55, 1.1), Vector3(x, 0.28 + k * 0.56, FRONT + 0.6)))
+		for k in 2: _pa_box(dark, Vector3(1.34, 0.55, 1.1), Transform3D(Basis.IDENTITY, Vector3(x, 0.28 + k * 0.56, FRONT + 0.6)))
+	_pa_fronts.build(self).name = "PAFronts"
+	_pa_fronts = null
+
+# Keep the published envelope: casing recessed behind the grille, which ends at the original front face.
+func _pa_box(dark: Kit.Batch, size: Vector3, at: Transform3D) -> void:
+	dark.add(at * Kit.block(Vector3(size.x, size.y, size.z - 0.006), Vector3(0, 0, -0.003)))
+	_pa_fronts.add(at * Kit.block(Vector3(size.x - 0.04, size.y - 0.02, 0.004), Vector3(0, 0, size.z / 2 - 0.002)))
 
 func _array(dark: Kit.Batch, top: Vector3, n: int, size: Vector3, yaw: float) -> void:
 	var y := top.y
@@ -758,7 +777,7 @@ func _array(dark: Kit.Batch, top: Vector3, n: int, size: Vector3, yaw: float) ->
 	dark.add(Kit.block(Vector3(1.5, 0.12, 0.8), Vector3(top.x, y + 0.25, zf)))
 	for i in n:
 		tilt += 0.012 * i
-		var b := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, -tilt)
-		dark.add(Transform3D(b * Basis.from_scale(size), Vector3(top.x, y, zf)))
+		var b := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, tilt)
+		_pa_box(dark, size, Transform3D(b, Vector3(top.x, y, zf)))
 		y -= size.y * cos(tilt)
-		zf += size.y * sin(tilt)
+		zf -= size.y * sin(tilt)

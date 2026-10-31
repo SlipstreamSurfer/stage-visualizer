@@ -9,6 +9,7 @@ var dj: MultiMesh
 var dj_node: MultiMeshInstance3D
 var material: ShaderMaterial
 var people := PackedColorArray()   # each person's INSTANCE_CUSTOM, as built (a headless renderer cannot read it back)
+var places := PackedVector2Array()  # and where they stand (x, z)
 var _stage := Vector3.ZERO
 
 # What people wear, as linear colours and the share of the crowd in each. Mostly dark, as at a techno night, with a
@@ -30,10 +31,29 @@ const PANTS := [
 	[Color(0.06, 0.06, 0.065), 0.10], [Color(0.20, 0.16, 0.09), 0.08], [Color(0.06, 0.07, 0.035), 0.07],
 ]
 
+# How people dance (person.gdshader moves each style its own way), and the mix in each part of the hall: the shares
+# of the six styles, in this order, from the barrier to FRONT_ZONE metres back, then to MIDDLE_ZONE, then the rest.
+const STYLES := ["jumper", "stomper", "arm pumper", "groover", "hip swayer", "watcher"]
+const FRONT_ZONE := 12.0
+const MIDDLE_ZONE := 30.0
+const FRONT_MIX := [0.30, 0.25, 0.20, 0.15, 0.05, 0.05]
+const MIDDLE_MIX := [0.10, 0.15, 0.15, 0.30, 0.20, 0.10]
+const BACK_MIX := [0.05, 0.05, 0.10, 0.30, 0.20, 0.30]
+
+static func zone_mix(z: float) -> Array:
+	var back := z - Hall.BARRIER
+	return FRONT_MIX if back < FRONT_ZONE else MIDDLE_MIX if back < MIDDLE_ZONE else BACK_MIX
+
+# A share list as a table for pick().
+static func _shares(mix: Array) -> Array:
+	return mix.map(func(v): return [null, v])
+
+static func style_of(c: Color) -> int: return clampi(int(c.r), 0, STYLES.size() - 1)
+
 # The shader's keys, from the appearance (w) and timing (x) hashes in INSTANCE_CUSTOM.
 static func cloth_key(c: Color) -> float: return fposmod(c.a * 7.31, 1.0)
 static func hair_key(c: Color) -> float: return fposmod(c.a * 23.8, 1.0)
-static func pants_key(c: Color) -> float: return fposmod(c.r * 5.3, 1.0)
+static func pants_key(c: Color) -> float: return fposmod(fposmod(c.r, 1.0) * 5.3, 1.0)
 
 # Which entry of a table a key picks: the shares run end to end from 0 to 1.
 static func pick(table: Array, key: float) -> int:
@@ -70,6 +90,8 @@ func build(count: int) -> void:
 	mm.instance_count = count
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
+	var dance := RandomNumberGenerator.new()   # its own numbers, so the crowd stands where it always stood
+	dance.seed = 11
 	var occupied := {}
 	var placed := 0
 	while placed < count:
@@ -93,9 +115,11 @@ func build(count: int) -> void:
 		mm.set_instance_transform(placed, t)
 		# the front moves more and raises their arms sooner
 		var keen := clampf(1.0 - (z - Hall.BARRIER) / 45.0, 0.0, 1.0)
-		var custom := Color(rng.randf(), rng.randf_range(0.3, 1.0) * (0.5 + keen * 0.5), rng.randf_range(0.0, 0.7) * (1.2 - keen), rng.randf())
+		var style := pick(_shares(zone_mix(z)), dance.randf())
+		var custom := Color(style + minf(rng.randf(), 0.9999), rng.randf_range(0.3, 1.0) * (0.5 + keen * 0.5), rng.randf_range(0.0, 0.7) * (1.2 - keen), rng.randf())
 		mm.set_instance_custom_data(placed, custom)
 		people.append(custom)
+		places.append(pos)
 		placed += 1
 	var mi := MultiMeshInstance3D.new()
 	mi.multimesh = mm

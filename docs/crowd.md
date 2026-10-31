@@ -78,3 +78,21 @@ Still one surface and one MultiMesh draw, no textures; 938 triangles per person.
 the shares (every colour worn, white and neon rare, most of the crowd dark) and the eased, blackout-safe stage light.
 Measured on the GTX 1660 SUPER, Normal, 1080p, the same synthetic scene, three runs alternating before and after
 (median): front of house 5.71 → 5.89 ms, DJ eyes 7.45 → 7.68 ms GPU.
+
+## Six ways to dance
+
+Every person has one of six styles: jumper, stomper, arm pumper, groover, hip swayer and watcher. `Crowd` picks it at
+build time from the mix for their part of the hall (`FRONT_MIX`, `MIDDLE_MIX`, `BACK_MIX`, split at `FRONT_ZONE` and
+`MIDDLE_ZONE` metres behind the barrier): wilder at the barrier, calmer at the back. Change those constants to change
+the mix; a separate random stream keeps everyone standing where they stood.
+
+The style is the whole part of INSTANCE_CUSTOM.x (the timing stays its fraction), so there is no extra instance data.
+`person.gdshader` gives each style its own weights (`NOD`, `DIP`, `JUMP`, `STOMP`, `PUMP`, `HIPS`, `TWIST`, `HANDS`):
+the jumper jumps from a medium energy on, the stomper stamps a foot down on each beat and leans in, the arm pumper
+punches a fist above the head on the kick, the groover dips deep and turns the upper body, the hip swayer moves the
+hips over two beats with feet planted, and the watcher barely moves. Phones and the DJ behave as before.
+
+`tools/test_crowd_detail.gd` checks every zone's mix against its constants (within 6 points), that every style dances
+in every zone, that the front has more jumpers and stompers than the back, and that the shader moves each style.
+GPU, Normal, 1080p, GTX 1660 SUPER, same synthetic scene, three alternating runs (median): front of house
+5.89 → 6.17 ms, DJ eyes 7.76 → 8.03 ms.

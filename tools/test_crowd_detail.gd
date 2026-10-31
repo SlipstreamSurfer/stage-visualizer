@@ -59,6 +59,7 @@ func _run() -> void:
 	check(crowd.mm.visible_instance_count == 1200, "Light preset crowd count")
 	check(crowd.dj.mesh == crowd.mm.mesh and not crowd.dj_node.visible, "DJ shares geometry and stays hidden from own eyes")
 	_check_appearance(crowd)
+	_check_styles(crowd)
 	crowd.free()
 	print("crowd detail: %d triangles, %d checks, %d failures" % [indices.size() / 3, checks, failures])
 	quit(0 if failures == 0 else 1)
@@ -102,3 +103,38 @@ func _check_appearance(crowd: Crowd) -> void:
 	check(flash.length() <= sqrt(3.0) + 0.001 and flash.y < 0.1, "A strobe frame does not flash the crowd: %s" % flash)
 	for i in 60: crowd.stage_light(Color(1, 0, 0), 0.0, 0.1)
 	check((mat.get_shader_parameter("stage_light") as Vector3).length() < 0.01, "No stage light in a blackout")
+
+# Six dance styles, mixed by zone: wilder at the barrier, calmer at the back; the timing keeps its own fraction.
+func _check_styles(crowd: Crowd) -> void:
+	var counts := {}
+	for zone in ["front", "middle", "back"]: counts[zone] = [0, 0, 0, 0, 0, 0]
+	for i in crowd.people.size():
+		var c := crowd.people[i]
+		var s := Crowd.style_of(c)
+		check(c.r >= 0.0 and c.r < Crowd.STYLES.size() and fposmod(c.r, 1.0) < 1.0, "A style and a timing per person")
+		var z := crowd.places[i].y - Hall.BARRIER
+		var zone := "front" if z < Crowd.FRONT_ZONE else "middle" if z < Crowd.MIDDLE_ZONE else "back"
+		counts[zone][s] += 1
+	for zone in counts:
+		var n := 0
+		for v in counts[zone]: n += v
+		check(n > 150, "Enough people in the %s to judge its mix: %d" % [zone, n])
+		var want: Array = {"front": Crowd.FRONT_MIX, "middle": Crowd.MIDDLE_MIX, "back": Crowd.BACK_MIX}[zone]
+		for s in 6:
+			var share := float(counts[zone][s]) / maxf(1.0, n)
+			check(absf(share - want[s]) < 0.06, "%s: %s at %.2f, mix says %.2f" % [zone, Crowd.STYLES[s], share, want[s]])
+			check(counts[zone][s] > 0, "Every style dances in the %s" % zone)
+	for mix in [Crowd.FRONT_MIX, Crowd.MIDDLE_MIX, Crowd.BACK_MIX]:
+		var total := 0.0
+		for v in mix: total += v
+		check(absf(total - 1.0) < 0.001 and mix.size() == Crowd.STYLES.size(), "A mix shares out the whole zone")
+	var f := float(counts.front[0] + counts.front[1])
+	var b := float(counts.back[0] + counts.back[1])
+	var fn := 0.0
+	var bn := 0.0
+	for v in counts.front: fn += v
+	for v in counts.back: bn += v
+	check(f / fn > 2.0 * b / bn, "Jumpers and stompers crowd the front")
+	var shader := (crowd.material.shader as Shader).code
+	for name in ["NOD", "DIP", "JUMP", "STOMP", "PUMP", "HIPS", "TWIST", "HANDS"]:
+		check(shader.contains("const float %s[6]" % name), "The shader moves each style: " + name)

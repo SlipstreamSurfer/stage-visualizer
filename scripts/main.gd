@@ -37,6 +37,8 @@ var pause: PauseMenu
 var desk: LightDesk
 var help: HelpScreen
 var midi: MidiControls
+var _held_keyboard := {"strobe": false, "blinder": false}
+var _held_midi := {"strobe": false, "blinder": false}
 var menu: AppMenu
 var wizard: SetupWizard
 var _return_to := ""    # where a screen goes back to when it closes: "menu", "pause", "start" (then the show) or ""
@@ -270,7 +272,7 @@ func _hud() -> void:
 		add_child(midi)
 		pause.midi = midi
 		midi.pressed.connect(_midi_pressed)
-		midi.released.connect(func(action: String): if action in ["strobe", "blinder"]: _manual(action, false))
+		midi.released.connect(_midi_released)
 
 # The source and the graphics, from the settings screen (and once at the start).
 func _apply_settings(options: Dictionary) -> void:
@@ -397,6 +399,12 @@ func _frame(dt: float, live: bool) -> void:
 		_quit()
 	if args.has("seconds") and _clock >= float(args.seconds): _quit()
 
+func _input(e: InputEvent) -> void:
+	# Release before a panel consumes unhandled input; presses still belong to the GUI first.
+	if e is InputEventKey and not e.pressed:
+		if e.keycode == KEY_SPACE: _hold("strobe", false, _held_keyboard)
+		elif e.keycode == KEY_N: _hold("blinder", false, _held_keyboard)
+
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventMouseMotion:
 		_mouse_idle = 0.0
@@ -406,8 +414,8 @@ func _unhandled_input(e: InputEvent) -> void:
 		return
 	if not (e is InputEventKey and not e.echo): return
 	# held: strobe and blinders as long as the key is down
-	if e.keycode == KEY_SPACE: _manual("strobe", e.pressed)
-	elif e.keycode == KEY_N: _manual("blinder", e.pressed)
+	if e.pressed and e.keycode == KEY_SPACE: _hold("strobe", true, _held_keyboard)
+	elif e.pressed and e.keycode == KEY_N: _hold("blinder", true, _held_keyboard)
 	if not e.pressed: return
 	bar.wake()
 	if e.keycode == KEY_F1 or e.unicode == 63:   # ? or F1
@@ -471,6 +479,10 @@ func _unhandled_input(e: InputEvent) -> void:
 			else: pause.open()
 
 # The DJ's own buttons, from the keyboard or a controller.
+func _hold(action: String, on: bool, source: Dictionary) -> void:
+	source[action] = on
+	if show: _manual(action, _held_keyboard[action] or _held_midi[action])
+
 func _manual(action: String, on: bool) -> void:
 	match action:
 		"blackout":
@@ -485,7 +497,11 @@ func _manual(action: String, on: bool) -> void:
 
 # A pad: blackout toggles, strobe and blinders hold, next look steps on.
 func _midi_pressed(action: String) -> void:
-	_manual(action, not show.manual.blackout if action == "blackout" else true)
+	if action in ["strobe", "blinder"]: _hold(action, true, _held_midi)
+	else: _manual(action, not show.manual.blackout if action == "blackout" else true)
+
+func _midi_released(action: String) -> void:
+	if action in ["strobe", "blinder"]: _hold(action, false, _held_midi)
 
 func _on_pause(what: String) -> void:
 	match what:
@@ -592,6 +608,11 @@ func _quit(code := 0) -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST: _quit()
+	elif what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		for action in ["strobe", "blinder"]:
+			_held_midi[action] = false
+			_hold(action, false, _held_keyboard)
+		if midi: midi.clear_held()
 
 func _exit_tree() -> void:
 	session.stop()

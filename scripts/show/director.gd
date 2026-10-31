@@ -194,6 +194,11 @@ var _truss_scene := 0
 var _truss_palette := 0
 var _truss_track := false
 var stack_name := ""   # the head look's movement, gate, colour spread and beam now
+var _stack_now: Array = []
+var _stack_scene := -1
+var _stack_palette := -1
+var _stack_look := ""
+var _stack_tier := ""
 var colours_in_use: Array = [Color.WHITE, Color.WHITE]   # the colours the heads are asked for now (two, or more for Raw / Deep / Hypnotic)
 var flash := 0.0
 var blind := 0.0
@@ -261,30 +266,38 @@ func _multi() -> bool:
 # [move, gate, colour, beam] for the head look now: its own, or a combination that follows from the scene, the track's
 # palette and the look (no chance in it, so a replay plays the same).
 func _stack(look: Array, tier: String) -> Array:
-	var own: Array = [look[3], look[4], look[5], look[6]]
-	if not _multi() or _scene % 3 == 0: return own
-	var h := absi(hash(_head_look))
-	var gates: Array = STACK_CALM_GATES if tier == "calm" else STACK_GATES
-	return [STACK_MOVES[(h + _scene * 3 + _palette) % STACK_MOVES.size()], gates[(floori(h / 7.0) + _scene * 2 + _palette * 5) % gates.size()],
-		STACK_COLOURS[(floori(h / 13.0) + _scene + _palette * 2) % STACK_COLOURS.size()], STACK_BEAMS[(floori(h / 17.0) + _scene * 3 + _palette) % STACK_BEAMS.size()]]
+	if not _stack_now.is_empty() and _stack_scene == _scene and _stack_palette == _palette and _stack_look == _head_look and _stack_tier == tier:
+		return _stack_now   # it only changes with the scene, the palette, the look or the part of the track
+	_stack_scene = _scene
+	_stack_palette = _palette
+	_stack_look = _head_look
+	_stack_tier = tier
+	_stack_now = [look[3], look[4], look[5], look[6]]
+	if _multi() and _scene % 3 != 0:
+		var h := absi(hash(_head_look))
+		var gates: Array = STACK_CALM_GATES if tier == "calm" else STACK_GATES
+		_stack_now = [STACK_MOVES[(h + _scene * 3 + _palette) % STACK_MOVES.size()], gates[(floori(h / 7.0) + _scene * 2 + _palette * 5) % gates.size()],
+			STACK_COLOURS[(floori(h / 13.0) + _scene + _palette * 2) % STACK_COLOURS.size()], STACK_BEAMS[(floori(h / 17.0) + _scene * 3 + _palette) % STACK_BEAMS.size()]]
+	stack_name = "%s · %s · %s · %s" % _stack_now
+	return _stack_now
 
 func _style() -> Dictionary:
 	return L.RAW_DEEP_STYLE if _multi() else L.style_of(mood_key, mood.family)
 
 # One colour of the palette for a head: the look's spread (sides, alternate, trusses, depth) over all the palette's
 # colours instead of two, and the dominant colour of a "mono" look moves on every 64 beats.
-func _spread(name: String, h: L.Head, beats: float, pal: Array) -> Color:
+func _spread(name: String, h: L.Head, k32: int, k64: int, pal: Array) -> Color:
 	var n := pal.size()
 	var side := 0 if h.fx.mount.x < 0.0 else 1
 	match name:
-		"sides", "centreWhite": return pal[(floori(beats / 32.0) + side) % n]
-		"alternate": return pal[(h.slot + floori(beats / 64.0)) % n]
-		"trusses": return pal[(h.row + floori(beats / 64.0)) % n]
+		"sides", "centreWhite": return pal[(k32 + side) % n]
+		"alternate": return pal[(h.slot + k64) % n]
+		"trusses": return pal[(h.row + k64) % n]
 		"depth":
 			var at := L.depth(h.fx.mount) * (n - 1)
 			var i := mini(floori(at), n - 1)
 			return pal[i].lerp(pal[mini(i + 1, n - 1)], at - i)
-	return pal[floori(beats / 64.0) % n]
+	return pal[k64 % n]
 
 # A break need not be the same floor scan every time: the heads take a curtain or a rake towards the stage,
 # and lean further out as the build-up grows.
@@ -706,6 +719,8 @@ func _direct(dt: float) -> void:
 	_row_w += ((0.28 + sig.build * 0.5 if brk else L.ROW_LEVEL.get(tier, 0.7)) * style.get("rowLevel", 1.0) - _row_w) * ease.call(1.2)
 	var lit_share: float = style.lit
 	var beats: float = sig.beats
+	var k32 := floori(beats / 32.0)   # the 32 and 64 beat counts the colour spread follows
+	var k64 := floori(beats / 64.0)
 	var pattern := floori(beats / 32.0) % 6
 	var bld := clampf(sig.build, 0.0, 1.0)
 	var dropk := clampf(sig.drop, 0.0, 1.0)
@@ -722,7 +737,6 @@ func _direct(dt: float) -> void:
 	var look_gate: String = stack[1]
 	var look_colour: String = stack[2]
 	var look_beam: Array = L.BEAMS[stack[3]]
-	stack_name = "%s · %s · %s · %s" % stack
 	var row_gate: String = row_def[2]
 	var row_colour: String = row_def[3]
 	var pattern_gain := 2.5 if pattern in [1, 2, 4] else 1.5
@@ -793,7 +807,7 @@ func _direct(dt: float) -> void:
 		# the look spreads the two colours, through a slow colour fade
 		var cname: String = look_colour if h.role == "overhead" else row_colour if row else "sides"
 		var share := L.colour(cname, h, beats)
-		var target := _vivid(_spread(cname, h, beats, pal).lerp(Color.WHITE, share.y)) if multi else _vivid(col.lerp(col2, share.x).lerp(Color.WHITE, share.y))
+		var target := _vivid(_spread(cname, h, k32, k64, pal).lerp(Color.WHITE, share.y)) if multi else _vivid(col.lerp(col2, share.x).lerp(Color.WHITE, share.y))
 		if warm > 0.0: target = target.lerp(WARM, warm)
 		if brk: target = target.lerp(Color.WHITE, white_k)
 		if not h.colored:
@@ -858,7 +872,7 @@ func _direct(dt: float) -> void:
 	hall_look = [head_name, truss_name, L.ROW_LOOKS[row_look][0]]
 	status = ("build-up" if sig.build > 0.45 else "break") if brk else SECTION_NAME.get(sec, sec) + " · " + head_name
 	_shown = [col, col2]
-	colours_in_use = pal.duplicate() if multi else [col, col2]
+	colours_in_use = pal if multi else _shown
 
 # SV in the browser draws a level of 1 as a full beam and its renderer is exposed for levels around 0.2 to 0.5;
 # this rig's lamps are linear up to 1. A soft knee keeps the order of things (calm, groove, drop) and lets the

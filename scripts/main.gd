@@ -34,6 +34,7 @@ var env: Environment
 var hud: Hud
 var bar: ShowBar
 var pause: PauseMenu
+var desk: LightDesk
 var help: HelpScreen
 var midi: MidiControls
 var menu: AppMenu
@@ -256,6 +257,9 @@ func _hud() -> void:
 	pause = PauseMenu.new()
 	add_child(pause)
 	pause.chosen.connect(_on_pause)
+	desk = LightDesk.new()
+	add_child(desk)
+	desk.light = show
 	if DisplayServer.get_name() != "headless":
 		midi = MidiControls.new()
 		add_child(midi)
@@ -405,6 +409,8 @@ func _unhandled_input(e: InputEvent) -> void:
 		return
 	match e.keycode:
 		KEY_B: _manual("blackout", not show.manual.blackout)
+		KEY_D: desk.toggle()
+		KEY_W: _say("Washes on" if desk.toggle_group("wash") else "Washes off", 1.5)
 		KEY_L: _manual("next_look", true)
 		KEY_I:
 			hud.info = not hud.info
@@ -454,6 +460,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			if _app: _remember("safe", show.safe)
 		KEY_ESCAPE:   # one step back: the help, the pause menu, or open the pause menu
 			if help.is_open(): help.close()
+			elif desk.is_open(): desk.close()
 			elif pause.is_open(): pause.back()
 			else: pause.open()
 
@@ -478,6 +485,7 @@ func _on_pause(what: String) -> void:
 	match what:
 		"settings": _open_settings("pause")
 		"source": _open_wizard("pause")
+		"desk": desk.open()
 		"menu": menu.open_panel()
 		"help": help.toggle()
 		"quit": _quit()

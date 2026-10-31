@@ -64,6 +64,65 @@ func _initialize() -> void:
 	show.manual.looks += 1
 	frame.call(1)
 	if show._scene != scene_before + 1: failed.append("next look did not start a new scene")
+	# the light desk: a group off or at a level, whatever the show plays; W takes the washes alone; all on again
+	var desk := LightDesk.new()
+	root.add_child(desk)
+	await process_frame   # the desk builds itself in _ready
+	desk.light = show
+	desk.open()
+	if not desk.is_open(): failed.append("the light desk does not open")
+	var group_lit := func(group: String) -> int:
+		var n := 0
+		for f in rig.fixtures:
+			if f.group == group and f.level > 0.003: n += 1
+		return n
+	var peak_lit := func(group: String, frames: int) -> int:   # the most heads of a group lit in any of these frames
+		var most := 0
+		for i in frames:
+			frame.call(1)
+			most = maxi(most, group_lit.call(group))
+		return most
+	var wash_mean := func(frames: int) -> float:
+		var total := 0.0
+		var count := 0
+		for i in frames:
+			frame.call(1)
+			for f in rig.fixtures:
+				if f.kind == Rig.WASH:
+					total += f.level
+					count += 1
+		return total / maxf(1.0, count)
+	if peak_lit.call("front", 200) == 0: failed.append("the stage row never lights before it is switched off")
+	desk._rows["front"].toggle.button_pressed = false   # a click on the switch
+	if float(show.tune.groups.get("front", 1.0)) != 0.0: failed.append("the switch does not set the group")
+	frame.call(5)
+	if peak_lit.call("front", 200) != 0: failed.append("a group that is off still lights")
+	if lit.call() == 0: failed.append("the rest of the show goes dark when one group is off")
+	var full: float = wash_mean.call(100)
+	if full <= 0.0: failed.append("the washes never light")
+	desk._rows["wash"].slider.value = 0.3   # moving the slider
+	if absf(float(show.tune.groups.get("wash", 1.0)) - 0.3) > 0.001: failed.append("the slider does not set the level")
+	var third: float = wash_mean.call(100)
+	if not third < 0.5 * full: failed.append("washes at 30%% give %.3f against %.3f" % [third, full])
+	if desk.toggle_group("wash"): failed.append("W does not switch the washes off")   # W is this call
+	frame.call(40)
+	for f in rig.fixtures:
+		if f.kind == Rig.WASH and f.level > 0.003: failed.append("a wash lights with the washes off"); break
+	if not desk.toggle_group("wash") or absf(float(show.tune.groups.get("wash", 1.0)) - 0.3) > 0.001: failed.append("W does not give the washes their level back")
+	desk._rows["batten"].toggle.button_pressed = false
+	frame.call(40)
+	for b in rig.battens:
+		if maxf(b.level, b.strobe) > 0.003: failed.append("a bar lights with the bars off"); break
+	desk.close()
+	desk.open()
+	if desk._rows["front"].toggle.button_pressed or desk._rows["wash"].slider.value != 0.3: failed.append("the desk does not show what the show has")
+	desk.all_on()
+	if not show.tune.groups.is_empty(): failed.append("all on leaves a group changed: " + str(show.tune.groups))
+	if peak_lit.call("front", 200) == 0: failed.append("the stage row does not come back")
+	desk.free()
+	# which SV this is
+	if BuildInfo.version() != str(ProjectSettings.get_setting("application/config/version")) or not BuildInfo.label().begins_with(BuildInfo.version()):
+		failed.append("the version label is wrong: " + BuildInfo.label())
 	# the controller: learn a pad, press it, let it go; kept in its file
 	var midi := MidiControls.new()
 	midi.path = "user://test_midi.cfg"

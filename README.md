@@ -79,6 +79,8 @@ To make an app for Windows, macOS or Linux, see [builds](docs/builds.md).
 | Esc | Pause menu (the show goes on) |
 | ? or F1 | All keys |
 | B | Blackout on / off |
+| D | Light desk: every group of lights on / off, with a level slider |
+| W | Washes on / off |
 | Space | Strobe while held |
 | N | Blinders while held |
 | L | Next look |

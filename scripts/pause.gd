@@ -3,7 +3,7 @@ extends CanvasLayer
 # Escape during the show: a menu over the hall. The music, the show and the light go on; nothing stops by accident.
 # Escape goes one step back: from the controller page to the menu, from the menu to the show.
 
-signal chosen(what: String)   # "settings", "source", "help", "menu", "quit"
+signal chosen(what: String)   # "settings", "source", "desk", "help", "menu", "quit"
 
 var midi: MidiControls
 var _root: Control
@@ -31,6 +31,7 @@ func _ready() -> void:
 	_button(_main, "Settings", func(): _choose("settings"))
 	_button(_main, "Source", func(): _choose("source"))
 	_button(_main, "DJ controller", func(): _show_controller())
+	_button(_main, "Light desk", func(): _choose("desk"))
 	_button(_main, "Help", func(): _choose("help"))
 	_menu_button = _button(_main, "Quit to menu", func(): _choose("menu"))
 	_menu_button.visible = false   # until there is a start screen

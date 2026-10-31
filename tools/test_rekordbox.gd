@@ -116,10 +116,118 @@ func _run() -> void:
 		bytes.resize(randi_range(0, 128))
 		for j in bytes.size(): bytes[j] = randi_range(0, 255)
 		reject(rb, bytes, "random datagram %d" % i)
+	_test_track_phrases()
 	rb.free()
 	if "--udp" in OS.get_cmdline_user_args(): await _test_udp()
 	print("rekordbox: %d checks, %d failures" % [checks, failures])
 	quit(0 if failures == 0 else 1)
+
+# Synthetic OSC reaches both the receiver and the actual show decisions.
+func _test_track_phrases() -> void:
+	for name in ["sv_beat", "sv_energy", "sv_hands", "sv_haze", "sv_phones"]:
+		RenderingServer.global_shader_parameter_add(name, RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+	var rb := Rekordbox.new()
+	rb.replaying = true
+	rb.replay_live = true
+	var rig := Rig.new()
+	var hall := Hall.new()
+	var listen := Listen.new()
+	var show := Show.new(rig, hall, {"genre": "house"})
+	var send := func(deck: String, field: String, value: Variant) -> void:
+		check(rb._read(message("/" + deck + "/" + field, value)), "Accept %s/%s" % [deck, field])
+	var tick := func() -> void: show.update(0.1, listen, rb)
+	for item in [["track/title", "Track A"], ["bpm/current", 128.0], ["phrase/available", 1],
+		["phrase/current", "Up"], ["phrase/next", "Chorus"], ["phrase/countin", 0.5]]:
+		send.call("1", item[0], item[1])
+	for item in [["track/title", "Other"], ["phrase/available", 1], ["phrase/current", "Outro"],
+		["phrase/next", "Chorus"], ["phrase/countin", 12.0]]:
+		send.call("2", item[0], item[1])
+	tick.call()
+	check(show.section == "build" and show.blackout == 1.0, "Initial valid Up/countdown reaches the show")
+	var other_before := rb.fields.duplicate(true)
+	send.call("1", "track/title", "Track A")
+	tick.call()
+	check(show.phrase == "Up" and show.countin == 0.5 and show.blackout == 1.0, "Repeated title keeps phrase and countdown")
+	send.call("1", "phrase/available", 0)
+	tick.call()
+	check(show.phrase == "" and show.countin == -1.0 and show.blackout == 0.0, "Unavailable clears an active phrase on the same track")
+	send.call("1", "phrase/available", 1)
+	for item in [["phrase/current", "Up"], ["phrase/next", "Chorus"], ["phrase/countin", 0.5]]:
+		send.call("1", item[0], item[1])
+	tick.call()
+	check(show.blackout == 1.0, "Analysis resumes on the same track")
+	send.call("1", "track/title", "Track B")
+	check(not rb.fields.has("1/phrase/current") and not rb.fields.has("1/phrase/next") and not rb.fields.has("1/phrase/countin"), "Changed title clears old phrase data immediately")
+	for key in other_before:
+		if str(key).begins_with("2/"): check(rb.fields.get(key) == other_before[key], "Other deck retains " + key)
+	send.call("1", "phrase/available", 0)
+	tick.call()
+	check(show.phrase == "" and show.next_phrase == "" and show.countin == -1.0, "Unavailable analysis has no phrase or countdown")
+	check(show.blackout == 0.0 and show.section == "groove" and show.build == 0.0, "Missing analysis falls back to groove without inherited blackout")
+	# A partial phrase packet cannot predict a blackout before the current phrase arrives.
+	send.call("1", "phrase/available", 1)
+	send.call("1", "phrase/next", "Chorus")
+	send.call("1", "phrase/countin", 0.5)
+	tick.call()
+	check(show.phrase == "" and show.blackout == 0.0 and show.build == 0.0, "Partial phrase analysis cannot trigger a blackout")
+	send.call("1", "phrase/available", 0)
+	# Unavailable is authoritative even if old or late phrase messages arrive.
+	for item in [["phrase/current", "Up"], ["phrase/next", "Chorus"], ["phrase/countin", 0.5]]:
+		send.call("1", item[0], item[1])
+	tick.call()
+	check(show.phrase == "" and show.next_phrase == "" and show.countin == -1.0 and show.blackout == 0.0, "Unavailable rejects late phrase data")
+	send.call("1", "phrase/available", 1)
+	tick.call()
+	check(show.phrase == "" and show.countin == -1.0 and show.blackout == 0.0, "Availability alone does not resurrect a prior phrase")
+	for item in [["phrase/current", "Up"], ["phrase/next", "Chorus"], ["phrase/countin", 0.5]]:
+		send.call("1", item[0], item[1])
+	tick.call()
+	check(show.section == "build" and show.blackout == 1.0 and show.build > 0.9, "Fresh analysis can build and black out")
+	send.call("1", "phrase/current", "Chorus")
+	tick.call()
+	check(show.section == "peak" and show.dropped and show.blackout == 0.0, "Valid transition into Chorus still drops")
+	send.call("1", "track/id", "id-a")
+	send.call("1", "track/id", "id-a")
+	check(rb.value("phrase/current") == "Chorus", "Initial and repeated ID keep current track's phrase")
+	send.call("1", "track/id", "id-b")
+	tick.call()
+	check(show.phrase == "" and show.next_phrase == "" and show.countin == -1.0 and show.blackout == 0.0, "Changed ID clears phrase with unchanged title")
+	# Replay may supply raw unavailable fields directly; consumers must still ignore them.
+	rb.fields["1/phrase/available"] = 0
+	rb.fields["1/phrase/current"] = "Up"
+	rb.fields["1/phrase/next"] = "Chorus"
+	rb.fields["1/phrase/countin"] = 0.5
+	tick.call()
+	check(show.phrase == "" and show.blackout == 0.0, "Unavailable replay fields cannot trigger blackout")
+	# Unknown phrases must not look like a transition on an incoming deck.
+	rb.fields.clear()
+	rb.active = "1"
+	for item in [["1", "track/title", "First"], ["1", "transport/playing", 1],
+		["1", "phrase/current", "Outro"], ["2", "track/title", "Second"],
+		["2", "transport/playing", 1], ["2", "phrase/current", "Verse"]]:
+		send.call(item[0], item[1], item[2])
+	show._deck_seen.clear()
+	show.playing.clear()
+	show._deck_phrase.clear()
+	show._choose_deck(0.1, rb)
+	show._rb_clock = 60.0
+	show._both_from = 0.0
+	rb.fields["2/phrase/available"] = 0
+	rb.fields["2/phrase/current"] = "Chorus"   # raw legacy replay data
+	show._choose_deck(0.1, rb)
+	check(rb.active == "1", "Unavailable incoming phrase does not trigger a deck switch")
+	rb.fields.erase("2/phrase/current")
+	send.call("2", "phrase/available", 1)
+	send.call("2", "phrase/current", "Chorus")
+	show._choose_deck(0.1, rb)
+	check(rb.active == "1", "The first newly available phrase is not a transition")
+	send.call("2", "phrase/current", "Verse")
+	show._choose_deck(0.1, rb)
+	check(rb.active == "2", "A later valid incoming phrase transition switches decks")
+	rig.free()
+	hall.free()
+	listen.free()
+	rb.free()
 
 func _test_udp() -> void:
 	var probe := PacketPeerUDP.new()

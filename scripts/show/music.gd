@@ -117,7 +117,8 @@ func _from_rekordbox(dt: float, rb: Rekordbox, l: Listen) -> void:
 	elif p.begins_with("down") or p.begins_with("bridge"): section = "break"
 	elif p.begins_with("chorus"): section = "peak"
 	elif p != "": section = "groove"
-	var coming := next_phrase.to_lower().begins_with("chorus") and countin >= 0.0 and section != "peak"
+	else: section = "groove"   # no phrase analysis: neutral, no predicted build or blackout
+	var coming := p != "" and next_phrase.to_lower().begins_with("chorus") and countin >= 0.0 and section != "peak"
 	build = clampf(1.0 - countin / 32.0, 0.0, 1.0) if coming else 0.0
 	blackout = 1.0 if coming and countin <= 1.0 else 0.0
 
@@ -167,12 +168,12 @@ func _choose_deck(dt: float, rb: Rekordbox) -> void:
 		if other == "": _both_from = -1.0
 		else:
 			if _both_from < 0.0: _both_from = _rb_clock
-			var mine := Rekordbox.phrase_name(rb.fields.get(pick + "/phrase/current", "")).to_lower()
-			var theirs := Rekordbox.phrase_name(rb.fields.get(other + "/phrase/current", ""))
-			var turned: bool = _deck_phrase.has(other) and _deck_phrase[other] != theirs
+			var mine: String = rb.value_for(pick, "phrase/current", "").to_lower()
+			var theirs: String = rb.value_for(other, "phrase/current", "")
+			var turned: bool = _deck_phrase.has(other) and theirs != "" and _deck_phrase[other] != "" and _deck_phrase[other] != theirs
 			var bars := (_rb_clock - _both_from) * maxf(bpm, 60.0) / 60.0 / 4.0
 			if mine.begins_with("outro") and bars >= 8.0 and turned: pick = other
-	for d in ["1", "2", "3", "4"]: _deck_phrase[d] = Rekordbox.phrase_name(rb.fields.get(d + "/phrase/current", ""))
+	for d in ["1", "2", "3", "4"]: _deck_phrase[d] = rb.value_for(d, "phrase/current", "")
 	if pick == "": pick = "1"
 	if pick != rb.active:
 		if _log: print("rekordbox: following deck %s" % pick)

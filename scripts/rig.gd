@@ -119,6 +119,7 @@ func build() -> void:
 	_gobo = _gobo_texture()
 	var chords := Kit.Batch.new(Kit.unit_tube(), alu)
 	var braces := Kit.Batch.new(Kit.unit_tube(), alu)
+	var plates := Kit.Batch.new(Kit.unit_box(), alu)
 	var F := Hall.FRONT
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--trusses="): shape = a.get_slice("=", 1)
@@ -197,19 +198,18 @@ func build() -> void:
 	for x in [-14.0, -7.0, 0.0, 7.0, 14.0]: _batten("rear", Vector3(x + 1.75, 10.72, bz - 0.45), -1, Vector3.RIGHT, at_stage, (x + 19.0) / 38.0)
 	for x in [-12.0, -4.0, 4.0, 12.0]: _blinder(Vector3(x, 10.55, bz - 0.4), Vector3(x * 0.8, 1.5, -8.0))
 
-	# delay towers halfway down either side: ground support, beams on top, battens down the front
+	# delay towers halfway down either side: a box-truss tower on a base plate, a bar across its top with the beams
+	# hung on it, battens down the front
 	for s in [-1.0, 1.0]:
 		var x: float = s * 15.5
 		var z := 4.0
-		for c in [Vector3(-0.6, 0, -0.6), Vector3(0.6, 0, -0.6), Vector3(0.6, 0, 0.6), Vector3(-0.6, 0, 0.6)]:
-			chords.add(Kit.tube(Vector3(x, 0, z) + c, Vector3(x, 9.0, z) + c, 0.04))
-		for h in [3.0, 6.0, 9.0]:
-			for e in [[Vector3(-0.6, h, -0.6), Vector3(0.6, h, -0.6)], [Vector3(0.6, h, -0.6), Vector3(0.6, h, 0.6)], [Vector3(0.6, h, 0.6), Vector3(-0.6, h, 0.6)], [Vector3(-0.6, h, 0.6), Vector3(-0.6, h, -0.6)]]:
-				braces.add(Kit.tube(Vector3(x, 0, z) + e[0], Vector3(x, 0, z) + e[1], 0.025))
+		Kit.truss(chords, braces, Vector3(x, 0.05, z), Vector3(x, 9.0, z), 0.5)
+		Kit.truss(chords, braces, Vector3(x - 1.0, 9.0, z), Vector3(x + 1.0, 9.0, z), 0.3)
+		plates.add(Kit.block(Vector3(0.9, 0.05, 0.9), Vector3(x, 0.025, z)))
 		for j in 4:
-			var f := _add(BEAM, "delay", Vector3(x + (j % 2 - 0.5) * 0.8, 9.05, z + (j / 2 - 0.5) * 0.8), Vector3.UP, -1, j / 3.0, 0)
+			var f := _add(BEAM, "delay", Vector3(x + (j - 1.5) * 0.5, 9.2, z), Vector3.UP, -1, j / 3.0, 0)
 			f.xn = s
-		for h in [4.0, 7.0]: _batten("delay", Vector3(x, h, z - 0.7), -1, Vector3.UP, Vector3.FORWARD, 0.5 + s * 0.5)
+		for h in [4.0, 7.0]: _batten("delay", Vector3(x, h, z - 0.32), -1, Vector3.UP, Vector3.FORWARD, 0.5 + s * 0.5)
 
 	# side: towers on the floor along both walls, beams across the hall and a batten up each
 	for s in [-1.0, 1.0]:
@@ -223,6 +223,7 @@ func build() -> void:
 
 	chords.build(self)
 	braces.build(self)
+	plates.build(self)
 
 	for f in fixtures:
 		f.x01 = clampf((f.mount.x + 21.0) / 42.0, 0.0, 1.0)

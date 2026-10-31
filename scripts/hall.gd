@@ -421,8 +421,8 @@ func _booth(black: Material) -> void:
 		elif arg in ["--booth=club", "--booth=2"]: booth_decks = 2
 	var positions := [0.7566, 0.394, -0.394, -0.7566] if booth_decks == 4 else [0.394, -0.394]
 	for i in positions.size():
-		_cdj_3000x(Vector3(positions[i], TABLE, zt + 0.12), i + 1)
-	_djm_a9(Vector3(0, TABLE, zt + 0.10395))
+		_cdj_3000x(Vector3(positions[i], TABLE, zt - 0.08), i + 1)   # 0.2 m nearer the DJ than before: the gear sits close to the table edge the DJ stands at
+	_djm_a9(Vector3(0, TABLE, zt - 0.09605))
 	for batch: Kit.Batch in _gear_batches.values(): batch.build(self)
 	_gear_batches.clear()
 	var lamp := SpotLight3D.new()

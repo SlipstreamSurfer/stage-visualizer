@@ -65,6 +65,7 @@ func _run() -> void:
 	app.show = show
 	app.env = environment
 	app.crowd = Crowd.new()
+	app.crowd.build(0)
 	rig.room_level = 8.0
 	rig.room_color = Color(0.1,0.4,0.8)
 	show.tune.haze = 0.0

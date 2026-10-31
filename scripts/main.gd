@@ -37,6 +37,8 @@ var pause: PauseMenu
 var desk: LightDesk
 var help: HelpScreen
 var midi: MidiControls
+var _held_keyboard := {"strobe": false, "blinder": false}
+var _held_midi := {"strobe": false, "blinder": false}
 var menu: AppMenu
 var wizard: SetupWizard
 var _return_to := ""    # where a screen goes back to when it closes: "menu", "pause", "start" (then the show) or ""
@@ -214,7 +216,7 @@ func _environment() -> void:
 	env.glow_bloom = 0.04
 	env.glow_hdr_threshold = 0.9
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
-	env.volumetric_fog_density = 0.009
+	env.volumetric_fog_density = Haze.DENSITY
 	env.volumetric_fog_albedo = Color(0.92, 0.93, 0.96)
 	env.volumetric_fog_anisotropy = 0.55
 	env.volumetric_fog_length = 70.0
@@ -233,7 +235,10 @@ func _environment() -> void:
 # The show's light on the room (SV in the browser: hall light and fog colour from director.room): the hall's
 # surfaces take a little of the show's colour, the haze glows with it, a kick lifts both and a strobe flashes the room.
 var _room_level := 0.0
+var _haze_level := -1.0
 func _room(dt: float) -> void:
+	var haze := Haze.level(show.tune.get("haze", 1.0))
+	if not is_equal_approx(haze, _haze_level): _haze_level = Haze.apply(haze, env, hall)
 	if args.has("bright"): return
 	_room_level = maxf(rig.room_level, lerpf(_room_level, rig.room_level, 1.0 - exp(-dt * 8.0)))
 	var c := rig.room_color
@@ -241,8 +246,9 @@ func _room(dt: float) -> void:
 	# strobes and blinders light the room through their own lamps (Rig); here only the show's glow, capped
 	var level := minf(_room_level, 30.0)
 	env.ambient_light_energy = 0.02 + level * 0.0014
-	var glow := (0.004 + level * 0.0008) * float(show.mood.get("haze", 1.0))
+	var glow := (0.004 + level * 0.0008) * float(show.mood.get("haze", 1.0)) * minf(haze, 1.0)
 	env.volumetric_fog_emission = Color(c.r * glow, c.g * glow, c.b * glow)
+	crowd.stage_light(c, level, dt)
 
 func _hud() -> void:
 	hud = Hud.new()
@@ -260,12 +266,13 @@ func _hud() -> void:
 	desk = LightDesk.new()
 	add_child(desk)
 	desk.light = show
+	desk.set_fog_enabled(env.volumetric_fog_enabled)
 	if DisplayServer.get_name() != "headless":
 		midi = MidiControls.new()
 		add_child(midi)
 		pause.midi = midi
 		midi.pressed.connect(_midi_pressed)
-		midi.released.connect(func(action: String): if action in ["strobe", "blinder"]: _manual(action, false))
+		midi.released.connect(_midi_released)
 
 # The source and the graphics, from the settings screen (and once at the start).
 func _apply_settings(options: Dictionary) -> void:
@@ -288,6 +295,7 @@ func _apply_settings(options: Dictionary) -> void:
 func _set_level(i: int) -> void:
 	level = clampi(i, 0, Quality.ORDER.size() - 1)
 	Quality.apply(Quality.ORDER[level], env, get_viewport(), rig, crowd)
+	if desk != null: desk.set_fog_enabled(env.volumetric_fog_enabled)
 	steady.reset(Quality.PRESETS[Quality.ORDER[level]].scale)
 
 func _say(text: String, seconds := 3.0) -> void:
@@ -391,6 +399,12 @@ func _frame(dt: float, live: bool) -> void:
 		_quit()
 	if args.has("seconds") and _clock >= float(args.seconds): _quit()
 
+func _input(e: InputEvent) -> void:
+	# Release before a panel consumes unhandled input; presses still belong to the GUI first.
+	if e is InputEventKey and not e.pressed:
+		if e.keycode == KEY_SPACE: _hold("strobe", false, _held_keyboard)
+		elif e.keycode == KEY_N: _hold("blinder", false, _held_keyboard)
+
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventMouseMotion:
 		_mouse_idle = 0.0
@@ -400,8 +414,8 @@ func _unhandled_input(e: InputEvent) -> void:
 		return
 	if not (e is InputEventKey and not e.echo): return
 	# held: strobe and blinders as long as the key is down
-	if e.keycode == KEY_SPACE: _manual("strobe", e.pressed)
-	elif e.keycode == KEY_N: _manual("blinder", e.pressed)
+	if e.pressed and e.keycode == KEY_SPACE: _hold("strobe", true, _held_keyboard)
+	elif e.pressed and e.keycode == KEY_N: _hold("blinder", true, _held_keyboard)
 	if not e.pressed: return
 	bar.wake()
 	if e.keycode == KEY_F1 or e.unicode == 63:   # ? or F1
@@ -465,6 +479,10 @@ func _unhandled_input(e: InputEvent) -> void:
 			else: pause.open()
 
 # The DJ's own buttons, from the keyboard or a controller.
+func _hold(action: String, on: bool, source: Dictionary) -> void:
+	source[action] = on
+	if show: _manual(action, _held_keyboard[action] or _held_midi[action])
+
 func _manual(action: String, on: bool) -> void:
 	match action:
 		"blackout":
@@ -479,7 +497,11 @@ func _manual(action: String, on: bool) -> void:
 
 # A pad: blackout toggles, strobe and blinders hold, next look steps on.
 func _midi_pressed(action: String) -> void:
-	_manual(action, not show.manual.blackout if action == "blackout" else true)
+	if action in ["strobe", "blinder"]: _hold(action, true, _held_midi)
+	else: _manual(action, not show.manual.blackout if action == "blackout" else true)
+
+func _midi_released(action: String) -> void:
+	if action in ["strobe", "blinder"]: _hold(action, false, _held_midi)
 
 func _on_pause(what: String) -> void:
 	match what:
@@ -586,6 +608,11 @@ func _quit(code := 0) -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST: _quit()
+	elif what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		for action in ["strobe", "blinder"]:
+			_held_midi[action] = false
+			_hold(action, false, _held_keyboard)
+		if midi: midi.clear_held()
 
 func _exit_tree() -> void:
 	session.stop()

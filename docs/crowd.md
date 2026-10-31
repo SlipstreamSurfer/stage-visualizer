@@ -59,3 +59,40 @@ arm-joint tags, phones, nods and jumps are unchanged. No textures or CPU animati
 `tools/test_crowd_detail.gd` checks the triangle budget, scale, normals, ear silhouette, non-degenerate triangles,
 material/joint tags, single-surface instancing and the Light visibility count. Frozen-pose Forward+ comparisons
 cover close-up faces, raised arms and phones under identical inspection lighting; they are not live-show footage.
+
+## A mixed crowd and the stage's light
+
+Shirts, trousers and hair come from tables in `Crowd` (`CLOTH`, `HAIR`, `PANTS`): linear colours with the share of
+the crowd that wears each. Most of the crowd stays dark, as at a techno night; about 4 % wear white and 3 % neon, so a
+few shirts catch the show's colour. Hair runs from black through brown and blond to grey, with a rare dyed colour.
+The shader picks an entry from the existing appearance and timing hashes, so there is no extra instance data.
+Narrower shoulders tend to wider hips and legs, for a mixed impression of builds.
+
+`Crowd.stage_light()` takes the show's room colour and level (from `main._room`) and eases it over about a third of
+a second, so a kick or a strobe frame does not flash the whole crowd; in a blackout it fades to nothing. The shader
+uses it for an edge on hair and shoulders facing the stage (what the audience sees from behind) and a little colour
+on the fronts, strongest at the barrier and fading towards the back. It is emission, so it is not shadowed by the
+people in front.
+
+Still one surface and one MultiMesh draw, no textures; 938 triangles per person. `tools/test_crowd_detail.gd` checks
+the shares (every colour worn, white and neon rare, most of the crowd dark) and the eased, blackout-safe stage light.
+Measured on the GTX 1660 SUPER, Normal, 1080p, the same synthetic scene, three runs alternating before and after
+(median): front of house 5.71 → 5.89 ms, DJ eyes 7.45 → 7.68 ms GPU.
+
+## Six ways to dance
+
+Every person has one of six styles: jumper, stomper, arm pumper, groover, hip swayer and watcher. `Crowd` picks it at
+build time from the mix for their part of the hall (`FRONT_MIX`, `MIDDLE_MIX`, `BACK_MIX`, split at `FRONT_ZONE` and
+`MIDDLE_ZONE` metres behind the barrier): wilder at the barrier, calmer at the back. Change those constants to change
+the mix; a separate random stream keeps everyone standing where they stood.
+
+The style is the whole part of INSTANCE_CUSTOM.x (the timing stays its fraction), so there is no extra instance data.
+`person.gdshader` gives each style its own weights (`NOD`, `DIP`, `JUMP`, `STOMP`, `PUMP`, `HIPS`, `TWIST`, `HANDS`):
+the jumper jumps from a medium energy on, the stomper stamps a foot down on each beat and leans in, the arm pumper
+punches a fist above the head on the kick, the groover dips deep and turns the upper body, the hip swayer moves the
+hips over two beats with feet planted, and the watcher barely moves. Phones and the DJ behave as before.
+
+`tools/test_crowd_detail.gd` checks every zone's mix against its constants (within 6 points), that every style dances
+in every zone, that the front has more jumpers and stompers than the back, and that the shader moves each style.
+GPU, Normal, 1080p, GTX 1660 SUPER, same synthetic scene, three alternating runs (median): front of house
+5.89 → 6.17 ms, DJ eyes 7.76 → 8.03 ms.

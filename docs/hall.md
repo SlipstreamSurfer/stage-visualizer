@@ -47,6 +47,17 @@ surface; all eight signs share one draw. The hall's potential mesh surfaces,
 including unchanged booth/PA geometry but excluding labels, fall from 134 to
 110. This is a geometry audit, not a count of shadow/SSR passes or visible draws.
 
+## PA direction
+
+The main arrays and floor subs have visible grilles facing the audience (+Z). The arrays toe towards the centre
+rather than the walls, and their increasing inter-box angle bends the lower cabinets down. The original hang
+positions, cabinet counts and angle magnitudes are retained; these are simplified visual models, not an acoustic
+coverage calculation. Booth monitors retain their independent orientation towards the DJ.
+
+All 48 PA grilles share one static, single-surface MultiMesh without shadows. They sit inside the original cabinet
+depth, with the casing recessed behind them. `tools/test_pa.gd` reads the actual generated batch transforms to check
+downward aiming, inward toe, cabinet counts and the unchanged front-head row with its deliberate PA gaps.
+
 ## Measurements and checks
 
 Godot 4.7.2 Forward+, 1920×1080, same local track, sequential GPU runs without

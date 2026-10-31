@@ -77,11 +77,11 @@ if [[ ! -d "$root/.godot" ]]; then
     fi
 fi
 run import "$godot_bin" --headless --path "$root" --editor --import
-for check in test_app test_controls test_light_desk test_show_checks test_choreography test_sequencer test_stage_detail test_crowd_detail test_session test_rekordbox test_listen_ear; do
+for check in test_app test_controls test_held_input test_light_desk test_show_checks test_choreography test_sequencer test_stage_detail test_crowd_detail test_pa test_haze test_session test_rekordbox test_listen_ear; do
     run "$check" "$godot_bin" --headless --path "$root" --script "tools/$check.gd"
 done
 if "$test_only"; then
-    echo 'Import and all eleven checks passed.'
+    echo 'Import and all fourteen checks passed.'
     exit 0
 fi
 mkdir -p "$out/linux" "$out/windows"

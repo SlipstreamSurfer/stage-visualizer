@@ -1,20 +1,44 @@
 // One opaque surface for all people. Colour: r = joint, g = side, b = material.
-// INSTANCE_CUSTOM: x = timing, y = energy, z = hands threshold, w = appearance.
+// INSTANCE_CUSTOM: x = dance style (whole part, Crowd.STYLES) + timing (fraction), y = energy, z = hands threshold,
+// w = appearance.
 shader_type spatial;
 
 global uniform float sv_beat;
 global uniform float sv_energy;
 global uniform float sv_hands;
 global uniform float sv_phones;
+// What people wear (Crowd.CLOTH, HAIR, PANTS): colours and where each share ends, from 0 to 1.
+uniform vec3 cloth_colours[14];
+uniform float cloth_ends[14];
+uniform vec3 hair_colours[8];
+uniform float hair_ends[8];
+uniform vec3 pants_colours[6];
+uniform float pants_ends[6];
+// The stage's light on the crowd (Crowd.stage_light), strongest at the barrier.
+uniform vec3 stage_light = vec3(0.0);
+uniform float barrier_z = -24.0;
 varying vec3 tint;
+varying float stage_near;
 varying float screen_light;
 varying float skin_part;
 varying float face_part;
 varying vec3 rest_position;
 
+// How each dance style moves (Crowd.STYLES): jumper, stomper, arm pumper, groover, hip swayer, watcher.
+const float NOD[6] = {1.0, 1.3, 0.8, 1.0, 0.6, 0.45};     // head nod on the beat
+const float DIP[6] = {1.0, 0.6, 0.8, 1.7, 0.5, 0.25};     // knee dip on the beat
+const float JUMP[6] = {1.0, 0.0, 0.3, 0.25, 0.0, 0.0};    // jumps (the jumper from a medium energy on)
+const float STOMP[6] = {0.0, 1.0, 0.0, 0.0, 0.0, 0.0};    // a foot stamped down on each beat, leaning in
+const float PUMP[6] = {0.0, 0.0, 1.0, 0.0, 0.0, 0.0};     // a fist pumped above the head
+const float HIPS[6] = {0.0, 0.0, 0.0, 0.35, 1.0, 0.2};    // hips side to side over two beats
+const float TWIST[6] = {0.0, 0.2, 0.3, 1.0, 0.5, 0.0};    // the upper body turning with the groove
+const float HANDS[6] = {1.0, 0.6, 1.4, 1.0, 0.9, 0.3};    // how readily the hands go up
+
 void vertex() {
 	rest_position = VERTEX;
 	vec4 c = INSTANCE_CUSTOM;
+	int style = clamp(int(c.x), 0, 5);
+	c.x = fract(c.x);
 	float side = COLOR.g * 2.0 - 1.0;
 	float region = COLOR.b;
 	float arm = step(0.1, COLOR.r);
@@ -42,20 +66,25 @@ void vertex() {
 		VERTEX.y = 1.665 + (VERTEX.y - 1.665) * hair_height;
 		NORMAL.y /= hair_height;
 	}
-	float nod = (0.035 + energy * 0.16) * pulse;
+	float nod = (0.035 + energy * 0.16) * pulse * NOD[style];
 	vec2 neck = vec2(1.49, 0.0);
 	vec2 rel_head = VERTEX.yz - neck;
 	VERTEX.yz = mix(VERTEX.yz, neck + mat2(vec2(cos(nod), sin(nod)), vec2(-sin(nod), cos(nod))) * rel_head, head);
 	NORMAL.yz = mix(NORMAL.yz, mat2(vec2(cos(nod), sin(nod)), vec2(-sin(nod), cos(nod))) * NORMAL.yz, head);
-	float up = smoothstep(c.z, c.z + 0.28, sv_hands);
+	float up = smoothstep(c.z, c.z + 0.28, sv_hands * HANDS[style]);
 	float phone_arm = phone_up * step(0.5, COLOR.g);
 	float bend = mix(0.18 + 0.65 * fract(c.x * 19.4 + side * 0.31) + up * 0.5, 0.12, phone_arm);
+	// the arm pumper's right fist goes up and down with the kick
+	float pump = PUMP[style] * step(0.5, COLOR.g) * (1.0 - phone_up) * smoothstep(0.15, 0.45, sv_energy);
+	float punch = max(0.0, pulse);
+	bend = mix(bend, 0.35 + 1.1 * (1.0 - punch), pump);
 	vec2 elbow = vec2(1.12, 0.0);
 	mat2 fold = mat2(vec2(cos(bend), -sin(bend)), vec2(sin(bend), cos(bend)));
 	VERTEX.yz = mix(VERTEX.yz, elbow + fold * (VERTEX.yz - elbow), lower_arm);
 	NORMAL.yz = mix(NORMAL.yz, fold * NORMAL.yz, lower_arm);
 	float a = side * (0.07 + up * mix(2.05, 2.8, fract(c.w * 11.3 + side * 0.37)) + energy * 0.11 * sin(ph * 3.141593 + side));
 	a = mix(a, 2.95, phone_arm);
+	a = mix(a, side * (2.15 + 0.4 * punch), pump);
 	vec2 shoulder = vec2(0.23 * side, 1.40);
 	mat2 lift = mat2(vec2(cos(a), sin(a)), vec2(-sin(a), cos(a)));
 	VERTEX.xy = mix(VERTEX.xy, shoulder + lift * (VERTEX.xy - shoulder), arm);
@@ -64,14 +93,34 @@ void vertex() {
 	float build = mix(0.82, 1.20, fract(c.w * 13.71));
 	float width = mix(build, mix(0.92, 1.10, fract(c.x * 9.7)), head);
 	float depth = mix(0.82, 1.22, fract(c.w * 5.31));
+	// Hips and legs against the shoulders: narrow shoulders tend to wider hips, for a mixed crowd.
+	float hips = mix(1.16, 0.92, fract(c.w * 13.71)) * mix(0.96, 1.04, fract(c.x * 3.9));
+	width *= mix(1.0, hips, (1.0 - smoothstep(0.86, 1.12, VERTEX.y)) * (1.0 - arm) * (1.0 - head));
 	VERTEX.x *= width;
 	VERTEX.z *= depth;
 	NORMAL.x /= width;
 	NORMAL.z /= depth;
+	// The style's own moves; the height a vertex moves with is its shoulder's for the arms.
+	float carried = arm > 0.5 ? 1.40 : rest_position.y;
+	float beat_in = fract(ph);
+	bool leg = arm < 0.5 && rest_position.y < 0.86 && (region > 0.2 && region < 0.8) && !phone_part;
+	float lead = mod(floor(ph), 2.0) < 1.0 ? 1.0 : -1.0;
+	float foot_up = smoothstep(0.0, 0.55, beat_in) * (1.0 - smoothstep(0.78, 1.0, beat_in)) * (0.05 + 0.1 * energy);
+	float stomp = STOMP[style] * foot_up * ((leg && sign(VERTEX.x) == lead) ? 1.0 - rest_position.y / 0.86 : 0.0);
+	VERTEX.y += stomp;
+	VERTEX.z += stomp * 0.6;
+	VERTEX.z += STOMP[style] * (0.03 + 0.04 * energy) * smoothstep(0.9, 1.7, carried);
+	float hip = sin(ph * 3.141593 + c.w * 6.0) * 0.075 * HIPS[style] * (0.4 + 0.6 * energy);
+	VERTEX.x += hip * smoothstep(0.15, 0.95, carried) * (1.0 - 0.6 * smoothstep(1.0, 1.6, carried));
+	float turn = sin(ph * 3.141593) * 0.24 * TWIST[style] * (0.3 + 0.7 * energy) * smoothstep(0.85, 1.3, carried);
+	mat2 twist = mat2(vec2(cos(turn), -sin(turn)), vec2(sin(turn), cos(turn)));
+	VERTEX.xz = twist * VERTEX.xz;
+	NORMAL.xz = twist * NORMAL.xz;
 	// A knee dip on each beat, then airborne on energetic drops; some jump every other beat.
-	float dip = (0.5 - 0.5 * cos(ph * 6.283185)) * (0.01 + 0.045 * energy);
+	float dip = (0.5 - 0.5 * cos(ph * 6.283185)) * (0.01 + 0.045 * energy) * DIP[style];
 	float excitement = max(sv_energy, sv_hands * smoothstep(0.25, 0.5, sv_energy));
-	float jumping = smoothstep(0.72, 0.96, excitement) * smoothstep(0.28, 0.75, c.y) * (1.0 - phone_up) * step(c.z, 1.0);
+	float jump_from = style == 0 ? 0.3 : 0.72;
+	float jumping = smoothstep(jump_from, jump_from + 0.24, excitement) * JUMP[style] * smoothstep(0.28, 0.75, c.y) * (1.0 - phone_up) * step(c.z, 1.0);
 	float jump_phase = ph * (fract(c.w * 8.3) > 0.55 ? 0.5 : 1.0);
 	float flight = max(0.0, sin(jump_phase * 6.283185));
 	float jump = flight * flight * (0.12 + c.y * 0.20) * jumping;
@@ -85,9 +134,18 @@ void vertex() {
 	NORMAL = normalize(NORMAL);
 	float k = fract(c.w * 7.31);
 	vec3 skin = mix(vec3(0.43, 0.31, 0.24), vec3(0.085, 0.050, 0.036), fract(c.w * 3.17));
-	vec3 cloth = k < 0.45 ? vec3(0.018, 0.022, 0.028) : k < 0.65 ? vec3(0.045, 0.065, 0.085) : k < 0.80 ? vec3(0.085, 0.03, 0.025) : k < 0.93 ? vec3(0.035, 0.065, 0.045) : vec3(0.13, 0.115, 0.09);
-	vec3 pants = mix(vec3(0.012, 0.016, 0.022), vec3(0.045, 0.06, 0.08), fract(c.x * 5.3));
-	vec3 hair = mix(vec3(0.009, 0.006, 0.004), vec3(0.10, 0.055, 0.02), fract(c.w * 23.8));
+	int ci = 13;
+	for (int i = 12; i >= 0; i--) { if (k < cloth_ends[i]) ci = i; }
+	vec3 cloth = cloth_colours[ci];
+	float pk = fract(c.x * 5.3);
+	int pi = 5;
+	for (int i = 4; i >= 0; i--) { if (pk < pants_ends[i]) pi = i; }
+	vec3 pants = pants_colours[pi];
+	float hk = fract(c.w * 23.8);
+	int hi = 7;
+	for (int i = 6; i >= 0; i--) { if (hk < hair_ends[i]) hi = i; }
+	vec3 hair = hair_colours[hi];
+	stage_near = clamp(1.0 - ((MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).z - barrier_z) / 45.0, 0.25, 1.0);
 	vec3 shoes = mix(vec3(0.012), vec3(0.16, 0.15, 0.14), step(0.85, fract(c.w * 12.9)));
 	tint = screen_part ? vec3(0.42, 0.62, 0.85) : phone_part ? vec3(0.008) : skin_part > 0.5 ? skin : region > 0.65 ? shoes : hair_part ? hair : region > 0.15 ? pants : cloth;
 }
@@ -109,4 +167,10 @@ void fragment() {
 	RIM = mix(0.18, 0.08, skin_part);
 	RIM_TINT = 0.7;
 	EMISSION = tint * screen_light * 1.5;
+	// The stage's light: an edge on hair and shoulders facing it (seen from behind), some colour on the fronts.
+	vec3 world_normal = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	float toward = clamp(dot(world_normal, normalize(vec3(0.0, 0.5, -1.0))), 0.0, 1.0);
+	float edge = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
+	float catch_light = 0.3 + 0.7 * clamp(dot(tint, vec3(0.3, 0.6, 0.1)) * 2.0, 0.0, 1.0);
+	EMISSION += stage_light * stage_near * toward * (tint * 0.35 + edge * catch_light * 0.45);
 }

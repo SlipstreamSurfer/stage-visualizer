@@ -27,6 +27,11 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if _open: OS.close_midi_inputs()
 
+# Forget physical holds after the window loses focus.
+func clear_held() -> void:
+	_down.erase("strobe")
+	_down.erase("blinder")
+
 # A controller plugged in after the start: look for inputs again.
 func reopen() -> void:
 	if _open: OS.close_midi_inputs()

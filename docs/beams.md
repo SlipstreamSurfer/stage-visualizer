@@ -25,6 +25,20 @@ hall that hangs hybrid heads, which made the beams read as thin lines.
   g = 0.3, capped at 4×). A beam aimed towards you glows; from behind the fixtures it is dimmer.
 - **The lens.** The front glass is drawn bright enough for bloom to make it flare.
 
+## Haze fader
+
+The light desk (**D**) has a Haze fader from 0 to 200%; 100% preserves the original setting. `tune.haze` scales the
+existing global fog density, all five local volumes (including the negative roof density) and the beam shader's
+`sv_haze`. Repeated adjustments always use the original densities, so they do not compound. Light levels, ambient
+lighting and the fog grid resolution are unchanged; extra haze does not amplify the room's fog-emission term.
+At zero, fog density, beam scattering and fog emission are all zero. Visible lenses and light falling on surfaces
+remain; this is not blackout.
+
+Low and Light still disable volumetric fog. The fader affects drawn beam haze there, and the desk explicitly shows
+**Beams only**. Quality changes update that notice. Values last for the run and are included in session controls;
+older controls without `haze` use 100%. `tools/test_haze.gd` checks the real main-loop path, original-density scaling,
+input bounds, zero emission, UI values and independence from light-group resets.
+
 ## The room
 
 As in SV's browser version (`director.room`): the show's colour and level light the hall's surfaces a little and

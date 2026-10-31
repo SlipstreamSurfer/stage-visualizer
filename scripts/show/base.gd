@@ -159,7 +159,7 @@ var _events: Array = []   # [time, what] of the last few things that happened, f
 
 # Live tuning (local/live.json, read every second while the show runs): a lighting designer's faders, so the show can
 # be shaped while someone plays. Missing keys keep their default.
-var tune := {"master": 1.0, "pace": 1.0, "strobe": 1.0, "hit": 1.0, "look": 1.0, "beam": 1.0, "groups": {}}
+var tune := {"master": 1.0, "pace": 1.0, "strobe": 1.0, "hit": 1.0, "look": 1.0, "beam": 1.0, "haze": 1.0, "groups": {}}
 
 var safe := false         # gentle strobes: never more than three flashes a second (for people sensitive to flashing light)
 

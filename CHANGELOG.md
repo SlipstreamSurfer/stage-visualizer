@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.56.0 — A livelier crowd, a haze fader and a PA that faces the hall
+
+- The crowd wears mixed clothes: mostly dark, with a rare white or neon shirt that catches the show's colour; hair from
+  black through blond to grey, and a mix of builds. The stage's light gives hair and shoulders a soft edge in the
+  show's colour, eased so a kick or a strobe does not flash the crowd, and off in a blackout. See [crowd](docs/crowd.md).
+- Six ways to dance: jumpers, stompers, arm pumpers, groovers, hip swayers and watchers, wilder at the barrier and
+  calmer at the back. Still one draw for up to 3,000 people.
+- Light desk (**D**): a haze fader from 0 to 200 %. It scales how strongly the beams show and the existing fog; on
+  Low and Light, which have no fog volume, the desk says "Beams only". See [beams](docs/beams.md).
+- The PA hangs aim down into the hall and slightly inwards, with visible front grilles on the hangs and the subs.
+  See [hall](docs/hall.md).
+- Strobe (**Space**) and blinders (**N**) no longer stay on when the key or pad is released while a panel is open,
+  the window loses focus, or the keyboard and a MIDI pad overlap.
+
 ## 0.55.2 — A light sequencer, richer techno shows and visual polish
 
 - Techno (Raw / Deep / Hypnotic) has a light sequencer on the beat grid: blocks of 4, 8, 16 or 32 bars, patterns of

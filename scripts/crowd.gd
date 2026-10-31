@@ -7,10 +7,62 @@ extends Node3D
 var mm: MultiMesh
 var dj: MultiMesh
 var dj_node: MultiMeshInstance3D
+var material: ShaderMaterial
+var people := PackedColorArray()   # each person's INSTANCE_CUSTOM, as built (a headless renderer cannot read it back)
+var _stage := Vector3.ZERO
+
+# What people wear, as linear colours and the share of the crowd in each. Mostly dark, as at a techno night, with a
+# rare white or neon shirt that catches the show's colour. person.gdshader picks one per person from its hashes.
+const CLOTH := [
+	[Color(0.018, 0.020, 0.024), 0.32], [Color(0.040, 0.042, 0.046), 0.14], [Color(0.12, 0.12, 0.125), 0.08],
+	[Color(0.020, 0.035, 0.075), 0.08], [Color(0.07, 0.10, 0.15), 0.06], [Color(0.06, 0.07, 0.035), 0.06],
+	[Color(0.10, 0.025, 0.03), 0.06], [Color(0.30, 0.24, 0.16), 0.05], [Color(0.22, 0.07, 0.03), 0.04],
+	[Color(0.03, 0.12, 0.12), 0.04], [Color(0.62, 0.62, 0.60), 0.04],   # white
+	[Color(0.30, 0.75, 0.02), 0.01], [Color(0.80, 0.04, 0.28), 0.01], [Color(0.85, 0.22, 0.01), 0.01],   # neon
+]
+const HAIR := [
+	[Color(0.009, 0.006, 0.004), 0.30], [Color(0.03, 0.016, 0.008), 0.25], [Color(0.08, 0.045, 0.02), 0.17],
+	[Color(0.16, 0.05, 0.02), 0.06], [Color(0.22, 0.15, 0.07), 0.08], [Color(0.45, 0.35, 0.18), 0.07],
+	[Color(0.25, 0.25, 0.25), 0.05], [Color(0.35, 0.06, 0.25), 0.02],
+]
+const PANTS := [
+	[Color(0.012, 0.014, 0.018), 0.40], [Color(0.03, 0.045, 0.08), 0.25], [Color(0.12, 0.17, 0.26), 0.10],
+	[Color(0.06, 0.06, 0.065), 0.10], [Color(0.20, 0.16, 0.09), 0.08], [Color(0.06, 0.07, 0.035), 0.07],
+]
+
+# The shader's keys, from the appearance (w) and timing (x) hashes in INSTANCE_CUSTOM.
+static func cloth_key(c: Color) -> float: return fposmod(c.a * 7.31, 1.0)
+static func hair_key(c: Color) -> float: return fposmod(c.a * 23.8, 1.0)
+static func pants_key(c: Color) -> float: return fposmod(c.r * 5.3, 1.0)
+
+# Which entry of a table a key picks: the shares run end to end from 0 to 1.
+static func pick(table: Array, key: float) -> int:
+	var at := 0.0
+	for i in table.size():
+		at += float(table[i][1])
+		if key < at: return i
+	return table.size() - 1
+
+static func _colours(table: Array) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for e in table: out.append(Vector3(e[0].r, e[0].g, e[0].b))
+	return out
+
+static func _ends(table: Array) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	var at := 0.0
+	for e in table:
+		at += float(e[1])
+		out.append(at)
+	out[out.size() - 1] = 1.01   # rounding never leaves a key without an entry
+	return out
 
 func build(count: int) -> void:
 	var mesh := person_mesh()
-	var mat := Kit.shader("res://shaders/person.gdshader")
+	var mat := Kit.shader("res://shaders/person.gdshader", {"barrier_z": Hall.BARRIER,
+		"cloth_colours": _colours(CLOTH), "cloth_ends": _ends(CLOTH), "hair_colours": _colours(HAIR), "hair_ends": _ends(HAIR),
+		"pants_colours": _colours(PANTS), "pants_ends": _ends(PANTS)})
+	material = mat
 	mm = MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_custom_data = true
@@ -41,7 +93,9 @@ func build(count: int) -> void:
 		mm.set_instance_transform(placed, t)
 		# the front moves more and raises their arms sooner
 		var keen := clampf(1.0 - (z - Hall.BARRIER) / 45.0, 0.0, 1.0)
-		mm.set_instance_custom_data(placed, Color(rng.randf(), rng.randf_range(0.3, 1.0) * (0.5 + keen * 0.5), rng.randf_range(0.0, 0.7) * (1.2 - keen), rng.randf()))
+		var custom := Color(rng.randf(), rng.randf_range(0.3, 1.0) * (0.5 + keen * 0.5), rng.randf_range(0.0, 0.7) * (1.2 - keen), rng.randf())
+		mm.set_instance_custom_data(placed, custom)
+		people.append(custom)
 		placed += 1
 	var mi := MultiMeshInstance3D.new()
 	mi.multimesh = mm
@@ -75,6 +129,13 @@ static func _clear_of_towers(x: float, z: float) -> bool:
 
 func shown(n: int) -> void:
 	mm.visible_instance_count = mini(n, mm.instance_count)
+
+# The light from the stage behind and above the DJ on the people facing it: edges of hair and shoulders seen from
+# the back, a little colour on their fronts. Eased, so a kick or a strobe does not flash the whole crowd; 0 in a blackout.
+func stage_light(colour: Color, level: float, dt: float) -> void:
+	var want := Vector3(colour.r, colour.g, colour.b) * clampf(level / 16.0, 0.0, 1.0)
+	_stage += (want - _stage) * (1.0 - exp(-dt * 3.0))
+	material.set_shader_parameter("stage_light", _stage)
 
 # One indexed surface for every person, including clothes, hands and phone.
 # Colour: r = arm joint, g = side, b = material (0.35 phone, 0.625 screen).

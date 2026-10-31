@@ -6,7 +6,18 @@ global uniform float sv_beat;
 global uniform float sv_energy;
 global uniform float sv_hands;
 global uniform float sv_phones;
+// What people wear (Crowd.CLOTH, HAIR, PANTS): colours and where each share ends, from 0 to 1.
+uniform vec3 cloth_colours[14];
+uniform float cloth_ends[14];
+uniform vec3 hair_colours[8];
+uniform float hair_ends[8];
+uniform vec3 pants_colours[6];
+uniform float pants_ends[6];
+// The stage's light on the crowd (Crowd.stage_light), strongest at the barrier.
+uniform vec3 stage_light = vec3(0.0);
+uniform float barrier_z = -24.0;
 varying vec3 tint;
+varying float stage_near;
 varying float screen_light;
 varying float skin_part;
 varying float face_part;
@@ -64,6 +75,9 @@ void vertex() {
 	float build = mix(0.82, 1.20, fract(c.w * 13.71));
 	float width = mix(build, mix(0.92, 1.10, fract(c.x * 9.7)), head);
 	float depth = mix(0.82, 1.22, fract(c.w * 5.31));
+	// Hips and legs against the shoulders: narrow shoulders tend to wider hips, for a mixed crowd.
+	float hips = mix(1.16, 0.92, fract(c.w * 13.71)) * mix(0.96, 1.04, fract(c.x * 3.9));
+	width *= mix(1.0, hips, (1.0 - smoothstep(0.86, 1.12, VERTEX.y)) * (1.0 - arm) * (1.0 - head));
 	VERTEX.x *= width;
 	VERTEX.z *= depth;
 	NORMAL.x /= width;
@@ -85,9 +99,18 @@ void vertex() {
 	NORMAL = normalize(NORMAL);
 	float k = fract(c.w * 7.31);
 	vec3 skin = mix(vec3(0.43, 0.31, 0.24), vec3(0.085, 0.050, 0.036), fract(c.w * 3.17));
-	vec3 cloth = k < 0.45 ? vec3(0.018, 0.022, 0.028) : k < 0.65 ? vec3(0.045, 0.065, 0.085) : k < 0.80 ? vec3(0.085, 0.03, 0.025) : k < 0.93 ? vec3(0.035, 0.065, 0.045) : vec3(0.13, 0.115, 0.09);
-	vec3 pants = mix(vec3(0.012, 0.016, 0.022), vec3(0.045, 0.06, 0.08), fract(c.x * 5.3));
-	vec3 hair = mix(vec3(0.009, 0.006, 0.004), vec3(0.10, 0.055, 0.02), fract(c.w * 23.8));
+	int ci = 13;
+	for (int i = 12; i >= 0; i--) { if (k < cloth_ends[i]) ci = i; }
+	vec3 cloth = cloth_colours[ci];
+	float pk = fract(c.x * 5.3);
+	int pi = 5;
+	for (int i = 4; i >= 0; i--) { if (pk < pants_ends[i]) pi = i; }
+	vec3 pants = pants_colours[pi];
+	float hk = fract(c.w * 23.8);
+	int hi = 7;
+	for (int i = 6; i >= 0; i--) { if (hk < hair_ends[i]) hi = i; }
+	vec3 hair = hair_colours[hi];
+	stage_near = clamp(1.0 - ((MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).z - barrier_z) / 45.0, 0.25, 1.0);
 	vec3 shoes = mix(vec3(0.012), vec3(0.16, 0.15, 0.14), step(0.85, fract(c.w * 12.9)));
 	tint = screen_part ? vec3(0.42, 0.62, 0.85) : phone_part ? vec3(0.008) : skin_part > 0.5 ? skin : region > 0.65 ? shoes : hair_part ? hair : region > 0.15 ? pants : cloth;
 }
@@ -109,4 +132,10 @@ void fragment() {
 	RIM = mix(0.18, 0.08, skin_part);
 	RIM_TINT = 0.7;
 	EMISSION = tint * screen_light * 1.5;
+	// The stage's light: an edge on hair and shoulders facing it (seen from behind), some colour on the fronts.
+	vec3 world_normal = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	float toward = clamp(dot(world_normal, normalize(vec3(0.0, 0.5, -1.0))), 0.0, 1.0);
+	float edge = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
+	float catch_light = 0.3 + 0.7 * clamp(dot(tint, vec3(0.3, 0.6, 0.1)) * 2.0, 0.0, 1.0);
+	EMISSION += stage_light * stage_near * toward * (tint * 0.35 + edge * catch_light * 0.45);
 }

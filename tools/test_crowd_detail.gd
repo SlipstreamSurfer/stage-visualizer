@@ -58,6 +58,47 @@ func _run() -> void:
 	crowd.shown(1200)
 	check(crowd.mm.visible_instance_count == 1200, "Light preset crowd count")
 	check(crowd.dj.mesh == crowd.mm.mesh and not crowd.dj_node.visible, "DJ shares geometry and stays hidden from own eyes")
+	_check_appearance(crowd)
 	crowd.free()
 	print("crowd detail: %d triangles, %d checks, %d failures" % [indices.size() / 3, checks, failures])
 	quit(0 if failures == 0 else 1)
+
+# A mixed crowd: mostly dark clothes, every colour in use, white and neon rare; the stage's light eased and off in a blackout.
+func _check_appearance(crowd: Crowd) -> void:
+	var cloth := {}
+	var hair := {}
+	var pants := {}
+	var white := 0
+	var neon := 0
+	var dark := 0
+	var n := crowd.people.size()
+	check(n == crowd.mm.instance_count, "Every person keeps an appearance")
+	for i in n:
+		var c := crowd.people[i]
+		var k := Crowd.pick(Crowd.CLOTH, Crowd.cloth_key(c))
+		cloth[k] = true
+		hair[Crowd.pick(Crowd.HAIR, Crowd.hair_key(c))] = true
+		pants[Crowd.pick(Crowd.PANTS, Crowd.pants_key(c))] = true
+		if k == 10: white += 1
+		elif k > 10: neon += 1
+		elif k in [0, 1, 3]: dark += 1
+	check(cloth.size() == Crowd.CLOTH.size(), "Every shirt colour is worn: %d of %d" % [cloth.size(), Crowd.CLOTH.size()])
+	check(hair.size() == Crowd.HAIR.size() and pants.size() == Crowd.PANTS.size(), "Every hair and trouser colour is in use")
+	check(white > n * 0.02 and white < n * 0.07, "White shirts stay an accent: %d" % white)
+	check(neon > n * 0.01 and neon < n * 0.05, "Neon stays rare: %d" % neon)
+	check(dark > n * 0.45, "Most of the crowd stays dark: %d" % dark)
+	for table in [Crowd.CLOTH, Crowd.HAIR, Crowd.PANTS]:
+		var total := 0.0
+		for e in table: total += float(e[1])
+		check(absf(total - 1.0) < 0.001, "Shares add up to the whole crowd")
+	var mat := crowd.material
+	check((crowd.get_child(0) as MultiMeshInstance3D).material_override == mat and (mat.get_shader_parameter("cloth_colours") as PackedVector3Array).size() == Crowd.CLOTH.size(), "The shader gets the shirt colours")
+	check((mat.get_shader_parameter("cloth_ends") as PackedFloat32Array)[Crowd.CLOTH.size() - 1] > 1.0, "The last share takes every key")
+	for i in 30: crowd.stage_light(Color(1, 0, 0), 40.0, 0.1)
+	var on: Vector3 = mat.get_shader_parameter("stage_light")
+	check(on.x > 0.9 and on.y == 0.0 and on.z == 0.0, "Stage light takes the show's colour: %s" % on)
+	crowd.stage_light(Color(1, 1, 1), 200.0, 0.016)
+	var flash: Vector3 = mat.get_shader_parameter("stage_light")
+	check(flash.length() <= sqrt(3.0) + 0.001 and flash.y < 0.1, "A strobe frame does not flash the crowd: %s" % flash)
+	for i in 60: crowd.stage_light(Color(1, 0, 0), 0.0, 0.1)
+	check((mat.get_shader_parameter("stage_light") as Vector3).length() < 0.01, "No stage light in a blackout")

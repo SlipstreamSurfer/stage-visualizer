@@ -243,6 +243,7 @@ func _room(dt: float) -> void:
 	env.ambient_light_energy = 0.02 + level * 0.0014
 	var glow := (0.004 + level * 0.0008) * float(show.mood.get("haze", 1.0))
 	env.volumetric_fog_emission = Color(c.r * glow, c.g * glow, c.b * glow)
+	crowd.stage_light(c, level, dt)
 
 func _hud() -> void:
 	hud = Hud.new()

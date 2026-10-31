@@ -107,6 +107,7 @@ func refresh(show: Show, listen: Listen, rb: Rekordbox, quality: String, auto: b
 	_boxes.bl.text = w
 	# SYSTEM
 	var y := _head("SYSTEM")
+	y += "Version  %s\n" % BuildInfo.label()
 	var gpu := RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid())
 	y += "Frames  %d fps   %.1f ms   GPU %.1f ms\n" % [Engine.get_frames_per_second(), 1000.0 / maxf(Engine.get_frames_per_second(), 1.0), gpu]
 	y += "Quality  %s%s   scale %d%%\n" % [quality.capitalize(), " (auto)" if auto else "", roundi(get_viewport().scaling_3d_scale * 100.0)]

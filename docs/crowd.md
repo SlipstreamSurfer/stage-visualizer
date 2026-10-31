@@ -44,3 +44,18 @@ Additional frozen-global captures check rest, nod, drop, landing and phones.
 Quality-switch checks confirm that wetness is enabled only on High/Ultra.
 All seven checks listed in `AGENTS.md` pass; the mesh has one surface and the
 3,000-instance build and Light visibility count were checked separately.
+
+## Rounded heads and shoulders
+
+The close-up model now has twelve-sided head, hair and neck rings, a cheek and brow profile, small ears and a
+rounder nose. The torso has a softer shoulder transition. Analytic normals follow the changing elliptical rings;
+end caps stay flat. Subtle socket and brow shading is anchored to the undeformed face, so it follows nods and sway.
+Skin tones are less orange, with a rougher finish and a weaker rim than cloth. Skin does not emit light.
+
+The mesh has 938 triangles per person (previously 686), below the 1,050-triangle detail budget. It remains one
+indexed opaque surface, one MultiMesh for up to 3,000 people and the separate DJ. Placement, quality counts,
+arm-joint tags, phones, nods and jumps are unchanged. No textures or CPU animation are added.
+
+`tools/test_crowd_detail.gd` checks the triangle budget, scale, normals, ear silhouette, non-degenerate triangles,
+material/joint tags, single-surface instancing and the Light visibility count. Frozen-pose Forward+ comparisons
+cover close-up faces, raised arms and phones under identical inspection lighting; they are not live-show footage.

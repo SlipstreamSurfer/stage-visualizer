@@ -34,3 +34,28 @@ De regie is daarom één-op-één overgezet uit de browserversie (`src/` van v0.
   geen zwarte zaal buiten een break, minstens drie looks. Gemeten: 53–84%, 17–19 looks.
 - `--replay=… --fast --check`: droptiming, deelgeflapper, variatie, geldige waarden, en "dark":
   vier seconden zwart in een groove of piek is een fout. Beide sessies slagen.
+
+## Lichtsequencer (alleen Techno Raw / Deep / Hypnotic)
+
+`scripts/show/sequencer.gd` is een stap-sequencer op het maatraster. Een maat heeft 4 slagen en 16 stappen.
+De show speelt in **blokken van 4, 8, 16 of 32 maten** (de lengte hangt af van het deel van het nummer; de blokken van
+een deel wisselen elkaar af). Een blok houdt één patroon per baan vast en wisselt alleen op de eigen maatlijn; het
+laatste kwart van een blok is een *fill*: hetzelfde patroon met extra hits.
+
+| Baan | Wat |
+|---|---|
+| 0 | hall-heads in het midden |
+| 1 | hall-heads aan de zijkanten |
+| 2 | stage-heads (torens, podiumrij) |
+| 3 | de balken (battens) |
+
+Een hit zet de baan even op vol licht; tussen de hits zakt ze naar 55% (diepte 45%). Met zachte strobes (`S`) zijn het
+alleen kwartnoten en is de diepte 20%. Nooit twee hits op naastliggende stappen: de snelste baan speelt achtste noten.
+Alles volgt uit getallen (baan, blok, maat), niet uit toeval, dus een replay speelt hetzelfde. Een nieuw blok is een
+nieuwe scène; een blok van 16 of 32 maten wisselt look en stack elke 8 maten, het patroon pas aan het eind.
+Het raster is `show.beat`: exact met rekordbox, bij systeemaudio zo goed als de maatlijn (`bar_offset`, toets `T`).
+
+Daarnaast heeft dit genre: zes extra head-looks (Lanes, Horizon, Cathedral, Searchlights, Pendulum, Stairs; een 8e
+element in `HEAD_LOOKS` houdt ze buiten elke andere stijl en terugvallijst), twaalf bewegingen, twaalf gates, tien
+kleurverdelingen, zes beams en zestien paletten van drie of vier kleuren. Het mikpunt blijft binnen de hal.
+Controle: `tools/test_sequencer.gd` (patronen, looks, gates, kleuren) en `tools/test_choreography.gd`.

@@ -88,6 +88,22 @@ static func position(name: String, h: Head, p: Vector3, k: Dictionary, s: Dictio
 			var a: float = (h.u + (0.5 if on_side(p) else 0.0)) * TAU + h.row * 0.7
 			return Vector3(cos(a) * 9.0, 6.5 + sin(a) * 5.0, maxf(s.stage + 4.0, p.z - 16.0))
 		"scatter": return Vector3(p.x + h.rp * 9.0, 0.0, p.z + (h.rt - 0.5) * 14.0)   # new places every eight kicks
+		# the looks of Techno (Raw / Deep / Hypnotic) alone
+		"lanes":   # parallel lanes down the hall, each head in the lane of its place along the truss
+			if on_side(p): return Vector3(-side_of(p) * 10.0, 0.5, p.z)
+			return Vector3((floorf(h.u * 5.99) / 5.0 * 2.0 - 1.0) * 17.0, 0.0, minf(p.z + 12.0 + (h.row % 2) * 3.0, 30.0))
+		"horizon":   # a line of light just above the crowd's hands
+			if on_side(p): return Vector3(-side_of(p) * 14.0, 4.3, p.z)
+			return Vector3(p.x * 0.9, 4.3, p.z + 15.0)
+		"cathedral":   # the two halves lean in and meet under the roof
+			if on_side(p): return Vector3(-side_of(p) * 4.0, 13.5, p.z)
+			return Vector3(-signf(p.x) * 1.5, 13.8, p.z + (h.u - 0.5) * 6.0)
+		"searchlights":   # every head on a slow search of its own
+			return Vector3(sin(k.m * 0.2 + h.row * 1.3 + h.u * 5.0) * 16.0, 0.0, p.z + cos(k.m * 0.17 + h.u * 4.0 + h.row) * 14.0)
+		"pendulum":   # the whole hall swings from side to side once in four bars
+			return Vector3(p.x + sin(k.phase * TAU / 16.0 + h.row * 0.6) * 12.0, 0.0, p.z + 6.0)
+		"stairs":   # each truss aims a step further down the hall than the one before
+			return Vector3(p.x * 0.6, 0.0, p.z + (h.row - 2) * 7.0 + 8.0)
 	return Vector3(p.x, 0.0, p.z)
 
 # How far an effect moves the target scales with how far the beam travels, so an effect on the roof is as big as one on the floor.
@@ -114,6 +130,15 @@ static func move(name: String, t: Vector3, h: Head, p: Vector3, k: Dictionary) -
 			var o: float = 0.45 + 0.55 * (0.5 + 0.5 * sin(k.m * 0.35 + h.row * 0.6))
 			return Vector3(p.x + (t.x - p.x) * o, t.y, p.z + (t.z - p.z) * o)
 		"snake": return Vector3(t.x + sin(k.m * 0.5 - t.z * 0.15) * 9.0, t.y, t.z)   # a wave that travels down the hall
+		"pendulum": return Vector3(t.x + sin(k.phase * TAU / 8.0 + h.row * 0.7) * 6.0 * _reach(t, p), t.y, t.z)   # a swing locked to the bar
+		"drift":   # slow wandering, each head its own way
+			var r := _reach(t, p)
+			return Vector3(t.x + sin(k.m * 0.21 + h.u * 7.0) * 5.0 * r, t.y, t.z + cos(k.m * 0.17 + h.row * 2.0) * 5.0 * r)
+		"pulse":   # in and out once a bar
+			var o: float = 0.7 + 0.3 * sin(k.phase * TAU / 4.0)
+			return Vector3(p.x + (t.x - p.x) * o, t.y, p.z + (t.z - p.z) * o)
+		"stepRow":   # the trusses step forward and back by turns, a bar at a time
+			return Vector3(t.x, t.y, t.z + (float(floori(k.phase / 4.0) % 4) - 1.5) * 4.0 * (1.0 if h.row % 2 == 0 else -1.0))
 		"spin":   # the whole picture turns slowly round the point straight below each head
 			var a: float = k.m * 0.3
 			var dx := t.x - p.x
@@ -143,9 +168,14 @@ static func gate(name: String, h: Head, counted: float, pattern: int) -> bool:
 		"alternate": return h.slot % 2 == int(floorf(counted / 2.0)) % 2
 		"sparkle": return _hash(h.slot + h.row * 31, floorf(counted)) < 0.45   # a different handful every beat
 		"trusses": return h.row % 7 == int(floorf(counted / 4.0)) % 7   # one truss at a time
+		"outIn": return fposmod(absf(across(at) * 2.0 - 1.0) + counted / 8.0, 1.0) < 0.5   # in from the walls to the middle
+		"blocks": return (h.slot / 4 + int(floorf(counted / 2.0))) % 3 == 0   # blocks of four heads, a third of them at a time
+		"diag": return fposmod(across(at) + depth(at) - counted / 12.0, 1.0) < 0.4   # a diagonal band across the hall
+		"pairsAlt": return (h.slot / 2) % 2 == int(floorf(counted / 2.0)) % 2   # pairs of heads, by turns
 	return true
 
-const GATE_GAIN := {"all": 1.0, "chase": 1.5, "across": 1.7, "frontBack": 2.1, "centre": 1.5, "alternate": 1.5, "sparkle": 1.5, "trusses": 2.2}
+const GATE_GAIN := {"all": 1.0, "chase": 1.5, "across": 1.7, "frontBack": 2.1, "centre": 1.5, "alternate": 1.5, "sparkle": 1.5, "trusses": 2.2,
+	"outIn": 1.5, "blocks": 2.0, "diag": 1.7, "pairsAlt": 1.5}
 
 # [share of the second colour, share of white]
 static func colour(name: String, h: Head, beats: float) -> Vector2:
@@ -159,7 +189,7 @@ static func colour(name: String, h: Head, beats: float) -> Vector2:
 	return Vector2.ZERO   # mono
 
 # zoom: how wide the beam opens (multiplies the show's own), gobo: how strongly a gobo breaks it up (-1: leave it)
-const BEAMS := {"normal": [1.0, -1.0], "narrow": [0.7, 0.0], "wide": [1.5, 0.0], "gobo": [1.1, 0.85]}
+const BEAMS := {"normal": [1.0, -1.0], "narrow": [0.7, 0.0], "wide": [1.5, 0.0], "gobo": [1.1, 0.85], "tight": [0.5, 0.0], "broad": [1.9, 0.0]}
 
 # The looks, in the order in which tracks get them: name, tiers, position, move, gate, colour, beam.
 const HEAD_LOOKS := {
@@ -188,12 +218,19 @@ const HEAD_LOOKS := {
 	"crossTrusses": ["Crossfire, truss by truss", ["big"], "cross", "panWave", "trusses", "centreWhite", "normal"],
 	"convergePulse": ["Converge, truss by truss", ["big"], "converge", "tiltWave", "trusses", "centreWhite", "narrow"],
 	"ballyhoo": ["Ballyhoo", ["big"], "fan", "eight", "sparkle", "sides", "narrow"],
+	# an 8th entry: the look belongs to Techno (Raw / Deep / Hypnotic) alone and is in no fallback list
+	"lanes": ["Lanes", ["calm", "mid"], "lanes", "sway", "all", "depth", "narrow", true],
+	"horizon": ["Horizon", ["mid", "big"], "horizon", "tiltWave", "across", "sides", "wide", true],
+	"cathedral": ["Cathedral", ["mid", "big"], "cathedral", "breathe", "all", "centreWhite", "narrow", true],
+	"searchlights": ["Searchlights", ["calm", "mid", "big"], "searchlights", "still", "chase", "alternate", "normal", true],
+	"pendulum": ["Pendulum", ["mid", "big"], "pendulum", "still", "centre", "trusses", "normal", true],
+	"stairs": ["Stairs", ["mid"], "stairs", "sway", "trusses", "depth", "narrow", true],
 }
 
 static func head_tier(tier: String) -> Array:
 	var out := []
 	for key in HEAD_LOOKS:
-		if tier in HEAD_LOOKS[key][1]: out.append(key)
+		if tier in HEAD_LOOKS[key][1] and HEAD_LOOKS[key].size() <= 7: out.append(key)
 	return out
 
 # Formations of the five hall trusses: drop in metres below their top (v: 0 the front truss, 1 the back one) and
@@ -285,6 +322,15 @@ const STYLES := {
 		"row": ["sweep", "wave", "fan", "vee"], "rowLevel": 0.9, "wash": 1.3},
 	"Concert & ambient": {"looks": ["softCurtains", "rakeStage", "walls", "softFans"], "trusses": ["High", "Arch"], "pace": 2.5, "lit": 0.45,
 		"row": ["curtain", "wave"], "rowLevel": 0.6, "wash": 1.4},
+}
+
+# Techno (Raw / Deep / Hypnotic) is one Beatport genre but three ways of playing: the raw, the deep and the hypnotic
+# styles above are put together for it, so a track draws on all their looks, formations and rows.
+const RAW_DEEP_STYLE := {
+	"looks": ["pillars", "cross", "softCurtains", "floor", "ripple", "tunnel", "crossTrusses", "snake", "scatter", "rakeStage", "spiral",
+		"walls", "curtains", "softFans", "sky", "converge", "circles", "skyCircles", "lanes", "horizon", "cathedral", "searchlights", "pendulum", "stairs"],
+	"trusses": ["High", "Low", "Canopy", "Arch", "Tilted", "Rising to the back", "Twisted", "Valley", "Falling to the back", "Front low", "Middle low"],
+	"pace": 0.75, "lit": 0.75, "row": ["chase", "curtain", "pairs", "wave", "crowd", "vee", "sweep", "fan"], "rowLevel": 0.85, "wash": 0.8,
 }
 
 static func style_of(mood_key: String, family: String) -> Dictionary:

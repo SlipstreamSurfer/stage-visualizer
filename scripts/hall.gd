@@ -421,8 +421,9 @@ func _booth(black: Material) -> void:
 		elif arg in ["--booth=club", "--booth=2"]: booth_decks = 2
 	var positions := [0.7566, 0.394, -0.394, -0.7566] if booth_decks == 4 else [0.394, -0.394]
 	for i in positions.size():
-		_cdj_3000x(Vector3(positions[i], TABLE, zt + 0.12), i + 1)
-	_djm_a9(Vector3(0, TABLE, zt + 0.10395))
+		_cdj_3000x(Vector3(positions[i], TABLE, zt - 0.08), i + 1)   # 0.2 m nearer the DJ than before: the gear sits close to the table edge the DJ stands at
+	_djm_a9(Vector3(0, TABLE, zt - 0.09605))
+	_booth_detail(base, zt, positions)
 	for batch: Kit.Batch in _gear_batches.values(): batch.build(self)
 	_gear_batches.clear()
 	var lamp := SpotLight3D.new()
@@ -437,6 +438,55 @@ func _booth(black: Material) -> void:
 	_booth_monitors(base, zt)
 	# Main remains untouched: the sibling Rekordbox is updated by main before this node.
 	process_priority = 10
+
+# Flightcase edging, recessed handles and a tidy cable loom. Three static batches, no extra lights.
+func _booth_detail(base: float, zt: float, players: Array) -> void:
+	var metal := Kit.mat(Color(0.22, 0.24, 0.26), 0.52, 0.72)
+	var trim := Kit.Batch.new(Kit.unit_box(), metal, false)
+	var hardware := Kit.Batch.new(Kit.unit_tube(), metal, false)
+	var cables := Kit.Batch.new(Kit.unit_tube(), Kit.mat(Color(0.014, 0.016, 0.019), 0.92), false)
+	# A cap round the tabletop; the centre remains the existing matte working surface.
+	for side in [-1.0, 1.0]:
+		trim.add(Kit.block(Vector3(3.24, 0.028, 0.018), Vector3(0, TABLE - 0.014, zt + side * 0.461)))
+		trim.add(Kit.block(Vector3(0.018, 0.028, 0.94), Vector3(side * 1.611, TABLE - 0.014, zt)))
+		for y in [base + 0.045, base + 0.96]:
+			trim.add(Kit.block(Vector3(3.2, 0.025, 0.016), Vector3(0, y, zt + side * 0.454)))
+			for i in 15:
+				var p := Vector3(-1.54 + i * 0.22, y, zt + side * 0.466)
+				hardware.add(Kit.tube(p, p + Vector3(0, 0, side * 0.003), 0.0045))
+		for x in [-1.59, -0.55, 0.55, 1.59]:
+			trim.add(Kit.block(Vector3(0.025, 0.94, 0.016), Vector3(x, base + 0.5, zt + side * 0.454)))
+		# Four small recessed-style handles, set against dark carcass panels.
+		for x in [-1.05, 1.05]:
+			var at := Vector3(x, base + 0.61, zt + side * 0.462)
+			for dx in [-0.095, 0.095]:
+				trim.add(Kit.block(Vector3(0.012, 0.10, 0.009), at + Vector3(dx, 0, 0)))
+			for dy in [-0.05, 0.05]:
+				trim.add(Kit.block(Vector3(0.20, 0.012, 0.009), at + Vector3(0, dy, 0)))
+			hardware.add(Kit.tube(at + Vector3(-0.075, 0, side * 0.012), at + Vector3(0.075, 0, side * 0.012), 0.009))
+		# Reinforced top corners, below the gear and outside the working surface.
+		for x in [-1.58, 1.58]:
+			trim.add(Kit.block(Vector3(0.075, 0.09, 0.026), Vector3(x, TABLE - 0.065, zt + side * 0.455)))
+	# Simplified rear connections: not a port-accurate wiring diagram.
+	for i in players.size():
+		var x: float = players[i]
+		for wire in 2:
+			var socket := Vector3(x - 0.06 + wire * 0.045, TABLE + 0.043, zt + 0.166)
+			hardware.add(Kit.tube(socket, socket + Vector3(0, 0, 0.027), 0.007))
+			var lane := zt + 0.31 + wire * 0.014 + i * 0.014
+			Kit.cable(cables, [socket + Vector3(0, 0, 0.027), Vector3(socket.x, TABLE + 0.018, zt + 0.25),
+				Vector3(socket.x + 0.035, TABLE + 0.008, lane), Vector3(1.30 + wire * 0.015, TABLE + 0.008, lane),
+				Vector3(1.43 + wire * 0.015, TABLE + 0.008, zt + 0.43), Vector3(1.48 + wire * 0.015, TABLE - 0.05, zt + 0.49),
+				Vector3(1.48 + wire * 0.015, base + 0.15, zt + 0.49)], 0.0035)
+	for wire in 3:
+		var socket := Vector3(-0.09 + wire * 0.06, TABLE + 0.044, zt + 0.134)
+		hardware.add(Kit.tube(socket, socket + Vector3(0, 0, 0.03), 0.008))
+		Kit.cable(cables, [socket + Vector3(0, 0, 0.03), Vector3(socket.x, TABLE + 0.012, zt + 0.27),
+			Vector3(1.27 + wire * 0.015, TABLE + 0.008, zt + 0.27), Vector3(1.43 + wire * 0.015, TABLE + 0.008, zt + 0.43),
+			Vector3(1.48 + wire * 0.015, TABLE - 0.05, zt + 0.49), Vector3(1.48 + wire * 0.015, base + 0.15, zt + 0.49)], 0.004)
+	trim.build(self).name = "BoothTrim"
+	hardware.build(self).name = "BoothHardware"
+	cables.build(self).name = "BoothCables"
 
 func _gear_part(p: Node3D, size: Vector3, at: Vector3, color: Color, round_part := false) -> void:
 	var key := str(color) + str(round_part)

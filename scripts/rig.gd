@@ -119,6 +119,10 @@ func build() -> void:
 	_gobo = _gobo_texture()
 	var chords := Kit.Batch.new(Kit.unit_tube(), alu)
 	var braces := Kit.Batch.new(Kit.unit_tube(), alu)
+	var plates := Kit.Batch.new(Kit.unit_box(), alu)
+	var mounts := Kit.Batch.new(Kit.unit_tube(), alu, false)
+	var safeties := Kit.Batch.new(Kit.unit_tube(), Kit.mat(Color(0.20, 0.21, 0.22), 0.45, 0.8), false)
+	var feet := Kit.Batch.new(Kit.unit_box(), _body, false)
 	var F := Hall.FRONT
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--trusses="): shape = a.get_slice("=", 1)
@@ -197,19 +201,27 @@ func build() -> void:
 	for x in [-14.0, -7.0, 0.0, 7.0, 14.0]: _batten("rear", Vector3(x + 1.75, 10.72, bz - 0.45), -1, Vector3.RIGHT, at_stage, (x + 19.0) / 38.0)
 	for x in [-12.0, -4.0, 4.0, 12.0]: _blinder(Vector3(x, 10.55, bz - 0.4), Vector3(x * 0.8, 1.5, -8.0))
 
-	# delay towers halfway down either side: ground support, beams on top, battens down the front
+	# delay towers halfway down either side: a box-truss tower on a base plate, a bar across its top with the beams
+	# hung on it, battens down the front
 	for s in [-1.0, 1.0]:
 		var x: float = s * 15.5
 		var z := 4.0
-		for c in [Vector3(-0.6, 0, -0.6), Vector3(0.6, 0, -0.6), Vector3(0.6, 0, 0.6), Vector3(-0.6, 0, 0.6)]:
-			chords.add(Kit.tube(Vector3(x, 0, z) + c, Vector3(x, 9.0, z) + c, 0.04))
-		for h in [3.0, 6.0, 9.0]:
-			for e in [[Vector3(-0.6, h, -0.6), Vector3(0.6, h, -0.6)], [Vector3(0.6, h, -0.6), Vector3(0.6, h, 0.6)], [Vector3(0.6, h, 0.6), Vector3(-0.6, h, 0.6)], [Vector3(-0.6, h, 0.6), Vector3(-0.6, h, -0.6)]]:
-				braces.add(Kit.tube(Vector3(x, 0, z) + e[0], Vector3(x, 0, z) + e[1], 0.025))
+		Kit.truss(chords, braces, Vector3(x, 0.05, z), Vector3(x, 9.0, z), 0.5)
+		Kit.truss(chords, braces, Vector3(x - 1.0, 9.0, z), Vector3(x + 1.0, 9.0, z), 0.3)
+		plates.add(Kit.block(Vector3(0.9, 0.05, 0.9), Vector3(x, 0.025, z)))
+		# Visible outriggers and ballast are visual detail, not a load-rated structural model.
+		for sx in [-1.0, 1.0]:
+			for sz in [-1.0, 1.0]:
+				var foot := Vector3(x + sx * 0.88, 0.12, z + sz * 0.88)
+				braces.add(Kit.tube(Vector3(x + sx * 0.23, 0.12, z + sz * 0.23), foot, 0.045))
+				feet.add(Kit.block(Vector3(0.24, 0.08, 0.24), Vector3(foot.x, 0.04, foot.z)))
+				chords.add(Kit.tube(Vector3(foot.x, 0.08, foot.z), Vector3(foot.x, 0.19, foot.z), 0.018))
+			feet.add(Kit.block(Vector3(0.24, 0.24, 0.72), Vector3(x + sx * 0.34, 0.17, z)))
 		for j in 4:
-			var f := _add(BEAM, "delay", Vector3(x + (j % 2 - 0.5) * 0.8, 9.05, z + (j / 2 - 0.5) * 0.8), Vector3.UP, -1, j / 3.0, 0)
+			var f := _add(BEAM, "delay", Vector3(x + (j - 1.5) * 0.5, 9.2, z), Vector3.UP, -1, j / 3.0, 0)
 			f.xn = s
-		for h in [4.0, 7.0]: _batten("delay", Vector3(x, h, z - 0.7), -1, Vector3.UP, Vector3.FORWARD, 0.5 + s * 0.5)
+			_delay_mount(mounts, safeties, f.mount)
+		for h in [4.0, 7.0]: _batten("delay", Vector3(x, h, z - 0.32), -1, Vector3.UP, Vector3.FORWARD, 0.5 + s * 0.5)
 
 	# side: towers on the floor along both walls, beams across the hall and a batten up each
 	for s in [-1.0, 1.0]:
@@ -223,6 +235,10 @@ func build() -> void:
 
 	chords.build(self)
 	braces.build(self)
+	plates.build(self)
+	mounts.build(self).name = "DelayMounts"
+	safeties.build(self).name = "DelaySafeties"
+	feet.build(self).name = "TowerFeet"
 
 	for f in fixtures:
 		f.x01 = clampf((f.mount.x + 21.0) / 42.0, 0.0, 1.0)
@@ -249,6 +265,22 @@ func build() -> void:
 		o.visible = false
 		add_child(o)
 		_strobe_lights.append(o)
+
+# Two omega rails under each fixed delay head, clamped round the crossbar's upper chords.
+# The closed safety loop joins the base to the bar independently of those rails.
+func _delay_mount(mounts: Kit.Batch, safeties: Kit.Batch, at: Vector3) -> void:
+	for dx in [-0.105, 0.105]:
+		mounts.add(Kit.tube(at + Vector3(dx, -0.015, -0.19), at + Vector3(dx, -0.015, 0.19), 0.015))
+		for dz in [-0.15, 0.15]:
+			var centre := at + Vector3(dx, -0.05, dz)
+			for i in 16:
+				var a := TAU * i / 16.0
+				var b := TAU * (i + 1) / 16.0
+				mounts.add(Kit.tube(centre + Vector3(0, cos(a), sin(a)) * 0.032, centre + Vector3(0, cos(b), sin(b)) * 0.032, 0.007))
+	Kit.cable(safeties, [at + Vector3(0.16, 0.04, -0.10), at + Vector3(0.20, -0.08, -0.22),
+		at + Vector3(0.20, -0.23, -0.22), at + Vector3(0.20, -0.27, -0.14), at + Vector3(0.20, -0.23, -0.08),
+		at + Vector3(0.20, -0.06, -0.11), at + Vector3(0.20, -0.015, -0.15), at + Vector3(0.18, -0.005, -0.18),
+		at + Vector3(0.16, 0.04, -0.10)], 0.0035)
 
 # Where something hung on hall truss i is now (the truss may be let down or rolled); fixed things stay put.
 func _hung_at(mount: Vector3, i: int) -> Vector3:

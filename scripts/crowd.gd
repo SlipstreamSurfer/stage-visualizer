@@ -85,12 +85,14 @@ static func person_mesh() -> ArrayMesh:
 	for side in [-1.0, 1.0]:
 		parts.append([_loft([Vector3(0.065, 0.12, 0.065), Vector3(0.083, 0.48, 0.085), Vector3(0.105, 0.87, 0.105)]), Vector3(side * 0.108, 0, 0), Color(0, 0, 0.25)])
 		parts.append([_loft([Vector3(0.075, 0.025, 0.135), Vector3(0.078, 0.09, 0.14), Vector3(0.06, 0.14, 0.08)]), Vector3(side * 0.108, 0, 0.035), Color(0, 0, 0.75)])
-	parts.append([_loft([Vector3(0.18, 0.84, 0.115), Vector3(0.185, 1.04, 0.12), Vector3(0.245, 1.36, 0.125), Vector3(0.205, 1.40, 0.105), Vector3(0.085, 1.46, 0.075)]), Vector3.ZERO, Color(0, 0, 0)])
-	parts.append([_loft([Vector3(0.06, 1.43, 0.06), Vector3(0.058, 1.54, 0.058)]), Vector3.ZERO, Color(0, 0, 1)])
-	# Jaw, temples and crown, rather than a ball on the shoulders. Local +Z faces the stage.
-	parts.append([_loft([Vector3(0.055, 1.50, 0.065), Vector3(0.09, 1.54, 0.085), Vector3(0.108, 1.65, 0.10), Vector3(0.08, 1.73, 0.075), Vector3(0.025, 1.755, 0.025)]), Vector3.ZERO, Color(0, 0, 1)])
-	parts.append([_loft([Vector3(0.109, 1.665, 0.101), Vector3(0.085, 1.735, 0.08), Vector3(0.025, 1.765, 0.025)]), Vector3(0, 0, -0.008), Color(0, 0, 0.5)])
-	parts.append([_loft([Vector3(0.023, 1.58, 0.015), Vector3(0.018, 1.62, 0.035), Vector3(0.012, 1.65, 0.008)], 4), Vector3(0, 0, 0.09), Color(0, 0, 1)])
+	parts.append([_loft([Vector3(0.18, 0.84, 0.115), Vector3(0.185, 1.04, 0.12), Vector3(0.23, 1.29, 0.125), Vector3(0.245, 1.35, 0.12), Vector3(0.205, 1.40, 0.105), Vector3(0.085, 1.46, 0.075)], 10, true), Vector3.ZERO, Color(0, 0, 0)])
+	parts.append([_loft([Vector3(0.06, 1.43, 0.06), Vector3(0.058, 1.54, 0.058)], 12, true), Vector3.ZERO, Color(0, 0, 1)])
+	# Cheeks, brow and crown keep a rounded silhouette close to the camera.
+	parts.append([_loft([Vector3(0.055, 1.50, 0.065), Vector3(0.087, 1.54, 0.082), Vector3(0.106, 1.61, 0.098), Vector3(0.103, 1.67, 0.095), Vector3(0.077, 1.73, 0.073), Vector3(0.025, 1.755, 0.025)], 12, true), Vector3.ZERO, Color(0, 0, 1)])
+	parts.append([_loft([Vector3(0.109, 1.665, 0.101), Vector3(0.085, 1.735, 0.08), Vector3(0.025, 1.765, 0.025)], 12, true), Vector3(0, 0, -0.008), Color(0, 0, 0.5)])
+	parts.append([_loft([Vector3(0.023, 1.58, 0.015), Vector3(0.018, 1.62, 0.035), Vector3(0.012, 1.65, 0.008)], 6, true), Vector3(0, 0, 0.09), Color(0, 0, 1)])
+	for side in [-1.0, 1.0]:
+		parts.append([_loft([Vector3(0.012, 1.575, 0.013), Vector3(0.018, 1.60, 0.022), Vector3(0.015, 1.63, 0.019), Vector3(0.008, 1.65, 0.008)], 6, true), Vector3(side * 0.106, 0, -0.009), Color(0, 0, 1)])
 	for side in [-1.0, 1.0]:
 		var g := 0.0 if side < 0.0 else 1.0
 		parts.append([_loft([Vector3(0.063, 1.12, 0.063), Vector3(0.079, 1.30, 0.08), Vector3(0.075, 1.39, 0.075)], 6), Vector3(side * 0.255, 0, 0), Color(1, g, 0)])
@@ -123,8 +125,18 @@ static func person_mesh() -> ArrayMesh:
 	st.index()
 	return st.commit()
 
+# Normal of an elliptical ring, including how its width and depth change through the neighbouring rings.
+static func _loft_normal(rings: Array, j: int, angle: float) -> Vector3:
+	var ring: Vector3 = rings[j]
+	var before: Vector3 = rings[maxi(0, j - 1)]
+	var after: Vector3 = rings[mini(rings.size() - 1, j + 1)]
+	var slope := (after - before) / (after.y - before.y)
+	var c := cos(angle)
+	var s := sin(angle)
+	return Vector3(c / ring.x, -c * c * slope.x / ring.x - s * s * slope.z / ring.z, s / ring.z).normalized()
+
 # Elliptical rings with flat end caps: fewer triangles than capsules, and a clothed outline.
-static func _loft(rings: Array, sides := 8) -> ArrayMesh:
+static func _loft(rings: Array, sides := 8, smooth := false) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for j in range(rings.size() - 1):
@@ -137,8 +149,13 @@ static func _loft(rings: Array, sides := 8) -> ArrayMesh:
 			var v1 := Vector3(cos(a) * upper.x, upper.y, sin(a) * upper.z)
 			var v2 := Vector3(cos(b) * upper.x, upper.y, sin(b) * upper.z)
 			var v3 := Vector3(cos(b) * lower.x, lower.y, sin(b) * lower.z)
-			for v in [v0, v2, v1, v0, v3, v2]: st.add_vertex(v)
-	st.generate_normals()
+			var vertices := [v0, v2, v1, v0, v3, v2]
+			var directions := [_loft_normal(rings, j, a), _loft_normal(rings, j + 1, b), _loft_normal(rings, j + 1, a),
+				_loft_normal(rings, j, a), _loft_normal(rings, j, b), _loft_normal(rings, j + 1, b)] if smooth else []
+			for k in vertices.size():
+				if smooth: st.set_normal(directions[k])
+				st.add_vertex(vertices[k])
+	if not smooth: st.generate_normals()
 	# Keep the soles, collar and cuffs flat, without rounding their side normals.
 	for end in [0, rings.size() - 1]:
 		var ring: Vector3 = rings[end]

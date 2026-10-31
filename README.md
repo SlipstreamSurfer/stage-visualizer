@@ -22,8 +22,9 @@
 ![The hangar from the crowd: steel roof girders in the haze, beams crossing over raised hands](docs/screenshots/hangar-hall.jpg)
 
 SV is for someone who DJs at home and wants the real thing around them: one hall, one stage over the full width, one
-DJ booth with two CDJ-3000X players and a DJM-A9. Play from rekordbox or any music on your computer, and a lighting
-designer runs the show: a mood for every genre, one palette per track, looks held for a phrase, a build-up that
+DJ booth with two CDJ-3000X players and a DJM-A9, flightcase edging and routed cables. Play from rekordbox or any
+music on your computer, and a lighting designer runs the show: a mood for every genre, one palette per track,
+looks held for a phrase, a build-up that
 lowers the trusses, and a drop that opens the whole rig.
 
 From 0.50 SV is built with **Godot 4.7** and runs on Windows, macOS and Linux. The browser version lives on in the
@@ -79,6 +80,8 @@ To make an app for Windows, macOS or Linux, see [builds](docs/builds.md).
 | Esc | Pause menu (the show goes on) |
 | ? or F1 | All keys |
 | B | Blackout on / off |
+| D | Light desk: group cards with on / off switches and percentage faders |
+| W | Washes on / off |
 | Space | Strobe while held |
 | N | Blinders while held |
 | L | Next look |

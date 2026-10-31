@@ -23,6 +23,8 @@ var _hall_materials: Array[ShaderMaterial] = []
 var _hall_rig: Rig
 var _return_level := 0.0
 var _pa_fronts: Kit.Batch
+var _fog_volumes: Array[FogVolume] = []
+var _fog_densities: Array[float] = []
 
 func build() -> void:
 	var black := Kit.mat(Color(0.018, 0.018, 0.02), 0.8)
@@ -108,7 +110,14 @@ func _fog(label: String, pos: Vector3, size: Vector3, density: float, shape: int
 	material.albedo = Color(0.92, 0.93, 0.96)
 	material.edge_fade = 0.4
 	fog.material = material
+	_fog_volumes.append(fog)
+	_fog_densities.append(density)
 	add_child(fog)
+
+# Always scale the original values, including the negative roof density, never the previous setting.
+func set_haze(level: float) -> void:
+	for i in _fog_volumes.size():
+		(_fog_volumes[i].material as FogMaterial).density = _fog_densities[i] * level
 
 # Pleated black cloth behind the rear towers, from the deck to the roof frame.
 func _curtain() -> void:

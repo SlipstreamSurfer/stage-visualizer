@@ -214,7 +214,7 @@ func _environment() -> void:
 	env.glow_bloom = 0.04
 	env.glow_hdr_threshold = 0.9
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
-	env.volumetric_fog_density = 0.009
+	env.volumetric_fog_density = Haze.DENSITY
 	env.volumetric_fog_albedo = Color(0.92, 0.93, 0.96)
 	env.volumetric_fog_anisotropy = 0.55
 	env.volumetric_fog_length = 70.0
@@ -233,7 +233,10 @@ func _environment() -> void:
 # The show's light on the room (SV in the browser: hall light and fog colour from director.room): the hall's
 # surfaces take a little of the show's colour, the haze glows with it, a kick lifts both and a strobe flashes the room.
 var _room_level := 0.0
+var _haze_level := -1.0
 func _room(dt: float) -> void:
+	var haze := Haze.level(show.tune.get("haze", 1.0))
+	if not is_equal_approx(haze, _haze_level): _haze_level = Haze.apply(haze, env, hall)
 	if args.has("bright"): return
 	_room_level = maxf(rig.room_level, lerpf(_room_level, rig.room_level, 1.0 - exp(-dt * 8.0)))
 	var c := rig.room_color
@@ -241,7 +244,7 @@ func _room(dt: float) -> void:
 	# strobes and blinders light the room through their own lamps (Rig); here only the show's glow, capped
 	var level := minf(_room_level, 30.0)
 	env.ambient_light_energy = 0.02 + level * 0.0014
-	var glow := (0.004 + level * 0.0008) * float(show.mood.get("haze", 1.0))
+	var glow := (0.004 + level * 0.0008) * float(show.mood.get("haze", 1.0)) * minf(haze, 1.0)
 	env.volumetric_fog_emission = Color(c.r * glow, c.g * glow, c.b * glow)
 	crowd.stage_light(c, level, dt)
 
@@ -261,6 +264,7 @@ func _hud() -> void:
 	desk = LightDesk.new()
 	add_child(desk)
 	desk.light = show
+	desk.set_fog_enabled(env.volumetric_fog_enabled)
 	if DisplayServer.get_name() != "headless":
 		midi = MidiControls.new()
 		add_child(midi)
@@ -289,6 +293,7 @@ func _apply_settings(options: Dictionary) -> void:
 func _set_level(i: int) -> void:
 	level = clampi(i, 0, Quality.ORDER.size() - 1)
 	Quality.apply(Quality.ORDER[level], env, get_viewport(), rig, crowd)
+	if desk != null: desk.set_fog_enabled(env.volumetric_fog_enabled)
 	steady.reset(Quality.PRESETS[Quality.ORDER[level]].scale)
 
 func _say(text: String, seconds := 3.0) -> void:

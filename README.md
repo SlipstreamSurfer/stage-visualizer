@@ -80,7 +80,7 @@ To make an app for Windows, macOS or Linux, see [builds](docs/builds.md).
 | Esc | Pause menu (the show goes on) |
 | ? or F1 | All keys |
 | B | Blackout on / off |
-| D | Light desk: group cards with on / off switches and percentage faders |
+| D | Light desk: group switches, percentage faders and haze (0–200%) |
 | W | Washes on / off |
 | Space | Strobe while held |
 | N | Blinders while held |

@@ -18,6 +18,10 @@ var _card_on: StyleBoxFlat
 var _card_off: StyleBoxFlat
 var _thumb: Texture2D
 var _sync_at := 0.0
+var _haze_slider: HSlider
+var _haze_value: Label
+var _haze_hint: Label
+var _fog_enabled := true
 
 func _ready() -> void:
 	layer = 15
@@ -67,6 +71,7 @@ func _ready() -> void:
 	_card_off = UiStyle.box(UiStyle.PANEL, UiStyle.BORDER, 16)
 	_thumb = _fader_thumb()
 	for entry in GROUPS: _group_card(entry)
+	_haze_control(column)
 	var footer := HBoxContainer.new()
 	column.add_child(footer)
 	var all := UiStyle.button("All on · 100%")
@@ -132,16 +137,7 @@ func _group_card(entry: Array) -> void:
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.focus_mode = Control.FOCUS_NONE
 	slider.tooltip_text = str(entry[1]) + " level"
-	var track := UiStyle.box(UiStyle.PANEL, Color.TRANSPARENT, 0)
-	track.content_margin_top = 3
-	track.content_margin_bottom = 3
-	slider.add_theme_stylebox_override("slider", track)
-	var fill := track.duplicate() as StyleBoxFlat
-	fill.bg_color = UiStyle.ACCENT
-	slider.add_theme_stylebox_override("grabber_area", fill)
-	slider.add_theme_stylebox_override("grabber_area_highlight", fill)
-	slider.add_theme_icon_override("grabber", _thumb)
-	slider.add_theme_icon_override("grabber_highlight", _thumb)
+	_style_fader(slider)
 	level.add_child(slider)
 	var value := UiStyle.label("100%")
 	value.custom_minimum_size.x = 64
@@ -156,6 +152,64 @@ func _group_card(entry: Array) -> void:
 		toggle_button.set_pressed_no_signal(v > 0.0)
 		if v > 0.0: _rows[key].last = v
 		_apply(key))
+
+# Atmosphere is independent of the light-group faders and their All on reset.
+func _haze_control(column: VBoxContainer) -> void:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UiStyle.box(UiStyle.SURFACE, UiStyle.BORDER, 16))
+	column.add_child(panel)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 4)
+	panel.add_child(body)
+	var header := HBoxContainer.new()
+	body.add_child(header)
+	var title := UiStyle.label("Haze", "Subtitle")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	_haze_value = UiStyle.label("100%")
+	_haze_value.name = "HazeValue"
+	header.add_child(_haze_value)
+	_haze_slider = HSlider.new()
+	_haze_slider.name = "HazeSlider"
+	_haze_slider.min_value = 0.0
+	_haze_slider.max_value = 2.0
+	_haze_slider.step = 0.05
+	_haze_slider.value = 1.0
+	_haze_slider.custom_minimum_size.y = 44
+	_haze_slider.focus_mode = Control.FOCUS_NONE
+	_haze_slider.tooltip_text = "Haze density and beam visibility, not lamp brightness"
+	_style_fader(_haze_slider)
+	body.add_child(_haze_slider)
+	_haze_hint = UiStyle.label("", "Hint")
+	_haze_hint.name = "HazeHint"
+	_haze_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_child(_haze_hint)
+	_haze_slider.value_changed.connect(func(v: float):
+		if light != null: light.tune.haze = v
+		_haze_value.text = "%d%%" % roundi(v * 100.0))
+
+func _style_fader(slider: HSlider) -> void:
+	var track := UiStyle.box(UiStyle.PANEL, Color.TRANSPARENT, 0)
+	track.content_margin_top = 3
+	track.content_margin_bottom = 3
+	slider.add_theme_stylebox_override("slider", track)
+	var fill := track.duplicate() as StyleBoxFlat
+	fill.bg_color = UiStyle.ACCENT
+	slider.add_theme_stylebox_override("grabber_area", fill)
+	slider.add_theme_stylebox_override("grabber_area_highlight", fill)
+	slider.add_theme_icon_override("grabber", _thumb)
+	slider.add_theme_icon_override("grabber_highlight", _thumb)
+
+func set_fog_enabled(enabled: bool) -> void:
+	_fog_enabled = enabled
+	_refresh_haze()
+
+func _refresh_haze() -> void:
+	if _haze_slider == null: return
+	var level := Haze.level(light.tune.get("haze", 1.0) if light != null else 1.0)
+	_haze_slider.set_value_no_signal(level)
+	_haze_value.text = "%d%%" % roundi(level * 100.0)
+	_haze_hint.text = "Haze density · 100% is the original setting" if _fog_enabled else "Beams only · volumetric haze is off at this quality"
 
 func _layout() -> void:
 	if _grid == null: return
@@ -209,6 +263,7 @@ func sync() -> void:
 			_rows[key].last = level
 		_refresh(key)
 	_update_summary()
+	_refresh_haze()
 
 # On again restores the fader, including its last positive value after dragging down to zero.
 func toggle_group(key: String) -> bool:

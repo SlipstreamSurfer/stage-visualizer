@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.55.1 — Rekordbox track changes
+
+- Clear the previous track's phrase and countdown when a deck loads a different track or reports that phrase analysis
+  is unavailable. Until a current phrase is available, the show uses a neutral groove without a predicted blackout.
+- Keep phrase data on the other decks and retain valid builds and drops.
+
 ## 0.55.0 — Rekordbox from another computer, good on every computer
 
 - Rekordbox can run on another computer: Settings → Rekordbox (or Source → Rekordbox connection…) shows the

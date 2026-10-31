@@ -71,7 +71,12 @@ func deck() -> String:
 	return "master" if fields.has("master/bpm/current") else "1"
 
 func value(field: String, default = null):
-	var result = fields.get(deck() + "/" + field, default)
+	return value_for(deck(), field, default)
+
+func value_for(deck_id: String, field: String, default = null):
+	if field.begins_with("phrase/") and field != "phrase/available" and fields.get(deck_id + "/phrase/available") == 0:
+		return default
+	var result = fields.get(deck_id + "/" + field, default)
 	return phrase_name(result) if field in ["phrase/current", "phrase/next"] else result
 
 # rkbx_link sends either full names or the lossy numeric phrase family (1..5).
@@ -102,11 +107,24 @@ func _read(p: PackedByteArray) -> bool:
 	for message in messages:
 		var key: String = message[0].trim_prefix("/")
 		if not _valid_value(key, message[1]): continue
+		var deck_id := key.get_slice("/", 0)
+		var field := key.substr(deck_id.length() + 1)
+		if field in ["track/id", "track/title"] and fields.has(key) and fields[key] != message[1]:
+			_clear_phrases(deck_id)
+		if field == "phrase/available" and message[1] == 0:
+			_clear_phrases(deck_id)
+		if field.begins_with("phrase/") and field != "phrase/available" and fields.get(deck_id + "/phrase/available") == 0:
+			accepted = true
+			continue
 		if key.ends_with("/time") and fields.has(key) and float(message[1]) > float(fields[key]):
 			_motion[key.get_slice("/", 0)] = _clock
 		fields[key] = message[1]
 		accepted = true
 	return accepted
+
+func _clear_phrases(deck_id: String) -> void:
+	for key in fields.keys():
+		if str(key).begins_with(deck_id + "/phrase/"): fields.erase(key)
 
 # Validate a whole packet before changing fields, including nested bundles.
 static func _decode(p: PackedByteArray, messages: Array, depth := 0) -> bool:

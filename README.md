@@ -13,6 +13,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/SlipstreamSurfer/stage-visualizer/releases/latest">Download</a> ·
   <a href="#start">Get started</a> ·
   <a href="#music">Connect music</a> ·
   <a href="#keys">Keys</a> ·
@@ -53,15 +54,18 @@ history of this repository, up to [v0.40.1](https://github.com/SlipstreamSurfer/
 
 ## Start
 
-1. Install [Godot 4.7.2](https://godotengine.org/download/) (standard version).
-2. Clone this repository and start it:
+1. Download the latest package for Windows, macOS or Linux from [Releases](https://github.com/SlipstreamSurfer/stage-visualizer/releases/latest).
+2. Extract it and open SV: `SV.exe` on Windows, `Stage Visualizer.app` on macOS, or `SV.x86_64` on Linux.
+   If your computer blocks the first launch, see [opening a downloaded build](docs/builds.md#open-a-downloaded-build).
+3. Choose your music source, check that it works, set the delay and choose your flashing-light preference.
+
+To run from source, install [Godot 4.7.2](https://godotengine.org/download/) (standard version), clone this repository and run:
 
 ```sh
 ./start.sh
 ```
 
-or open the folder in Godot and press Play. The first time, SV asks for your music source, checks that it works,
-sets the delay with a few taps and asks about flashing light. After that it opens on the start screen.
+Or open the folder in Godot and press Play.
 
 To make an app for Windows, macOS or Linux, see [builds](docs/builds.md).
 

@@ -244,9 +244,9 @@ func _room(dt: float) -> void:
 	var c := rig.room_color
 	env.ambient_light_color = c
 	# strobes and blinders light the room through their own lamps (Rig); here only the show's glow, capped
-	var level := minf(_room_level, 30.0)
-	env.ambient_light_energy = 0.02 + level * 0.0014
-	var glow := (0.004 + level * 0.0008) * float(show.mood.get("haze", 1.0)) * minf(haze, 1.0)
+	var level := minf(_room_level, 30.0) * rig.lighting_activity()
+	env.ambient_light_energy = 0.02 + level * 0.00025
+	var glow := level * 0.00025 * float(show.mood.get("haze", 1.0)) * minf(haze, 1.0)
 	env.volumetric_fog_emission = Color(c.r * glow, c.g * glow, c.b * glow)
 	crowd.stage_light(c, level, dt)
 

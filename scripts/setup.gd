@@ -283,7 +283,7 @@ func _update_status() -> void:
 		_peer_label.text = "From " + rb.sender_ip if rb.connected and rb.sender_ip != "" else "Open Rekordbox connection for the destination and config."
 		var tempo := float(_rb.value("bpm/current", 0.0))
 		if rb.connected and tempo > 0:
-			_tempo_label.text = "%.1f BPM · Beat found ✓" % tempo
+			_tempo_label.text = "%.1f BPM · %s" % [tempo, "Beat received ✓" if rb.get("beat", false) else "Waiting for beat…"]
 		elif _options.source == "rekordbox": _tempo_label.text = "Waiting for tempo…"
 	_error.text = _preview_error
 	_next.text = "Continue" if source_ready() else "Continue anyway"

@@ -20,7 +20,9 @@
    and time since the last accepted packet. With no playing flag, SV reports playback
    only after it observes the track position moving. “Master deck” means the upstream
    master stream; that stream does not identify the physical deck number. After 1.5 s
-   without valid data, the page shows that it is waiting again.
+   without valid data, the page shows that it is waiting again. Beat shows whether a
+   recent beat message arrived for the selected deck. Phrase shows whether a phrase
+   is available for that deck; it may be unavailable while a track has no phrase analysis.
 7. Choose **Save** in Settings, or finish Source, to keep your choices. Back/Escape
    from Settings restores the saved port. Back from Source's connection page returns
    to its source check; cancelling Source restores the previous choices.
@@ -42,6 +44,10 @@ On macOS, allow SV's incoming connections. Go to **System Settings → Network �
 Firewall → Options** to change this later. On Windows, allow SV on **Private networks**
 in Defender Firewall, or run the shown `netsh` command in an Administrator terminal.
 The Windows rule allows only LocalSubnet on the Private profile.
+
+During the show, press **I** for the info screen. It shows the active source, audio
+delay, rekordbox connection, beat and phrase status. If rekordbox stops sending,
+the timing line shows whether audio analysis is being used or SV is waiting for a source.
 
 ## Configuration reference
 

@@ -87,6 +87,10 @@ func refresh(show: Show, listen: Listen, rb: Rekordbox, quality: String, auto: b
 	if rb.listening: s += "Rekordbox  %s · port %d%s" % ["live" if rb.live() else "listening", rb.port, "\n           " + show.deck_text(rb) if rb.live() else ""]
 	elif rb.error != "": s += "Rekordbox  [color=#ff9a80]%s[/color]" % rb.error
 	else: s += "Rekordbox  off"
+	if rb.listening:
+		var state := rb.status()
+		s += "\nBeat  %s · phrase %s" % ["received" if state.beat else "waiting", "available" if state.phrase else "unavailable"]
+		if not state.connected: s += "\nTiming  %s" % ("audio analysis" if listen.source not in ["none", ""] else "waiting for source")
 	_boxes.tl.text = s
 	# TRACK
 	var t := _head("TRACK")

@@ -68,6 +68,18 @@ func _run() -> void:
 	app.crowd.build(0)
 	rig.room_level = 8.0
 	rig.room_color = Color(0.1,0.4,0.8)
+	var dark_activity := rig.lighting_activity()
+	check(is_zero_approx(dark_activity), "A dark rig must not light the whole room")
+	var first: Rig.Fixture = rig.fixtures[0]
+	first.level = 1.0
+	first.shown = Color.RED
+	first.pos = Vector3(-10, 10, -10)
+	first.dir = Vector3.DOWN
+	var pools := rig.bounce_pools()
+	check(rig.lighting_activity() < 0.02, "One fixture contributes only a small share of room light")
+	check(pools[0].colour.x > 0.0 and pools[1].colour.length() == 0.0 and pools[2].colour.length() == 0.0 and pools[3].colour.length() == 0.0, "One fixture creates a local pool")
+	check(pools[0].position.distance_to(Vector3(-10, 0, -10)) < 0.01, "The pool follows the fixture's aim")
+	first.level = 0.0
 	show.tune.haze = 0.0
 	app._room(0.1)
 	check(is_zero_approx(environment.volumetric_fog_density), "Main does not apply zero haze")

@@ -113,6 +113,46 @@ var shape := "v"   # the hall trusses: a V with the point at the stage, or "stra
 
 const LASER_BEAMS := 9
 
+# The diffuse return is a cheap approximation, not another lamp. Its strength follows the
+# actual rig faders, including fixtures omitted from direct lighting at lower quality.
+func lighting_activity() -> float:
+	var total := 0.0
+	for f in fixtures: total += clampf(f.level, 0.0, 1.0)
+	for b in battens: total += clampf(b.level, 0.0, 1.0) * 0.25
+	var capacity := float(fixtures.size()) + float(battens.size()) * 0.25
+	return clampf(total / maxf(capacity, 1.0) + maxf(strobe, blinder) * 0.15, 0.0, 1.0)
+
+# First point where a head's current direction reaches the hall envelope.
+static func hall_hit(origin: Vector3, direction: Vector3) -> Vector3:
+	var distance := 65.0
+	for axis in 3:
+		var d := direction[axis]
+		if absf(d) < 0.0001: continue
+		var limit: float = [Hall.W * 0.5, Hall.H, Hall.D * 0.5][axis] if d > 0.0 else [-Hall.W * 0.5, 0.0, -Hall.D * 0.5][axis]
+		var t := (limit - origin[axis]) / d
+		if t >= 0.0: distance = minf(distance, t)
+	return origin + direction * distance
+
+# Four broad pools approximate reflected light around where the heads hit the hall.
+func bounce_pools() -> Array[Dictionary]:
+	var pools: Array[Dictionary] = []
+	for i in 4: pools.append({"position": Vector3.ZERO, "colour": Vector3.ZERO, "weight": 0.0})
+	for f in fixtures:
+		var weight := clampf(f.level, 0.0, 1.0)
+		if weight <= 0.001: continue
+		var hit := hall_hit(f.pos, f.dir)
+		var i := (1 if hit.x >= 0.0 else 0) + (2 if hit.z >= 0.0 else 0)
+		pools[i].position += hit * weight
+		pools[i].colour += Vector3(f.shown.r, f.shown.g, f.shown.b) * weight
+		pools[i].weight += weight
+	var capacity := maxf(float(fixtures.size()) / 4.0, 1.0)
+	for pool in pools:
+		var weight: float = pool.weight
+		if weight > 0.0:
+			pool.position /= weight
+			pool.colour = pool.colour / weight * minf(weight / capacity, 1.0) * 0.4
+	return pools
+
 func build() -> void:
 	var alu := Kit.mat(Color(0.6, 0.61, 0.63), 0.32, 0.9)
 	_body = Kit.mat(Color(0.03, 0.03, 0.034), 0.45, 0.25)

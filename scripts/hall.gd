@@ -21,7 +21,6 @@ var _floor: StandardMaterial3D
 var _wet_floor := false
 var _hall_materials: Array[ShaderMaterial] = []
 var _hall_rig: Rig
-var _return_level := 0.0
 var _pa_fronts: Kit.Batch
 var _fog_volumes: Array[FogVolume] = []
 var _fog_densities: Array[float] = []
@@ -400,16 +399,17 @@ func _hall_material(color: Color, rough: float, metal: float, gain: float) -> Sh
 	_hall_materials.append(material)
 	return material
 
-# Read the existing show output after main updates it. No new lights or changes to the rig.
-func _update_return(dt: float) -> void:
+# A few broad pools of reflected colour, centred on the actual heads' impact points.
+func _update_return(_dt: float) -> void:
 	if not is_instance_valid(_hall_rig):
 		for sibling in get_parent().get_children():
 			if sibling is Rig: _hall_rig = sibling
 	if not is_instance_valid(_hall_rig): return
-	var level := minf(_hall_rig.room_level, 16.0)
-	_return_level = maxf(level, lerpf(_return_level, level, 1.0 - exp(-dt * 8.0))) if level > 0.01 else 0.0
-	var reflected := Vector3(_hall_rig.room_color.r, _hall_rig.room_color.g, _hall_rig.room_color.b) * _return_level * 0.12
-	for material in _hall_materials: material.set_shader_parameter("show_return", reflected)
+	var pools := _hall_rig.bounce_pools()
+	for material in _hall_materials:
+		for i in 4:
+			material.set_shader_parameter("bounce_pos_%d" % i, pools[i].position)
+			material.set_shader_parameter("bounce_colour_%d" % i, pools[i].colour)
 
 # Dimensions in metres; local +Z is the back of a unit (away from the DJ).
 # Official reference images and limits are recorded in docs/booth.md.

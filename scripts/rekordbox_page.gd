@@ -73,7 +73,7 @@ static func connection_text(state: Dictionary) -> String:
 	var playing: Variant = state.get("playing")
 	var activity := "playing" if playing == true else "stopped" if playing == false else "timing received"
 	var title: String = state.get("title", "")
-	return "✓ Receiving from %s · %s %s · %s\nLast packet %s" % [state.sender_ip, "Master deck" if state.deck == "master" else "Deck " + state.deck, activity, title if title != "" else "No title yet", age]
+	return "✓ Receiving from %s · %s %s · %s\nLast packet %s\nBeat: %s · Phrase: %s" % [state.sender_ip, "Master deck" if state.deck == "master" else "Deck " + state.deck, activity, title if title != "" else "No title yet", age, "received" if state.get("beat", false) else "waiting", "available" if state.get("phrase", false) else "not available yet"]
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 12)
@@ -107,17 +107,21 @@ func _ready() -> void:
 		port_changed.emit(int(value))
 		_refresh())
 	add_child(_text("Use the same network / Wi-Fi as the rekordbox computer."))
+	add_child(_text("Download and start rkbx_link on the rekordbox computer.\nThen copy the settings below and play an analysed track."))
+	var download := UiStyle.button("Open rkbx_link download")
+	download.pressed.connect(func(): OS.shell_open("https://github.com/grufkork/rkbx_link"))
+	add_child(download)
 	add_child(UiStyle.label("Connection", "Subtitle"))
 	_status = _text("")
 	add_child(_status)
-	add_child(UiStyle.label("2 · Put this in rkbx_link's config", "Subtitle"))
+	add_child(UiStyle.label("2 · Add these lines to rkbx_link's config", "Subtitle"))
 	_config = TextEdit.new()
 	_config.editable = false
 	_config.scroll_fit_content_height = true
 	_config.add_theme_color_override("font_readonly_color", UiStyle.TEXT)
 	_config.add_theme_font_size_override("font_size", 20)
 	add_child(_config)
-	add_child(_text("Merge into the existing config. Choose keeper.rekordbox_version\nand keeper.decks there. Save the file, then restart rkbx_link."))
+	add_child(_text("Keep the other lines in the config. Set keeper.rekordbox_version\nand keeper.decks, save, then restart rkbx_link. Check Connection above."))
 	var buttons := HBoxContainer.new()
 	add_child(buttons)
 	var copy_all := UiStyle.button("Copy all")

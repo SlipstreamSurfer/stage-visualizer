@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.57.0 — Light that belongs to the room
+
+- Reflected light follows the active heads and their aim, falling off across the hall. A single lamp contributes
+  only a small amount to the room's overall glow. Crowd stage light also fades towards the back.
+- The rekordbox connection shows whether beat and phrase data arrive, with a direct link to rkbx_link and clearer
+  setup steps. The info screen shows the timing fallback when the connection drops.
+- The README starts with the downloadable builds and platform opening instructions.
+
 ## 0.56.0 — A livelier crowd, a haze fader and a PA that faces the hall
 
 - The crowd wears mixed clothes: mostly dark, with a rare white or neon shirt that catches the show's colour; hair from

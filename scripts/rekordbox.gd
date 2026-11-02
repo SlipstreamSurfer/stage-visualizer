@@ -22,6 +22,7 @@ var sender_ip := ""
 var _udp := PacketPeerUDP.new()
 var _clock := 0.0
 var _motion := {}
+var _beat_received := {}
 var replaying := false
 var replay_live := false
 
@@ -39,6 +40,7 @@ func stop() -> void:
 	last_packet = -10.0
 	fields.clear()
 	_motion.clear()
+	_beat_received.clear()
 	packets = 0
 	sender_ip = ""
 	replaying = false
@@ -55,7 +57,9 @@ func status() -> Dictionary:
 	return {"connected": live(), "sender_ip": sender_ip, "packets": packets,
 		"deck": deck(), "seconds_since": maxf(0.0, _clock - last_packet) if packets > 0 else -1.0,
 		"listening": listening, "port": port, "error": error,
-		"title": str(value("track/title", "")), "playing": playing()}
+		"title": str(value("track/title", "")), "playing": playing(),
+		"beat": live() and _beat_received.has(deck()) and _clock - float(_beat_received[deck()]) < 1.5,
+		"phrase": live() and str(value("phrase/current", "")) != ""}
 
 # Upstream sends position rather than a playing flag. Only report observed movement.
 func playing() -> Variant:
@@ -111,6 +115,7 @@ func _read(p: PackedByteArray) -> bool:
 		var field := key.substr(deck_id.length() + 1)
 		if field in ["track/id", "track/title"] and fields.has(key) and fields[key] != message[1]:
 			_clear_phrases(deck_id)
+			_beat_received.erase(deck_id)
 		if field == "phrase/available" and message[1] == 0:
 			_clear_phrases(deck_id)
 		if field.begins_with("phrase/") and field != "phrase/available" and fields.get(deck_id + "/phrase/available") == 0:
@@ -119,6 +124,7 @@ func _read(p: PackedByteArray) -> bool:
 		if key.ends_with("/time") and fields.has(key) and float(message[1]) > float(fields[key]):
 			_motion[key.get_slice("/", 0)] = _clock
 		fields[key] = message[1]
+		if field == "beat/subdiv/1": _beat_received[deck_id] = _clock
 		accepted = true
 	return accepted
 

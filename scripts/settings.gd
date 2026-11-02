@@ -6,7 +6,7 @@ signal applied(options: Dictionary)
 signal closed
 
 const DEFAULTS := {"source": "both", "device": "", "track": "", "latency": 0.08, "quality": "auto", "genre": "auto", "osc_port": 4460,
-	"rekordbox_local": false, "setup_done": false, "safe": false, "screen": -1, "fullscreen": false, "fps_limit": 60, "camera": 1}
+	"rekordbox_local": false, "setup_done": false, "safe": false, "stage_screen": true, "screen": -1, "fullscreen": false, "fps_limit": 60, "camera": 1}
 const SOURCES := ["system", "both", "rekordbox", "file"]
 const SOURCE_LABELS := ["System audio", "System audio + rekordbox", "Rekordbox", "Music file"]
 const QUALITIES := ["auto", "low", "light", "normal", "high", "ultra"]
@@ -36,6 +36,7 @@ var _fullscreen: CheckButton
 var _fps: OptionButton
 var _camera: OptionButton
 var _safe: CheckButton
+var _stage_screen: CheckButton
 var shortcuts_enabled := true
 
 func load_settings() -> Dictionary:
@@ -105,7 +106,7 @@ static func _validated(options: Dictionary) -> Dictionary:
 	var port = options.get("osc_port", DEFAULTS.osc_port)
 	if port is int or (port is float and is_finite(port)):
 		result.osc_port = int(clampf(float(port), 1.0, 65535.0))
-	for key in ["setup_done", "safe", "fullscreen", "rekordbox_local"]:
+	for key in ["setup_done", "safe", "fullscreen", "rekordbox_local", "stage_screen"]:
 		if options.get(key) is bool: result[key] = options[key]
 	for key in ["screen", "fps_limit", "camera"]:
 		var number = options.get(key)
@@ -232,6 +233,9 @@ func _ready() -> void:
 	_quality = OptionButton.new()
 	for choice in QUALITIES: _quality.add_item("Automatic" if choice == "auto" else choice.capitalize())
 	_row(show_options, "Quality", _quality)
+	_stage_screen = CheckButton.new()
+	_stage_screen.text = "Stage screen"
+	show_options.add_child(_stage_screen)
 	_safe = CheckButton.new()
 	_safe.text = "Gentle strobes"
 	show_options.add_child(_safe)
@@ -303,6 +307,7 @@ func _sync() -> void:
 	_rekordbox_page._port.set_value_no_signal(values.osc_port)
 	_rekordbox_page._refresh()
 	_safe.button_pressed = values.safe
+	_stage_screen.button_pressed = values.stage_screen
 	_fullscreen.button_pressed = values.fullscreen
 	_fps.select(SvDisplay.FPS_LIMITS.find(values.fps_limit))
 	_camera.select(values.camera - 1)
@@ -328,7 +333,7 @@ func _apply() -> void:
 	options.merge({"source": SOURCES[_source.selected], "genre": Show.GENRE_ORDER[_genre.selected], "device": _device.get_selected_metadata(),
 		"track": _track.text.strip_edges(), "latency": _latency.value / 1000.0,
 		"quality": QUALITIES[_quality.selected], "osc_port": int(_port.value), "rekordbox_local": _rekordbox_page.same_computer,
-		"safe": _safe.button_pressed, "fullscreen": _fullscreen.button_pressed,
+		"safe": _safe.button_pressed, "stage_screen": _stage_screen.button_pressed, "fullscreen": _fullscreen.button_pressed,
 		"screen": _screen.get_selected_metadata(), "fps_limit": SvDisplay.FPS_LIMITS[_fps.selected], "camera": _camera.selected + 1}, true)
 	if options.source == "file":
 		if not FileAccess.file_exists(options.track) or options.track.get_extension().to_lower() not in ["ogg", "mp3", "wav"]:

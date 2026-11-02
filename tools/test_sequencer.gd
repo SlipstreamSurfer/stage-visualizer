@@ -17,7 +17,7 @@ func _initialize() -> void:
 			if n not in S.LENGTHS: failed.append("%s block %d is %d bars" % [section, i, n])
 	for n in S.LENGTHS:
 		if not seen.has(n): failed.append("no block is %d bars" % n)
-	# patterns: deterministic, never neighbouring hits, 2 to 10 hits, the fill never has fewer hits, safe is quarters only
+	# Patterns are deterministic; dense stage patterns may use eighths or sixteenths.
 	var distinct := {}
 	for lane in S.LANES:
 		for block in 40:
@@ -27,9 +27,9 @@ func _initialize() -> void:
 				distinct[first] = true
 				for bar in length:
 					var m := S.pattern(lane, block, bar, length)
-					if (m & ((m << 1) & 0xFFFF)) != 0 or ((m & 1) == 1 and ((m >> 15) & 1) == 1): failed.append("neighbouring hits: lane %d block %d bar %d" % [lane, block, bar])
+					if m != 0xFFFF and ((m & ((m << 1) & 0xFFFF)) != 0 or ((m & 1) == 1 and ((m >> 15) & 1) == 1)): failed.append("neighbouring hits: lane %d block %d bar %d" % [lane, block, bar])
 					var n := S.popcount(m)
-					if n < 2 or n > 10: failed.append("%d hits: lane %d block %d bar %d of %d" % [n, lane, block, bar, length])
+					if n < 2 or n > 16: failed.append("%d hits: lane %d block %d bar %d of %d" % [n, lane, block, bar, length])
 					var safe := S.pattern(lane, block, bar, length, true)
 					if safe == 0 or safe & ~0x1111 != 0: failed.append("safe pattern off the quarter notes")
 				# a block holds one pattern until its fill, and the fill has at least as many hits
@@ -43,6 +43,11 @@ func _initialize() -> void:
 	for block in 40:
 		if S.pattern(0, block, 0, 16) == S.pattern(1, block, 0, 16): same += 1
 	if same > 10: failed.append("lanes 0 and 1 play the same pattern in %d of 40 blocks" % same)
+	if S.pattern(2, 2, 0, 8) != 0x5555 or S.pattern(2, 5, 0, 8) != 0xFFFF: failed.append("Missing eighth or sixteenth stage pattern")
+	if S.pulse(0xFFFF, 0.0) < 0.9 or S.pulse(0xFFFF, 0.2) > 0.01 or S.pulse(0xFFFF, 0.25) < 0.9: failed.append("Sixteenths do not separate into pulses")
+	var monos := {}
+	for block in [1, 4, 7, 10, 13]: monos[ShowDirector.mono_colour(block).to_html()] = true
+	if monos.size() != 5: failed.append("Mono blocks must include five different colours")
 
 	# the new head looks: every one of them with every move, over the hall, over time: finite, and aimed in or at the hall
 	var L := ShowLooks

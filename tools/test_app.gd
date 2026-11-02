@@ -267,6 +267,13 @@ func _test_rekordbox_page_udp() -> void:
 	rb.update(0.1)
 	var text := RekordboxPage.connection_text(rb.status())
 	check("127.0.0.1" in text and "Deck 1 playing" in text and "Test track" in text, "Live page includes sender, observed playback and title")
+	check(not rb.status().beat and not rb.status().phrase, "Track data alone does not claim beat or phrase data")
+	sender.put_packet(osc.bundle([osc.message("/1/beat/subdiv/1", 0.5), osc.message("/1/phrase/current", "Chorus")]))
+	await create_timer(0.05).timeout
+	rb.update(0.1)
+	check(rb.status().beat and rb.status().phrase, "Page reports received beat and phrase")
+	rb.update(1.6)
+	check(not rb.status().beat and not rb.status().phrase, "Old beat and phrase are not reported as live")
 	rb.update(1.6)
 	check("last received" in RekordboxPage.connection_text(rb.status()), "Stale connection reports age")
 	probe.bind(0, "127.0.0.1")

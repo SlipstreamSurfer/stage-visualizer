@@ -21,10 +21,11 @@ var _floor: StandardMaterial3D
 var _wet_floor := false
 var _hall_materials: Array[ShaderMaterial] = []
 var _hall_rig: Rig
-var _return_level := 0.0
 var _pa_fronts: Kit.Batch
 var _fog_volumes: Array[FogVolume] = []
 var _fog_densities: Array[float] = []
+var stage_screen: Node3D
+var stage_screen_material: ShaderMaterial
 
 func build() -> void:
 	var black := Kit.mat(Color(0.018, 0.018, 0.02), 0.8)
@@ -66,6 +67,7 @@ func build() -> void:
 	# One solid deck: no second skin crossing the riser or sharing the stage's faces.
 	Kit.box(self, Vector3(W - 0.4, DECK, FRONT - BACK), Vector3(0, DECK / 2, (FRONT + BACK) / 2), deck_top).name = "StageDeck"
 	_curtain()
+	_stage_screen()
 	_booth(black)
 	_pa(dark)
 	_hazers(boxes, dark)
@@ -76,6 +78,23 @@ func build() -> void:
 	Kit.box(self, Vector3(W - 3.0, 0.08, 1.1), Vector3(0, 0.04, BARRIER - 0.5), barrier)
 	boxes.build(self)
 	dark.build(self)
+
+func _stage_screen() -> void:
+	var center := Vector3(0, DECK + 2.8 + 3.5, -36.3)
+	var frame := Kit.mat(Color(0.012, 0.012, 0.014), 0.8)
+	stage_screen = Node3D.new()
+	stage_screen.name = "StageScreen"
+	add_child(stage_screen)
+	Kit.box(stage_screen, Vector3(5.12, 7.12, 0.15), center + Vector3(0, 0, -0.09), frame)
+	stage_screen_material = ShaderMaterial.new()
+	stage_screen_material.shader = load("res://shaders/stage_screen.gdshader")
+	var face := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(5.0, 7.0)
+	face.mesh = quad
+	face.material_override = stage_screen_material
+	face.position = center
+	stage_screen.add_child(face)
 
 # Two floor hazers at the rear, with recessed outlets facing the crowd.
 func _hazers(boxes: Kit.Batch, dark: Kit.Batch) -> void:
@@ -400,16 +419,17 @@ func _hall_material(color: Color, rough: float, metal: float, gain: float) -> Sh
 	_hall_materials.append(material)
 	return material
 
-# Read the existing show output after main updates it. No new lights or changes to the rig.
-func _update_return(dt: float) -> void:
+# A few broad pools of reflected colour, centred on the actual heads' impact points.
+func _update_return(_dt: float) -> void:
 	if not is_instance_valid(_hall_rig):
 		for sibling in get_parent().get_children():
 			if sibling is Rig: _hall_rig = sibling
 	if not is_instance_valid(_hall_rig): return
-	var level := minf(_hall_rig.room_level, 16.0)
-	_return_level = maxf(level, lerpf(_return_level, level, 1.0 - exp(-dt * 8.0))) if level > 0.01 else 0.0
-	var reflected := Vector3(_hall_rig.room_color.r, _hall_rig.room_color.g, _hall_rig.room_color.b) * _return_level * 0.12
-	for material in _hall_materials: material.set_shader_parameter("show_return", reflected)
+	var pools := _hall_rig.bounce_pools()
+	for material in _hall_materials:
+		for i in 4:
+			material.set_shader_parameter("bounce_pos_%d" % i, pools[i].position)
+			material.set_shader_parameter("bounce_colour_%d" % i, pools[i].colour)
 
 # Dimensions in metres; local +Z is the back of a unit (away from the DJ).
 # Official reference images and limits are recorded in docs/booth.md.

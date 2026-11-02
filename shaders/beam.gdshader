@@ -43,7 +43,7 @@ void fragment() {
 	// along: the light's density over its width, and the haze taking a little on the way
 	float zoom = max(gobo.z, 0.2);
 	float width = lens_radius + spread * zoom * d;
-	float along = clamp((lens_radius + spread * zoom * 6.0) / width, 0.0, 1.0) * exp(-d / 95.0);
+	float along = pow(clamp((lens_radius + spread * zoom * 6.0) / width, 0.0, 1.0), 1.35) * exp(-d / 95.0);
 	along *= smoothstep(0.0, 0.015, t) * (1.0 - smoothstep(0.8, 1.0, t));
 	// forward scattering, against the light seen from the side
 	float c = dot(axis, normalize(VIEW));

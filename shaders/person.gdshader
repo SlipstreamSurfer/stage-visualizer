@@ -145,7 +145,7 @@ void vertex() {
 	int hi = 7;
 	for (int i = 6; i >= 0; i--) { if (hk < hair_ends[i]) hi = i; }
 	vec3 hair = hair_colours[hi];
-	stage_near = clamp(1.0 - ((MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).z - barrier_z) / 45.0, 0.25, 1.0);
+	stage_near = clamp(1.0 - ((MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).z - barrier_z) / 45.0, 0.0, 1.0);
 	vec3 shoes = mix(vec3(0.012), vec3(0.16, 0.15, 0.14), step(0.85, fract(c.w * 12.9)));
 	tint = screen_part ? vec3(0.42, 0.62, 0.85) : phone_part ? vec3(0.008) : skin_part > 0.5 ? skin : region > 0.65 ? shoes : hair_part ? hair : region > 0.15 ? pants : cloth;
 }

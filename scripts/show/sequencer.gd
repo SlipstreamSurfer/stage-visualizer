@@ -53,6 +53,9 @@ static func popcount(mask: int) -> int:
 
 # The pattern of a lane in a block, for a bar of it (0 is the block's first bar). safe: on the quarter notes only.
 static func pattern(lane: int, block: int, bar: int, length: int, safe := false) -> int:
+	# Occasional driving eighths and sixteenths; other lanes keep their own rhythms.
+	if not safe and lane == 2 and posmod(block, 6) in [2, 5]:
+		return 0x5555 if posmod(block, 6) == 2 else 0xFFFF
 	var s := lane * 7919 + block * 104729 + length * 31
 	var hits := 3 + (s / 3) % 5
 	var rot := (s / 7) % STEPS
@@ -62,6 +65,12 @@ static func pattern(lane: int, block: int, bar: int, length: int, safe := false)
 		mask &= 0x1111
 		if mask == 0: mask = 0x1111
 	return mask
+
+# A repeated hit must go down between adjacent sixteenths, even if no frame lands on the step boundary.
+static func pulse(mask: int, grid: float) -> float:
+	var phase := fposmod(grid * 4.0, 1.0)
+	if not hit(mask, floori(grid * 4.0)): return 0.0
+	return 1.0 - smoothstep(0.35, 0.8, phase)
 
 static func hit(mask: int, step: int) -> bool:
 	return (mask >> posmod(step, STEPS)) & 1 == 1

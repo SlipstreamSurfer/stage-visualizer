@@ -36,6 +36,7 @@ func _run() -> void:
 		var wash_sum := 0.0
 		var wash_n := 0
 		var most_hues := 0
+		var row_lit := {}
 		var dark_beats := 0.0
 		var longest_rest := 0.0
 		var previous := ""
@@ -64,6 +65,7 @@ func _run() -> void:
 			var wanted: Array = show.colours_in_use.map(func(c): return ShowDirector._vivid(c))
 			var burning := {}
 			for fixture in rig.fixtures:
+				if fixture.group == "front" and fixture.level > 0.01: row_lit[fixture.idx] = true
 				if fixture.level > 0.003:
 					count += 1
 					if fixture.truss >= 0: rows[fixture.truss] = true
@@ -99,6 +101,10 @@ func _run() -> void:
 			"head_looks": head_looks.size(), "combos": combos.size(), "block_lengths": block_lengths.keys().size(), "lowest_gain": lowest_gain, "wash_mean": wash_sum / maxf(1.0, wash_n), "most_hues": most_hues}
 		results[genre] = result
 		print(genre, " ", JSON.stringify(result))
+		var row_count := rig.fixtures.filter(func(f): return f.group == "front").size()
+		if row_lit.size() != row_count:
+			printerr("Front row has heads that never light: ", genre, " ", row_lit.size(), "/", row_count)
+			failed = true
 		# a show, not an empty room: the rig plays while the music does, and it moves on
 		if result.mean_lit < 0.3 or result.looks < 3 or result.longest_rest_beats > 4.0:
 			printerr("Presence/variation contract failed: ", genre)

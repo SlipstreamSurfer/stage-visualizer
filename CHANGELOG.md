@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.60.0-test3 — Roof bars and upper back-tower spots
+
+- Adds eight individually addressable LED bars along the stage roof, evenly placed between the existing washes.
+- Adds one spot above the beam row on each of the eight mirrored back towers.
+- Carries forward test2's individual bar-cell dimmers and colours, plus the balanced show and local debug feedback.
+
 ## 0.60.0-test2 — Independently programmed LED bars
 
 - Every batten has twelve independently set dimmer and colour cells, still rendered in one batch.

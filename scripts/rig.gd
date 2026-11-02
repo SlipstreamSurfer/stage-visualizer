@@ -2,7 +2,7 @@ class_name Rig
 extends Node3D
 # The rig, as a lighting designer would hang a hangar show around one full-width stage:
 #   front   beams along the stage's front edge (a gap where the PA hangs) and 8 strobe battens between them
-#   back    7 towers behind the DJ, each with 3 beams and 2 battens: beams over the DJ's head into the hall
+#   back    8 evenly spaced towers behind the DJ, each with 3 beams and 2 battens
 #   roof    two trusses over the stage: 12 spots with gobos, 8 washes, 8 blinders at the crowd
 #   hall    5 trusses over the crowd on winches, a V at two heights by turns: 12 beams, 4 washes, 4 spots, 2 battens each
 #   rear    a truss at the back of the hall: 12 beams, 6 washes, 5 battens and 4 blinders, towards the stage
@@ -174,14 +174,13 @@ func build() -> void:
 		_add(BEAM, "front", Vector3(x, Hall.DECK, F - 0.8), Vector3.UP, -1, (x + 20.3) / 40.6, 0)
 	for x in [-19.5, -12.5, -7.5, -2.5, 2.5, 7.5, 12.5, 19.5]: _batten("front", Vector3(x, Hall.DECK + 0.1, F - 0.3), -1, Vector3.RIGHT, Vector3(0, 0.6, 0.8).normalized(), (x + 20.0) / 40.0)
 
-	# back: seven towers behind the DJ, beams from 6 m up so that they pass over the DJ's head
-	for k in 7:
-		var x := -18.0 + k * 6.0
-		if k == 3: x = 3.4
+	# back: eight mirrored towers at an even 6 m pitch, leaving the centre screen clear
+	for k in 8:
+		var x := -21.0 + k * 6.0
 		var z := Hall.BACK + 1.0
 		Kit.truss(chords, braces, Vector3(x, Hall.DECK, z), Vector3(x, 13.8, z), 0.3)
-		for j in 3: _add(BEAM, "back", Vector3(x, 6.5 + j * 3.0, z + 0.15), Vector3.BACK, -1, k / 6.0, j)
-		for j in 2: _batten("back", Vector3(x, 8.0 + j * 3.0, z + 0.22), -1, Vector3.UP, Vector3.BACK, k / 6.0)
+		for j in 3: _add(BEAM, "back", Vector3(x, 6.5 + j * 3.0, z + 0.15), Vector3.BACK, -1, k / 7.0, j)
+		for j in 2: _batten("back", Vector3(x, 8.0 + j * 3.0, z + 0.22), -1, Vector3.UP, Vector3.BACK, k / 7.0)
 
 	# roof: two trusses over the stage, spots, washes and blinders at the crowd
 	var rz := F - 2.5

@@ -50,7 +50,7 @@ laatste kwart van een blok is een *fill*: hetzelfde patroon met extra hits.
 | 3 | de balken (battens) |
 
 Een hit zet de baan even op vol licht; tussen de hits zakt ze naar 55% (diepte 45%). Met zachte strobes (`S`) zijn het
-alleen kwartnoten en is de diepte 20%. Nooit twee hits op naastliggende stappen: de snelste baan speelt achtste noten.
+alleen kwartnoten en is de diepte 20%. Sommige podiumblokken gebruiken achtsten of zestienden; de rustige stand blijft op kwartnoten.
 Alles volgt uit getallen (baan, blok, maat), niet uit toeval, dus een replay speelt hetzelfde. Een nieuw blok is een
 nieuwe scène; een blok van 16 of 32 maten wisselt look en stack elke 8 maten, het patroon pas aan het eind.
 Het raster is `show.beat`: exact met rekordbox, bij systeemaudio zo goed als de maatlijn (`bar_offset`, toets `T`).

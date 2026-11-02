@@ -22,6 +22,27 @@ var _haze_slider: HSlider
 var _haze_value: Label
 var _haze_hint: Label
 var _fog_enabled := true
+var profile_path := ""
+
+func load_profile() -> void:
+	if profile_path == "" or light == null: return
+	var config := ConfigFile.new()
+	if config.load(profile_path) != OK: return
+	for entry in GROUPS:
+		var value = config.get_value("groups", entry[0], 1.0)
+		if (value is float or value is int) and is_finite(float(value)):
+			var level := clampf(float(value), 0.0, 1.0)
+			if level < 1.0: light.tune.groups[entry[0]] = level
+			else: light.tune.groups.erase(entry[0])
+	sync()
+
+func _save_profile() -> void:
+	if profile_path == "" or light == null: return
+	var config := ConfigFile.new()
+	for entry in GROUPS: config.set_value("groups", entry[0], float(light.tune.groups.get(entry[0], 1.0)))
+	var temporary := profile_path + ".tmp"
+	if config.save(temporary) == OK:
+		DirAccess.rename_absolute(ProjectSettings.globalize_path(temporary), ProjectSettings.globalize_path(profile_path))
 
 func _ready() -> void:
 	layer = 15
@@ -78,7 +99,7 @@ func _ready() -> void:
 	all.focus_mode = Control.FOCUS_NONE
 	all.pressed.connect(all_on)
 	footer.add_child(all)
-	var note := UiStyle.label("Levels last for this run", "Hint")
+	var note := UiStyle.label("Levels are remembered", "Hint")
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	note.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -288,6 +309,7 @@ func _apply(key: String) -> void:
 		else: light.tune.groups[key] = level
 	_refresh(key)
 	_update_summary()
+	_save_profile()
 
 func _refresh(key: String) -> void:
 	var row: Dictionary = _rows[key]

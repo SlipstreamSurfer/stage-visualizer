@@ -15,6 +15,10 @@ Built with Godot 4.7.2 (Forward+); it runs on Windows, macOS and Linux.
 
 ## Where things are
 
+For any choreography work, read `docs/choreography-blueprint.md` first, then `docs/pattern-design.md`.
+The blueprint applies to every model: preserve the base show, treat new effects as occasional episodes, inspect
+local debug feedback with its context, and publish only after explicit approval. Never commit personal ratings.
+
 | Part | Files |
 |---|---|
 | The show (the lighting designer) | `scripts/show.gd`, `scripts/show/` (director, looks, music, genres), `docs/choreografie.md` |
@@ -31,6 +35,7 @@ GODOT=/path/to/Godot_v4.7.2-stable
 "$GODOT" --headless --path . --script tools/test_app.gd
 "$GODOT" --headless --path . --script tools/test_controls.gd
 "$GODOT" --headless --path . --script tools/test_show_checks.gd
+"$GODOT" --headless --path . --script tools/test_feedback.gd
 "$GODOT" --headless --path . --script tools/test_choreography.gd
 "$GODOT" --headless --path . --script tools/test_session.gd
 "$GODOT" --headless --path . --script tools/test_rekordbox.gd

@@ -8,6 +8,10 @@ func _initialize() -> void:
 	root.add_child(rig)
 	rig.build()
 	var hall := Hall.new()
+	hall.stage_screen = Node3D.new()
+	hall.add_child(hall.stage_screen)
+	hall.stage_screen_material = ShaderMaterial.new()
+	hall.stage_screen_material.shader = load("res://shaders/stage_screen.gdshader")
 	var listen := Listen.new()
 	var rb := Rekordbox.new()
 	seed(5)
@@ -39,9 +43,11 @@ func _initialize() -> void:
 	show.manual.blackout = true
 	frame.call(5)
 	if lit.call() != 0 or rig.strobe > 0.0 or rig.blinder > 0.0: failed.append("blackout leaves light on")
+	if show.visuals.level != 0.0 or float(hall.stage_screen_material.get_shader_parameter("level")) != 0.0: failed.append("blackout leaves the stage screen on")
 	show.manual.blackout = false
 	frame.call(40)
 	if lit.call() == 0: failed.append("the show does not come back after a blackout")
+	if show.visuals.level <= 0.0: failed.append("the screen does not return after blackout")
 	# strobe while held: the hall flashes, and stops when let go
 	show.manual.strobe = true
 	var flashes := 0
@@ -69,6 +75,10 @@ func _initialize() -> void:
 	root.add_child(desk)
 	await process_frame   # the desk builds itself in _ready
 	desk.light = show
+	# Test group controls independently of a long hall-only rain cue.
+	show.gestures.name = ""
+	show.gestures.mix = 0.0
+	show.gestures.next_at = INF
 	desk.open()
 	if not desk.is_open(): failed.append("the light desk does not open")
 	var group_lit := func(group: String) -> int:
@@ -103,7 +113,17 @@ func _initialize() -> void:
 	desk._rows["wash"].slider.value = 0.3   # moving the slider
 	if absf(float(show.tune.groups.get("wash", 1.0)) - 0.3) > 0.001: failed.append("the slider does not set the level")
 	var third: float = wash_mean.call(100)
-	if not third < 0.5 * full: failed.append("washes at 30%% give %.3f against %.3f" % [third, full])
+	if third <= 0.0: failed.append("washes at 30% are dark")
+	# Compare the same cue: consecutive phrases may now have very different wash levels.
+	var reduced: Array = rig.fixtures.filter(func(f): return f.kind == Rig.WASH).map(func(f): return f.level)
+	show.tune.groups["wash"] = 1.0
+	show._direct(0.0)
+	var at := 0
+	for f in rig.fixtures:
+		if f.kind != Rig.WASH: continue
+		if absf(reduced[at] - f.level * 0.3) > 0.0001: failed.append("wash fader does not scale the same cue to 30%")
+		at += 1
+	show.tune.groups["wash"] = 0.3
 	if desk.toggle_group("wash"): failed.append("W does not switch the washes off")   # W is this call
 	frame.call(40)
 	for f in rig.fixtures:
@@ -157,6 +177,20 @@ func _initialize() -> void:
 	if again.label("strobe").is_empty() or again.label("strobe") == "not linked" or again.label("blackout") == "not linked":
 		failed.append("links are not kept: %s / %s" % [again.label("strobe"), again.label("blackout")])
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(midi.path))
+	var gentle := Show.new(rig, hall, {"genre": "techno-raw-deep-hypnotic", "seed": 5})
+	gentle.safe = true
+	for n in 160:
+		listen.beat = n * 0.1
+		listen.bpm = 120.0
+		listen.section = "peak"
+		listen.phase = "groove"
+		listen.energy = 0.9
+		listen.ev_drop = n == 0
+		listen.kick = n % 10 == 0
+		gentle.update(0.05, listen, rb)
+		if rig.strobe != 0.0: failed.append("gentle mode starts an automatic strobe"); break
+		for b in rig.battens:
+			if b.strobe != 0.0: failed.append("gentle mode flashes a batten automatically"); break
 	midi.free()
 	again.free()
 	rig.free()

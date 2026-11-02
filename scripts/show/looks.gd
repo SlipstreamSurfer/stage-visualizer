@@ -104,6 +104,12 @@ static func position(name: String, h: Head, p: Vector3, k: Dictionary, s: Dictio
 			return Vector3(p.x + sin(k.phase * TAU / 16.0 + h.row * 0.6) * 12.0, 0.0, p.z + 6.0)
 		"stairs":   # each truss aims a step further down the hall than the one before
 			return Vector3(p.x * 0.6, 0.0, p.z + (h.row - 2) * 7.0 + 8.0)
+		"ribbon": return Vector3(p.x * 0.6, 11.5 + sin(h.u * PI) * 2.0, p.z + 12.0 + sin(k.m * 0.3 + h.row) * 4.0)
+		"diamonds": return Vector3(-p.x * 0.65, 5.5 + absf(h.xn) * 6.5, p.z + (10.0 if h.row % 2 else -10.0))
+		"wings": return Vector3(side_of(p) * 20.0, 7.0 + sin(h.u * PI) * 6.0, p.z + 10.0)
+		"mirrorOrbit":
+			var phase: float = k.m * 0.35 + h.row * 0.45
+			return Vector3(side_of(p) * (8.0 + cos(phase) * 7.0), 6.0 + sin(phase) * 4.0, p.z + 10.0)
 	return Vector3(p.x, 0.0, p.z)
 
 # How far an effect moves the target scales with how far the beam travels, so an effect on the roof is as big as one on the floor.
@@ -218,6 +224,10 @@ const HEAD_LOOKS := {
 	"crossTrusses": ["Crossfire, truss by truss", ["big"], "cross", "panWave", "trusses", "centreWhite", "normal"],
 	"convergePulse": ["Converge, truss by truss", ["big"], "converge", "tiltWave", "trusses", "centreWhite", "narrow"],
 	"ballyhoo": ["Ballyhoo", ["big"], "fan", "eight", "sparkle", "sides", "narrow"],
+	"ribbon": ["Ceiling ribbons", ["calm", "mid"], "ribbon", "still", "all", "depth", "narrow"],
+	"diamonds": ["Diamond lattice", ["mid", "big"], "diamonds", "breathe", "all", "trusses", "narrow"],
+	"wings": ["Open wings", ["mid", "big"], "wings", "still", "all", "sides", "narrow"],
+	"mirrorOrbit": ["Mirrored orbits", ["calm", "mid", "big"], "mirrorOrbit", "still", "all", "sides", "normal"],
 	# an 8th entry: the look belongs to Techno (Raw / Deep / Hypnotic) alone and is in no fallback list
 	"lanes": ["Lanes", ["calm", "mid"], "lanes", "sway", "all", "depth", "narrow", true],
 	"horizon": ["Horizon", ["mid", "big"], "horizon", "tiltWave", "across", "sides", "wide", true],
@@ -328,15 +338,17 @@ const STYLES := {
 # styles above are put together for it, so a track draws on all their looks, formations and rows.
 const RAW_DEEP_STYLE := {
 	"looks": ["pillars", "cross", "softCurtains", "floor", "ripple", "tunnel", "crossTrusses", "snake", "scatter", "rakeStage", "spiral",
-		"walls", "curtains", "softFans", "sky", "converge", "circles", "skyCircles", "lanes", "horizon", "cathedral", "searchlights", "pendulum", "stairs"],
+		"walls", "curtains", "softFans", "sky", "converge", "circles", "skyCircles", "lanes", "horizon", "cathedral", "searchlights", "pendulum", "stairs", "ribbon", "diamonds", "wings", "mirrorOrbit"],
 	"trusses": ["High", "Low", "Canopy", "Arch", "Tilted", "Rising to the back", "Twisted", "Valley", "Falling to the back", "Front low", "Middle low"],
 	"pace": 0.75, "lit": 0.75, "row": ["chase", "curtain", "pairs", "wave", "crowd", "vee", "sweep", "fan"], "rowLevel": 0.85, "wash": 0.8,
 }
 
 static func style_of(mood_key: String, family: String) -> Dictionary:
-	if STYLES.has(mood_key): return STYLES[mood_key]
-	if STYLES.has(family): return STYLES[family]
-	return STYLES.techno
+	var base: Dictionary = STYLES.get(mood_key, STYLES.get(family, STYLES.techno))
+	var style := base.duplicate(true)
+	var additions := ["ribbon", "mirrorOrbit"] if family == "Concert & ambient" or mood_key in ["organic", "deephouse", "downtempo"] else ["ribbon", "diamonds", "wings", "mirrorOrbit"]
+	style.looks.append_array(additions)
+	return style
 
 # The stage's row of heads along the front of the deck, played as one instrument, as on the big techno stages: a
 # curtain straight up, a fan, a V crossing over the booth, a wave or a sweep running along the row, crossing pairs, a

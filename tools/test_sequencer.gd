@@ -4,6 +4,20 @@ extends SceneTree
 func _initialize() -> void:
 	var failed := []
 	var S := LightSequencer
+	# The spatial sequence hands light from one whole fixture to another, with truly dark off steps.
+	var occupied := {}
+	for step in 32:
+		var lit := 0
+		for column in 16:
+			var x := -20.625 + column * 2.75
+			for row in 8:
+				var z := -32.375 + row * 9.25
+				var value := S.fixture_gain(Vector3(x, 10, z), step * 0.25, 7, false, 23)
+				if value > 0.1:
+					lit += 1
+					occupied[Vector2i(x, z)] = true
+		if lit == 0 or lit >= 64: failed.append("Spatial sequencer must select a local set of whole fixtures")
+	if occupied.size() < 96: failed.append("Spatial sequencer does not travel through the rig")
 	# the grid
 	for hits in range(1, 9):
 		for rot in 16:
@@ -43,10 +57,16 @@ func _initialize() -> void:
 	for block in 40:
 		if S.pattern(0, block, 0, 16) == S.pattern(1, block, 0, 16): same += 1
 	if same > 10: failed.append("lanes 0 and 1 play the same pattern in %d of 40 blocks" % same)
-	if S.pattern(2, 2, 0, 8) != 0x5555 or S.pattern(2, 5, 0, 8) != 0xFFFF: failed.append("Missing eighth or sixteenth stage pattern")
+	var speeds := {}
+	for block in 80: speeds[S.pattern(2, block, 0, 8)] = true
+	if not speeds.has(0x5555) or not speeds.has(0xFFFF): failed.append("Missing eighth or sixteenth stage pattern")
+	var different_tracks := 0
+	for block in 40:
+		if S.pattern(0, block, 0, 16, false, 17) != S.pattern(0, block, 0, 16, false, 39): different_tracks += 1
+	if different_tracks < 20: failed.append("Different tracks reuse too many identical rhythms")
 	if S.pulse(0xFFFF, 0.0) < 0.9 or S.pulse(0xFFFF, 0.2) > 0.01 or S.pulse(0xFFFF, 0.25) < 0.9: failed.append("Sixteenths do not separate into pulses")
 	var monos := {}
-	for block in [1, 4, 7, 10, 13]: monos[ShowDirector.mono_colour(block).to_html()] = true
+	for block in 60: monos[ShowDirector.mono_colour(block).to_html()] = true
 	if monos.size() != 5: failed.append("Mono blocks must include five different colours")
 
 	# the new head looks: every one of them with every move, over the hall, over time: finite, and aimed in or at the hall
@@ -105,6 +125,15 @@ func _initialize() -> void:
 	# the new colour spreads: always a colour of the palette or between two, whatever the beat
 	var pal: Array = ShowDirector.RAW_DEEP_PALETTES[0].map(func(c): return ShowDirector._hex(c))
 	var director := ShowDirector.new()
+	var replay := ShowDirector.new()
+	# Ordinary figures keep their authored movement and gating instead of acquiring random fast gates.
+	for scene in 80:
+		director._scene = scene
+		replay._scene = scene
+		var stack := director._stack(L.HEAD_LOOKS.floor, "mid")
+		if stack != replay._stack(L.HEAD_LOOKS.floor, "mid"): failed.append("Pattern choices change on replay")
+		if stack != [L.HEAD_LOOKS.floor[3], L.HEAD_LOOKS.floor[4], L.HEAD_LOOKS.floor[5], L.HEAD_LOOKS.floor[6]]:
+			failed.append("The ordinary figure acquired an extra pattern layer")
 	for name in ShowDirector.STACK_COLOURS:
 		var colours := {}
 		for k32 in 8:

@@ -276,6 +276,7 @@ func _hud() -> void:
 
 # The source and the graphics, from the settings screen (and once at the start).
 func _apply_settings(options: Dictionary) -> void:
+	if hall.stage_screen: hall.stage_screen.visible = bool(options.get("stage_screen", true))
 	show.genre = options.get("genre", show.genre)
 	show.safe = args.has("safe") or bool(options.get("safe", show.safe))
 	if _app and not (args.has("windowed") or args.has("shot")): SvDisplay.apply(options, get_window())

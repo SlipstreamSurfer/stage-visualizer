@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.58.0 — Stage screen
+
+- A central LED screen above the booth shows animated patterns in the show's colour, with quieter visuals during breaks.
+- The screen can be switched on or off in Settings > Show. The central rear tower sits beside the screen.
+
+## 0.57.1 — Techno heads
+
+- Front-row heads no longer stay dark because of the fixed fixture selection; programmed chases still alternate them.
+- Raw / Deep / Hypnotic Techno adds occasional eighth- and sixteenth-note stage patterns and single-colour blocks
+  in blue, red, green, white or warm white. Gentle strobes keep the slower quarter-note patterns.
+- Moving-head beams fall off a little more naturally with distance.
+
 ## 0.57.0 — Light that belongs to the room
 
 - Reflected light follows the active heads and their aim, falling off across the hall. A single lamp contributes

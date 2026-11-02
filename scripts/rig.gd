@@ -177,6 +177,7 @@ func build() -> void:
 	# back: seven towers behind the DJ, beams from 6 m up so that they pass over the DJ's head
 	for k in 7:
 		var x := -18.0 + k * 6.0
+		if k == 3: x = 3.4
 		var z := Hall.BACK + 1.0
 		Kit.truss(chords, braces, Vector3(x, Hall.DECK, z), Vector3(x, 13.8, z), 0.3)
 		for j in 3: _add(BEAM, "back", Vector3(x, 6.5 + j * 3.0, z + 0.15), Vector3.BACK, -1, k / 6.0, j)

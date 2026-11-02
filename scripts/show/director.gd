@@ -321,7 +321,10 @@ func _sequence(dt: float, grid: float, sec: String) -> void:
 	var depth := 0.2 if safe else 0.45
 	for lane in LightSequencer.LANES:
 		_seq_env[lane] *= exp(-dt * 5.0)
-		seq_gain[lane] = 1.0 - depth + depth * _seq_env[lane]
+		var mask := LightSequencer.pattern(lane, _blk_index, bar - _blk_start, _blk_len, safe)
+		if not safe and lane == 2 and mask in [0x5555, 0xFFFF]:
+			seq_gain[lane] = 0.25 + 0.75 * LightSequencer.pulse(mask, grid)
+		else: seq_gain[lane] = 1.0 - depth + depth * _seq_env[lane]
 	seq_text = "bar %d of %d · block %d" % [bar - _blk_start + 1, _blk_len, _blk_index + 1]
 
 # Where a beam may be aimed: inside the hall. The moves scale with the distance of their target, so a combination of a far
@@ -847,7 +850,7 @@ func _direct(dt: float) -> void:
 		var bank: int = h.bank
 		if not brk and accent_bank == bank: I += I_accent
 		# the genre's share of lit heads: the rest stay dark outside a drop
-		if not brk and h.lit_key > lit_share: I *= dropk * 0.9
+		if not brk and not row and h.lit_key > lit_share: I *= dropk * 0.9
 		var foreground: bool = bank == foreground_bank
 		var lv: float = 1.0 if foreground else 0.28 if calm or brk else 0.45
 		h.level += (lv - h.level) * e18
@@ -866,6 +869,8 @@ func _direct(dt: float) -> void:
 		var cname: String = look_colour if h.role == "overhead" else row_colour if row else "sides"
 		var share := L.colour(cname, h, beats)
 		var target := _vivid(_spread(cname, h, k32, k64, pal).lerp(Color.WHITE, share.y)) if multi else _vivid(col.lerp(col2, share.x).lerp(Color.WHITE, share.y))
+		# A whole techno block can use a single colour across the rig, including the row and washes.
+		if multi and posmod(_blk_index, 3) == 1: target = mono_colour(_blk_index)
 		if warm > 0.0: target = target.lerp(WARM, warm)
 		if brk: target = target.lerp(Color.WHITE, white_k)
 		if not h.colored:
@@ -902,6 +907,7 @@ func _direct(dt: float) -> void:
 		f.gobo = 0.0
 		f.level = _lamp((maxf(_wash_level * _w.wash, mood.wash) + sig.drop * 0.3 + sig.lift * 0.15) * master) * float(tune.groups.get("wash", 1.0))
 		f.color = tint.call(pal[i % pal.size()] if multi else col2 if i % 2 else col)
+		if multi and posmod(_blk_index, 3) == 1: f.color = mono_colour(_blk_index)
 	for i in rig.battens.size():
 		var bt: Rig.Batten = rig.battens[i]
 		_bar_level[i] = _bar_level[i] * exp(-dt * mood.decay)
@@ -909,7 +915,7 @@ func _direct(dt: float) -> void:
 		var run: float = sig.build * pow(0.5 + 0.5 * sin(bt.u * 5.0 + maxi(bt.truss, 0) + _chase), 4.0) if brk else 0.0   # a chase racing along as the build-up grows
 		var hit: float = sig.accent * (0.5 if i % 2 == _beat % 2 else 0.1)
 		bt.level = _lamp(maxf(maxf(maxf(_bar_level[i], breathe), maxf(run, hit)) * _w.bars, maxf(sig.drop, sig.lift * 0.45)) * master) * float(tune.groups.get("batten", 1.0)) * (seq_gain[3] if multi and not brk else 1.0)
-		bt.color = pal[i % pal.size()] if multi else col2 if i % 2 else col
+		bt.color = mono_colour(_blk_index) if multi and posmod(_blk_index, 3) == 1 else pal[i % pal.size()] if multi else col2 if i % 2 else col
 		bt.chase_amount = 0.0
 		bt.strobe = flash * strobe_k * (0.0 if manual.blackout else 1.0) * float(tune.groups.get("batten", 1.0))
 
@@ -925,18 +931,23 @@ func _direct(dt: float) -> void:
 		rig.truss_rolls[i] = 0.0 if brk else L.truss_roll(_truss_look, i)
 
 	# the room itself: how much of all this lands on walls, floor and crowd, and in what colour
-	rig.room_color = col.lerp(Color.WHITE, maxf(flash, blind * 0.7))
+	var room_base := mono_colour(_blk_index) if multi and posmod(_blk_index, 3) == 1 else col
+	rig.room_color = room_base.lerp(Color.WHITE, maxf(flash, blind * 0.7))
 	rig.room_level = (1.5 + sig.energy * 7.0 + sig.kick * 26.0 + sig.build * 6.0 + sig.lift * 14.0 + flash * 100.0 + blind * 50.0) * master
 	hall_look = [head_name, truss_name, L.ROW_LOOKS[row_look][0]]
 	status = ("build-up" if sig.build > 0.45 else "break") if brk else SECTION_NAME.get(sec, sec) + " · " + head_name
 	_shown = [col, col2]
-	colours_in_use = pal if multi else _shown
+	colours_in_use = [mono_colour(_blk_index)] if multi and posmod(_blk_index, 3) == 1 else pal if multi else _shown
 
 # SV in the browser draws a level of 1 as a full beam and its renderer is exposed for levels around 0.2 to 0.5;
 # this rig's lamps are linear up to 1. A soft knee keeps the order of things (calm, groove, drop) and lets the
 # quieter levels read as light, as they did in the browser.
 static func _lamp(I: float) -> float:
 	return 1.0 - exp(-maxf(I, 0.0) * 3.5)
+
+static func mono_colour(block: int) -> Color:
+	var colours := [Color(0.03, 0.12, 1.0), Color(1.0, 0.02, 0.01), Color(0.03, 1.0, 0.08), Color.WHITE, Color(1.0, 0.58, 0.24)]
+	return colours[posmod(floori(block / 3.0), colours.size())]
 
 # How the beam groups weigh against each other (the live faders' groups multiply this).
 const GROUP_LEVEL := {"hall": 1.0, "front": 1.0, "back": 0.9, "rear": 0.85, "side": 0.85, "delay": 0.85, "roof": 0.8}

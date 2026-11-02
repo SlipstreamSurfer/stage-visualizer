@@ -24,6 +24,8 @@ var _hall_rig: Rig
 var _pa_fronts: Kit.Batch
 var _fog_volumes: Array[FogVolume] = []
 var _fog_densities: Array[float] = []
+var stage_screen: Node3D
+var stage_screen_material: ShaderMaterial
 
 func build() -> void:
 	var black := Kit.mat(Color(0.018, 0.018, 0.02), 0.8)
@@ -65,6 +67,7 @@ func build() -> void:
 	# One solid deck: no second skin crossing the riser or sharing the stage's faces.
 	Kit.box(self, Vector3(W - 0.4, DECK, FRONT - BACK), Vector3(0, DECK / 2, (FRONT + BACK) / 2), deck_top).name = "StageDeck"
 	_curtain()
+	_stage_screen()
 	_booth(black)
 	_pa(dark)
 	_hazers(boxes, dark)
@@ -75,6 +78,23 @@ func build() -> void:
 	Kit.box(self, Vector3(W - 3.0, 0.08, 1.1), Vector3(0, 0.04, BARRIER - 0.5), barrier)
 	boxes.build(self)
 	dark.build(self)
+
+func _stage_screen() -> void:
+	var center := Vector3(0, DECK + 2.8 + 3.5, -36.3)
+	var frame := Kit.mat(Color(0.012, 0.012, 0.014), 0.8)
+	stage_screen = Node3D.new()
+	stage_screen.name = "StageScreen"
+	add_child(stage_screen)
+	Kit.box(stage_screen, Vector3(5.12, 7.12, 0.15), center + Vector3(0, 0, -0.09), frame)
+	stage_screen_material = ShaderMaterial.new()
+	stage_screen_material.shader = load("res://shaders/stage_screen.gdshader")
+	var face := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(5.0, 7.0)
+	face.mesh = quad
+	face.material_override = stage_screen_material
+	face.position = center
+	stage_screen.add_child(face)
 
 # Two floor hazers at the rear, with recessed outlets facing the crowd.
 func _hazers(boxes: Kit.Batch, dark: Kit.Batch) -> void:

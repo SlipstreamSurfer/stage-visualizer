@@ -77,7 +77,7 @@ if [[ ! -d "$root/.godot" ]]; then
     fi
 fi
 run import "$godot_bin" --headless --path "$root" --editor --import
-for check in test_app test_controls test_held_input test_light_desk test_show_checks test_feedback test_choreography test_sequencer test_stage_detail test_crowd_detail test_pa test_haze test_session test_rekordbox test_listen_ear; do
+for check in test_app test_controls test_held_input test_light_desk test_show_checks test_feedback test_choreography test_sequencer test_bar_pixels test_stage_detail test_crowd_detail test_pa test_haze test_session test_rekordbox test_listen_ear; do
     run "$check" "$godot_bin" --headless --path "$root" --script "tools/$check.gd"
 done
 if "$test_only"; then

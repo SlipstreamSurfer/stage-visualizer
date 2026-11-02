@@ -1,6 +1,6 @@
 # SV: voorgesteld herstel- en ontwikkelplan
 
-Status: uitvoering gestart na expliciete opdracht. De wijzigingen worden als lokale kandidaten in afzonderlijke stappen opgeleverd; er wordt niets publiek gepubliceerd zonder aparte goedkeuring. Lees daarnaast `choreography-blueprint.md` en `pattern-design.md`.
+Status: uitvoering gestart; test1 is als publieke prerelease uitgebracht na expliciete opdracht. Volgende stappen komen in afzonderlijke kandidaten. Lees daarnaast `choreography-blueprint.md` en `pattern-design.md`.
 
 ## Richting
 
@@ -174,6 +174,12 @@ Lever per stap één onveranderlijke lokale kandidaat met een kleine, duidelijke
 - De volledige Godot 4.7.2-checksuite slaagt voor deze kandidaat.
 - De al aanwezige roof-spot-, sequencer-, depth-chase-, scherm- en feedbackwijzigingen zijn meegenomen in deze lokale kandidaat.
 
+## Uitgevoerd in kandidaat 0.60.0-test2
+
+- Elke batten heeft twaalf afzonderlijke dimmer- en kleurwaarden binnen één gebatchte pixelmesh.
+- De barpatronen omvatten aangehouden 50/50-vlakken, even/oneven cellen, midden, uiteinden en een langzaam verplaatsend venster. Afwisselende kleuren volgen het bestaande showpalet en monochrome scènes blijven monochroom.
+- `tools/test_bar_pixels.gd` controleert het aantal cellen, patroonvormen, determinisme en de gebatchte renderstructuur.
+
 ## Resterende uitvoering
 
-Volgende stappen zijn pixelbars met onafhankelijke segmentwaarden, de visuele beoordeling van de towergeometrie, een roof-spotpassage die zonder Stage row en Hall beams leesbaar blijft, daarna pas nieuwe roof-bars en een extra spotrij op de back towers. Vervolgens volgen samenhang, comfortlogging, prestaties, scherm/zaal/camera, langere praktijkbeoordeling en lokale iteraties. De candidate status is geen artistieke goedkeuring.
+Volgende stappen zijn de visuele beoordeling van pixelbars en towergeometrie, een roof-spotpassage die zonder Stage row en Hall beams leesbaar blijft, daarna pas nieuwe roof-bars en een extra spotrij op de back towers. Vervolgens volgen samenhang, comfortlogging, prestaties, scherm/zaal/camera, langere praktijkbeoordeling en lokale iteraties. De candidate status is geen artistieke goedkeuring.

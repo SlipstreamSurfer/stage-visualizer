@@ -1,13 +1,19 @@
 # Changelog
 
+## 0.60.0-test2 — Independently programmed LED bars
+
+- Every batten has twelve independently set dimmer and colour cells, still rendered in one batch.
+- Phrase-held bar figures include solid, 50/50, odd/even, centre, end and travelling-window states.
+- Alternating LED colours follow the active show palette; monochrome cues keep all cells in one colour.
+- Carries forward the symmetric back towers, saved source continuity, calmer stage row and the test1 show design.
+- New roof bars and a second head row on the back towers remain follow-up work.
+
 ## 0.60.0-test1 — Symmetric stage towers and show source continuity
 
 - Back towers now use eight mirrored positions at an even 6 m spacing, centred around the LED screen.
 - Launching with a saved audio device no longer silently changes the saved source to System + rekordbox.
 - Carries forward the current candidate's calmer stage row, preserved light-desk levels, integrated scene accents,
   longer evolving depth chase, screen visuals and optional local debug feedback.
-- This is a local review candidate. Bars do not yet have independent LED pixel states, and new roof bars or a second
-  head row on the back towers are not included in this build.
 
 ## Unreleased — Show balance, spatial patterns and debug feedback
 

@@ -44,6 +44,7 @@ var wizard: SetupWizard
 var _return_to := ""    # where a screen goes back to when it closes: "menu", "pause", "start" (then the show) or ""
 var _app := false       # the app's own screens (start screen, first-run setup); off for tests and recordings
 var settings: SettingsPanel
+var feedback: FeedbackPanel
 var level := 0
 var calibration: Quality.Calibration
 var args := {}
@@ -158,7 +159,6 @@ func _ready() -> void:
 		overrides.track = args.track
 	if args.has("device"):
 		overrides.device = args.device
-		if not args.has("track"): overrides.source = "both"
 	if args.has("osc-port"): overrides.osc_port = int(args["osc-port"])
 	if args.has("quality"): overrides.quality = args.quality
 	if args.has("latency"): overrides.latency = float(args.latency)
@@ -179,6 +179,9 @@ func _ready() -> void:
 	if args.has("pause"): pause.open()   # pictures of the pause menu and the help
 	if args.has("keys"): help.toggle()
 	if args.has("safe"): show.safe = true
+	if args.has("debug-feedback"):
+		feedback = FeedbackPanel.new()
+		add_child(feedback)
 	if _context.has("tune"): show.tune = _context.tune.duplicate(true)
 	if not (args.has("shot") or args.has("bench") or args.has("film")): UiStyle.configure_window(get_window())
 	if not _app and not (args.has("shot") or args.has("bench") or args.has("windowed")): get_window().mode = Window.MODE_FULLSCREEN
@@ -266,6 +269,9 @@ func _hud() -> void:
 	desk = LightDesk.new()
 	add_child(desk)
 	desk.light = show
+	if not args.has("shot") and not args.has("bench") and not args.has("replay"):
+		desk.profile_path = "user://lighting.cfg"
+		desk.load_profile()
 	desk.set_fog_enabled(env.volumetric_fog_enabled)
 	if DisplayServer.get_name() != "headless":
 		midi = MidiControls.new()
@@ -342,6 +348,7 @@ func _frame(dt: float, live: bool) -> void:
 	_room(dt)
 	var t3 := Time.get_ticks_usec()
 	view.update(dt, show)
+	if feedback != null: feedback.history.observe(dt, show, rig, view.camera_index())
 	_frames += 1
 	if args.has("trace"):
 		print(JSON.stringify({"n": _frames - 1, "t": _clock, "dt": dt, "beat": show.beat,
@@ -401,12 +408,16 @@ func _frame(dt: float, live: bool) -> void:
 	if args.has("seconds") and _clock >= float(args.seconds): _quit()
 
 func _input(e: InputEvent) -> void:
+	if feedback != null and e is InputEventKey and feedback.handle_key(e):
+		get_viewport().set_input_as_handled()
+		return
 	# Release before a panel consumes unhandled input; presses still belong to the GUI first.
 	if e is InputEventKey and not e.pressed:
 		if e.keycode == KEY_SPACE: _hold("strobe", false, _held_keyboard)
 		elif e.keycode == KEY_N: _hold("blinder", false, _held_keyboard)
 
 func _unhandled_input(e: InputEvent) -> void:
+	if feedback != null and feedback.is_open(): return
 	if e is InputEventMouseMotion:
 		_mouse_idle = 0.0
 		bar.wake()

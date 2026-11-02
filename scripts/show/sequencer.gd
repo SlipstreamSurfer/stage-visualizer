@@ -20,9 +20,9 @@ const BLOCKS := {
 	"break": [4, 8],
 }
 
-static func length_for(section: String, index: int) -> int:
+static func length_for(section: String, index: int, salt := 0) -> int:
 	var cycle: Array = BLOCKS.get(section, [8])
-	return cycle[posmod(index, cycle.size())]
+	return cycle[posmod(hash("%s:%d:%d:length" % [section, index, salt]), cycle.size())]
 
 # k hits spread evenly over the 16 steps, turned by rot steps: bit i is step i.
 static func euclid(hits: int, rot: int) -> int:
@@ -52,11 +52,12 @@ static func popcount(mask: int) -> int:
 	return n
 
 # The pattern of a lane in a block, for a bar of it (0 is the block's first bar). safe: on the quarter notes only.
-static func pattern(lane: int, block: int, bar: int, length: int, safe := false) -> int:
+static func pattern(lane: int, block: int, bar: int, length: int, safe := false, salt := 0) -> int:
 	# Occasional driving eighths and sixteenths; other lanes keep their own rhythms.
-	if not safe and lane == 2 and posmod(block, 6) in [2, 5]:
-		return 0x5555 if posmod(block, 6) == 2 else 0xFFFF
-	var s := lane * 7919 + block * 104729 + length * 31
+	var speed := posmod(hash("%d:%d:speed" % [block, salt]), 8)
+	if not safe and lane == 2 and speed in [2, 5]:
+		return 0x5555 if speed == 2 else 0xFFFF
+	var s := absi(hash("%d:%d:%d:%d:rhythm" % [lane, block, length, salt]))
 	var hits := 3 + (s / 3) % 5
 	var rot := (s / 7) % STEPS
 	var mask := thin(euclid(hits, rot))
@@ -74,3 +75,23 @@ static func pulse(mask: int, grid: float) -> float:
 
 static func hit(mask: int, step: int) -> bool:
 	return (mask >> posmod(step, STEPS)) & 1 == 1
+
+# Select whole fixtures in space. A different station owns each eighth/sixteenth, with real darkness between.
+static func fixture_gain(position: Vector3, grid: float, block: int, safe := false, salt := 0) -> float:
+	if safe: return 1.0
+	var mode := posmod(hash("%d:%d:route" % [block, salt]), 6)
+	var x := clampf((position.x + 22.0) / 44.0, 0.0, 0.999)
+	var z := clampf((position.z + 37.0) / 74.0, 0.0, 0.999)
+	var coordinate := z
+	match mode:
+		0: coordinate = x
+		1: coordinate = z
+		2: coordinate = (x + z) * 0.5
+		3: coordinate = absf(x * 2.0 - 1.0)
+		4: coordinate = (x if floori(z * 4.0) % 2 == 0 else 1.0 - x)
+		5: coordinate = fposmod(z + floorf(x * 4.0) * 0.125, 1.0)
+	var speed := 4.0 if posmod(hash("%d:%d:step-speed" % [block, salt]), 3) == 0 else 2.0
+	var step := grid * speed
+	var station := clampi(floori(coordinate * 8.0), 0, 7)
+	if station != posmod(floori(step), 8): return 0.0
+	return 1.0 - smoothstep(0.7, 0.94, fposmod(step, 1.0))

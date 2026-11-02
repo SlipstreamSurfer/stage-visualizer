@@ -16,7 +16,17 @@ func _run() -> void:
 	var rig := Rig.new()
 	root.add_child(rig)
 	rig.build()
-	check(rig.fixtures.size() == 209, "Detail must not add or remove lights")
+	check(rig.fixtures.size() == 212, "The symmetric back towers add only their three planned heads")
+	var tower_x := {}
+	for f in rig.fixtures:
+		if f.group == "back": tower_x[snappedf(f.mount.x, 0.01)] = true
+	var ordered_towers: Array = tower_x.keys()
+	ordered_towers.sort()
+	check(ordered_towers.size() == 8, "Back towers must be a mirrored eight-position row")
+	if ordered_towers.size() == 8:
+		for i in range(ordered_towers.size()):
+			check(is_equal_approx(float(ordered_towers[i]), -float(ordered_towers[7 - i])), "Back towers must mirror around the screen centre")
+			if i > 0: check(is_equal_approx(float(ordered_towers[i]) - float(ordered_towers[i - 1]), 6.0), "Back towers must have equal 6 m spacing")
 	for label in ["DelayMounts", "DelaySafeties", "TowerFeet"]:
 		check_batch(rig, label)
 	var mounts := rig.get_node_or_null("DelayMounts") as MultiMeshInstance3D

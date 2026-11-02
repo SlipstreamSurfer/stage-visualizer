@@ -5,6 +5,7 @@ extends ShowDirector
 # a mood per genre, a palette per track, looks held for a phrase, the drop opening the whole rig.
 # With rekordbox it sees a drop coming: the build is timed to the phrase, the rig goes black on the last beat before
 # it, and the drop lands on the first beat of the Chorus.
+var visuals := StageVisuals.new()
 
 
 func _init(r: Rig, h: Hall, options: Dictionary = {}) -> void:
@@ -20,10 +21,9 @@ func _init(r: Rig, h: Hall, options: Dictionary = {}) -> void:
 
 func _light(dt: float) -> void:
 	_direct(dt)
-	if hall.stage_screen_material:
-		hall.stage_screen_material.set_shader_parameter("show_color", palette[0])
-		hall.stage_screen_material.set_shader_parameter("show_energy", clampf(energy, 0.0, 1.0) * (0.3 if section == "break" else 1.0))
-		hall.stage_screen_material.set_shader_parameter("beat", beat)
+	visuals.update(dt, beat, section, energy, colours_in_use, visual_master, safe,
+		hall.stage_screen != null and hall.stage_screen.visible, "%s:%s" % [genre, title], phrasing.cue == 7)
+	if hall.stage_screen_material: visuals.apply(hall.stage_screen_material)
 	# the crowd: hands and phones go up with the music
 	var G := _g()
 	var hands_want: float = {"intro": 0.05, "groove": 0.3, "build": 0.2 + 0.5 * build, "break": 0.15, "peak": 0.55 + 0.45 * drop, "outro": 0.05}[section] * G.hands

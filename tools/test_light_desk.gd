@@ -23,6 +23,7 @@ func _run() -> void:
 	desk = LightDesk.new()
 	root.add_child(desk)
 	desk.light = show
+	desk.profile_path = "/tmp/sv-lighting-profile-%d.cfg" % Time.get_ticks_usec()
 	desk.open()
 	await settle()
 	var grid := desk.find_child("GroupsGrid", true, false) as GridContainer
@@ -65,6 +66,13 @@ func _run() -> void:
 	if close != null:
 		await click(close)
 		check(not desk.is_open(), "Close button closes the desk")
+	row.slider.value = 0.05
+	desk._rows.front.toggle.button_pressed = false
+	show.tune.groups.clear()
+	desk.load_profile()
+	check(is_equal_approx(float(show.tune.groups.get("wash", 1.0)), 0.05), "Wash preference survives loading the profile")
+	check(float(show.tune.groups.get("front", 1.0)) == 0.0, "Stage row preference survives loading the profile")
+	DirAccess.remove_absolute(desk.profile_path)
 	desk.free()
 	rig.free()
 	hall.free()

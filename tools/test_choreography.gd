@@ -14,6 +14,8 @@ func _run() -> void:
 	root.add_child(rig)
 	rig.build()
 	var hall := Hall.new()
+	hall.stage_screen = Node3D.new()
+	hall.add_child(hall.stage_screen)
 	var listen := Listen.new()
 	var rb := Rekordbox.new()
 	var results := {}
@@ -124,9 +126,9 @@ func _run() -> void:
 		if genre != raw_genre and (result.lowest_gain != 1.0 or result.block_lengths > 1):
 			printerr("Another genre is sequenced: ", genre, " ", JSON.stringify(result))
 			failed = true
-		# Every other genre plays its looks as designed: one combination per look.
-		if genre != raw_genre and result.combos != result.head_looks:
-			printerr("Another genre got other combinations: ", genre, " ", JSON.stringify(result))
+		# Each genre keeps its figures and can play several spatial combinations per figure.
+		if genre != raw_genre and result.combos < result.head_looks:
+			printerr("A genre lost its head combinations: ", genre, " ", JSON.stringify(result))
 			failed = true
 		# Every other genre keeps its own way: a pair of colours at a time.
 		if genre != raw_genre and result.most_hues > 2:

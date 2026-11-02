@@ -194,6 +194,7 @@ var _head_at := -100.0
 var _head_scene := 0
 var _head_fresh := false
 var _style_key := ""
+var _style_cache := {}
 # The light sequencer (sequencer.gd) for Raw / Deep / Hypnotic: blocks of 4, 8, 16 or 32 bars on the beat grid.
 var _blk_start := 0          # the bar the block began on
 var _blk_len := 8            # its length in bars
@@ -220,6 +221,11 @@ var _stack_tier := ""
 var colours_in_use: Array = [Color.WHITE, Color.WHITE]   # the colours the heads are asked for now (two, or more for Raw / Deep / Hypnotic)
 var flash := 0.0
 var blind := 0.0
+var visual_master := 0.0
+var _screen_focus := 0.0
+var phrasing := ShowPhrasing.new()
+var gestures := ShowGestures.new()
+var _drop_count := 0
 # The DJ's own buttons (keys or a controller), on top of the automatic show, as `manual` in the browser's director:
 # blackout and strobe and blinder while held; looks counts presses of "next look".
 var manual := {"blackout": false, "strobe": false, "blinder": false, "looks": 0}
@@ -281,8 +287,7 @@ func _palette_pool(key: String) -> Array:
 func _multi() -> bool:
 	return genre == RAW_DEEP
 
-# [move, gate, colour, beam] for the head look now: its own, or a combination that follows from the scene, the track's
-# palette and the look (no chance in it, so a replay plays the same).
+# Authored figures form the base show; raw techno can vary their movement stacks between scenes.
 func _stack(look: Array, tier: String) -> Array:
 	if not _stack_now.is_empty() and _stack_scene == _scene and _stack_palette == _palette and _stack_look == _head_look and _stack_tier == tier:
 		return _stack_now   # it only changes with the scene, the palette, the look or the part of the track
@@ -302,6 +307,7 @@ func _stack(look: Array, tier: String) -> Array:
 # The sequencer, once a frame: the bar line and the step of the beat grid, a new block on its first bar (and with it a
 # new scene, and another every eight bars of a long block), and the hits of each lane. The depth of a hit is 45%; with gentle strobes quarter notes and 20%.
 func _sequence(dt: float, grid: float, sec: String) -> void:
+	var salt := hash("%s:%s:%d" % [genre, title, _palette])
 	var bar := floori(grid / 4.0)
 	var step := floori(grid * 4.0)
 	if bar < _blk_start or bar >= _blk_start + _blk_len or sec != _blk_section:
@@ -309,7 +315,7 @@ func _sequence(dt: float, grid: float, sec: String) -> void:
 		_blk_index = 0 if first else _blk_index + 1
 		_blk_section = sec
 		_blk_start = bar
-		_blk_len = LightSequencer.length_for(sec, _blk_index)
+		_blk_len = LightSequencer.length_for(sec, _blk_index, salt)
 		if not first and _t - _scene_at >= 8.0: _next(sec)   # a new block is a new scene, on the bar line
 	elif bar != _seq_bar and (bar - _blk_start) % 8 == 0 and _t - _scene_at >= 8.0:
 		_next(sec)   # a long block keeps its pattern, but the look and the stack change every eight bars
@@ -317,11 +323,11 @@ func _sequence(dt: float, grid: float, sec: String) -> void:
 	if step != _seq_step:
 		_seq_step = step
 		for lane in LightSequencer.LANES:
-			if LightSequencer.hit(LightSequencer.pattern(lane, _blk_index, bar - _blk_start, _blk_len, safe), step): _seq_env[lane] = 1.0
+			if LightSequencer.hit(LightSequencer.pattern(lane, _blk_index, bar - _blk_start, _blk_len, safe, salt), step): _seq_env[lane] = 1.0
 	var depth := 0.2 if safe else 0.45
 	for lane in LightSequencer.LANES:
 		_seq_env[lane] *= exp(-dt * 5.0)
-		var mask := LightSequencer.pattern(lane, _blk_index, bar - _blk_start, _blk_len, safe)
+		var mask := LightSequencer.pattern(lane, _blk_index, bar - _blk_start, _blk_len, safe, salt)
 		if not safe and lane == 2 and mask in [0x5555, 0xFFFF]:
 			seq_gain[lane] = 0.25 + 0.75 * LightSequencer.pulse(mask, grid)
 		else: seq_gain[lane] = 1.0 - depth + depth * _seq_env[lane]
@@ -333,7 +339,9 @@ static func _inside(v: Vector3) -> Vector3:
 	return Vector3(clampf(v.x, -24.0, 24.0), clampf(v.y, 0.0, 14.5), clampf(v.z, -36.0, 35.0))
 
 func _style() -> Dictionary:
-	return L.RAW_DEEP_STYLE if _multi() else L.style_of(mood_key, mood.family)
+	if _multi(): return L.RAW_DEEP_STYLE
+	if not _style_cache.has(mood_key): _style_cache[mood_key] = L.style_of(mood_key, mood.family)
+	return _style_cache[mood_key]
 
 # One colour of the palette for a head: the look's spread (sides, alternate, trusses, depth) over all the palette's
 # colours instead of two, and the dominant colour of a "mono" look moves on every 64 beats.
@@ -543,7 +551,7 @@ func _start_track(sec: String) -> void:
 	_track_at = -1.0
 
 # The heads' look and the trusses' formation. A new palette is the show hearing a new track: it gets two looks of
-# its own for each part of a track, others than the last one had, and the show moves between them at scene cues.
+# its own for each part of a track, with a shuffled selection and memory of recent figures.
 func _hangar_looks(tier: String, brk: bool) -> void:
 	var style := _style()
 	var chosen: Dictionary = L.PACE.normal
@@ -561,21 +569,31 @@ func _hangar_looks(tier: String, brk: bool) -> void:
 			for key in style.looks:
 				if L.HEAD_LOOKS.has(key) and part in L.HEAD_LOOKS[key][1]: own.append(key)
 			var list: Array = own if own.size() >= 2 else L.head_tier(part)
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash("%s:%s:%d:%s:%d" % [genre, title, _palette, part, _head_turn[part]])
+			list = list.duplicate()
+			for i in range(list.size() - 1, 0, -1):
+				var j := rng.randi_range(0, i)
+				var swap = list[i]
+				list[i] = list[j]
+				list[j] = swap
 			if _multi():   # six looks of its own for each part of a track, not two
 				var six := []
 				for i in mini(6, list.size()): six.append(list[(_head_turn[part] + i) % list.size()])
 				_head_set[part] = six
 				_head_turn[part] += six.size()
 			else:
-				_head_set[part] = [list[_head_turn[part] % list.size()], list[(_head_turn[part] + 1) % list.size()]]
-				_head_turn[part] += 2
+				var four := []
+				for i in mini(4, list.size()): four.append(list[(_head_turn[part] + i) % list.size()])
+				_head_set[part] = four
+				_head_turn[part] += four.size()
 	_head_scene = _scene
 	if not brk and (_head_fresh or (cue and _t - _head_at >= chosen.head * pace_k * (0.35 if _multi() else 1.0)) or not tier in L.HEAD_LOOKS[_head_look][1]):
 		var choices: Array = _head_set[tier]
 		var next: String = choices[(choices.find(_head_look) + 1) % choices.size()]
-		if _multi():   # the next one that did not play just now
+		if choices.size() > 2:   # avoid the recent figures in every genre
 			var fresh := choices.filter(func(c): return c != _head_look and not c in _head_recent)
-			if not fresh.is_empty(): next = fresh[0]
+			if not fresh.is_empty(): next = fresh[posmod(hash("%s:%d:%s" % [title, _scene, tier]), fresh.size())]
 		if next != _head_look:
 			_head_recent.push_front(_head_look)
 			if _head_recent.size() > 2: _head_recent.resize(2)
@@ -664,6 +682,7 @@ func _direct(dt: float) -> void:
 				_next(sec)
 				_pending = {}
 			_drop_at = _t
+			_drop_count += 1
 		# beats, not kicks: a kick that was missed for a bar or two moves the count on by the beats it was gone
 		var before := _beat
 		var gone := roundi(float(ev.kickGap) * maxf(float(sig.bpm), 60.0) / 60.0)
@@ -742,6 +761,11 @@ func _direct(dt: float) -> void:
 	_present += (present_want - _present) * (ease.call(1.5) if mood.flow else 1.0)
 	var held: bool = manual.strobe or manual.blinder
 	var master: float = 0.0 if manual.blackout else maxf(_present * _level, 1.0 if held else 0.0) * float(mood.level) * float(tune.master) * (1.0 - blackout)
+	visual_master = master
+	phrasing.update(dt, sig.phase_clock, sec, sig.build, sig.drop, mood.flow, safe, "%s:%s" % [genre, title])
+	var screen_turn := not brk and phrasing.cue == 7 and hall.stage_screen != null and hall.stage_screen.visible
+	_screen_focus = lerpf(_screen_focus, 1.0 if screen_turn else 0.0, ease.call(2.0))
+	var single_colour := not multi and not brk and phrasing.cue == 1
 	var tint := func(c: Color) -> Color: return c.lerp(WARM, mood.warm) if mood.warm > 0.0 else c
 	var speed: float = mood.speed * (0.35 + sig.energy * 1.2 + sig.mid * 0.65 + sig.kick * 0.35) * (0.6 if calm else 1.0)
 	_motion += dt * speed * act
@@ -753,7 +777,7 @@ func _direct(dt: float) -> void:
 	_strobe_clock += dt * strobe_rate
 
 	# ----- strobes and blinders -----
-	var strobing: bool = manual.strobe or (mood.strobes and ((brk and sig.riser > mood.strobeAt) or sig.drop > 0.55) and float(tune.strobe) > 0.0)
+	var strobing: bool = manual.strobe or (not safe and mood.strobes and ((brk and sig.riser > mood.strobeAt) or sig.drop > 0.55) and float(tune.strobe) > 0.0)
 	flash = 1.0 if strobing and floori(_strobe_clock) % 2 == 0 else 0.0
 	blind = maxf(1.0 if manual.blinder else 0.0, pow(sig.drop, 1.5) * mood.blinder)
 	var strobe_k := 1.0 if manual.strobe else minf(1.0, float(tune.strobe))
@@ -772,9 +796,10 @@ func _direct(dt: float) -> void:
 	for r in style.get("row", []):
 		if r in tier_row: own.append(r)
 	var row_list: Array = own if not own.is_empty() else style.row if not style.get("row", []).is_empty() else tier_row
-	row_look = ("fan" if sig.build > 0.5 else "curtain") if brk else "sunburst" if _t - _drop_at < 6.0 else row_list[(_scene + _palette * 2) % row_list.size()]
+	var drop_rows := ["sunburst", "vee", "fan"]
+	row_look = ("fan" if sig.build > 0.5 else "curtain") if brk else drop_rows[posmod(_drop_count - 1, drop_rows.size())] if _t - _drop_at < 6.0 else row_list[(_scene + _palette * 2) % row_list.size()]
 	var row_def: Array = L.ROW_LOOKS[row_look]
-	_row_w += ((0.28 + sig.build * 0.5 if brk else L.ROW_LEVEL.get(tier, 0.7)) * style.get("rowLevel", 1.0) - _row_w) * ease.call(1.2)
+	_row_w += ((0.28 + sig.build * 0.5 if brk else L.ROW_LEVEL.get(tier, 0.7)) * style.get("rowLevel", 1.0) * 0.55 - _row_w) * ease.call(1.2)
 	var lit_share: float = style.lit
 	var beats: float = sig.beats
 	var k32 := floori(beats / 32.0)   # the 32 and 64 beat counts the colour spread follows
@@ -787,7 +812,7 @@ func _direct(dt: float) -> void:
 	var e14: float = ease.call(1.4)
 	var e_moving: float = ease.call(0.1)
 	var e_settle: float = ease.call(0.7)
-	var e_gate: float = ease.call(0.08)
+	var e_gate: float = ease.call(0.65 if safe else 0.22)
 	var cue := "%d:%d" % [_scene, floori((_beat - 1) / 16.0)]
 	# what is the same for every head this frame, worked out once
 	var stack := _stack(look, tier)
@@ -800,17 +825,18 @@ func _direct(dt: float) -> void:
 	var pattern_gain := 2.5 if pattern in [1, 2, 4] else 1.5
 	var gains := {}
 	for g in [look_gate, row_gate, "patterns"]: gains[g] = 1.0 if calm or brk else float(L.GATE_GAIN.get(g, pattern_gain))
+	gains["all"] = 1.0
 	var warm: float = mood.warm
-	var counted := beats / 2.0 if calm else beats
+	var counted := beats / 2.0 if calm or safe else beats
 	var white_k := bld * 0.35
 	var peak := sec == "peak"
 	var foreground_bank := 2 if brk else _scene % 3
 	var accent_bank := floori(beats / 2.0) % 3
-	var e_kick: float = sig.kick
+	var e_kick: float = sig.kick * (0.18 if safe else 1.0)
 	var I_base: float = 0.1 + sig.mid * 0.15 + sig.build * 0.3 if brk else 0.045 + sig.energy * 0.23 + sig.bass * 0.12 + e_kick * 0.55 + sig.accent * 0.1
 	var I_drop: float = sig.drop * 0.5
-	var I_accent: float = sig.accent * 0.18 * master
-	var chase_gate: bool = not brk and P.get("gate", false)
+	var I_accent: float = sig.accent * (0.04 if safe else 0.18) * master
+	var chase_gate: bool = not safe and not brk and P.get("gate", false)
 	var faders := {}
 	for g in GROUP_LEVEL: faders[g] = float(GROUP_LEVEL[g]) * float(tune.groups.get(g, 1.0))
 	for h: L.Head in _heads:
@@ -823,7 +849,7 @@ func _direct(dt: float) -> void:
 			if brk: a = _toward(p, _break_target(h, p, k, s, sig) if multi else L.floor_target(h, p, k, _beat, sec, sig.build, sig.energy, sig.drop))
 			else:
 				var target := L.move(look_move, L.position(look[2], h, p, k, s), h, p, k)
-				a = _toward(p, _inside(target) if multi else target)
+				a = _toward(p, _inside(target))
 		elif row: a = _toward(p, L.row_aim(row_look, h, p, k))
 		else: a = _program_aim("break" if brk else P.name, h.hanging, h, k)
 		# crossfade the asked aim as well as limiting the motors; a head dims while it travels far
@@ -855,22 +881,27 @@ func _direct(dt: float) -> void:
 		var lv: float = 1.0 if foreground else 0.28 if calm or brk else 0.45
 		h.level += (lv - h.level) * e18
 		I *= h.level + (1.0 - h.level) * dropk
+		I *= phrasing.gain(bank, f.mount, dropk)
+		I *= 1.0 - _screen_focus * (0.6 if row or role == "stage" else 0.3) * (1.0 - dropk)
 		# hold each figure for 32 kicks; builds leave a small group near the stage
 		var build_on: bool = absf(h.xn) <= 1.0 - bld * 0.85 and (bld < 0.65 or bank == 2 or h.row % 3 == 0)
 		var gate_name: String = look_gate if h.role == "overhead" else row_gate if row else "patterns"
+		if safe and not row: gate_name = "all"
 		var on: bool = build_on if brk else L.gate(gate_name, h, counted, pattern)
+		if row and dropk < 0.5: on = on and posmod(h.slot, 4) == posmod(floori(sig.phase_clock / 8.0) + _scene, 4)
 		h.gate += ((1.0 if on else 0.0) - h.gate) * e_gate
 		var gain: float = gains[gate_name]
 		I *= (h.gate + (1.0 - h.gate) * dropk) * (gain + (1.0 - gain) * dropk)
 		I *= h.move_level + (1.0 - h.move_level) * dropk
-		if multi and not brk: I *= seq_gain[mini(h.bank, 2)] + (1.0 - seq_gain[mini(h.bank, 2)]) * dropk   # lane 0 the centre, 1 the sides, 2 the stage
+
 		f.level = _lamp(I) * float(faders.get(f.group, 1.0))
 		# the look spreads the two colours, through a slow colour fade
 		var cname: String = look_colour if h.role == "overhead" else row_colour if row else "sides"
 		var share := L.colour(cname, h, beats)
 		var target := _vivid(_spread(cname, h, k32, k64, pal).lerp(Color.WHITE, share.y)) if multi else _vivid(col.lerp(col2, share.x).lerp(Color.WHITE, share.y))
+		if single_colour: target = col
 		# A whole techno block can use a single colour across the rig, including the row and washes.
-		if multi and posmod(_blk_index, 3) == 1: target = mono_colour(_blk_index)
+		if multi and _mono_block(): target = mono_colour(_blk_index + _palette * 137)
 		if warm > 0.0: target = target.lerp(WARM, warm)
 		if brk: target = target.lerp(Color.WHITE, white_k)
 		if not h.colored:
@@ -881,7 +912,7 @@ func _direct(dt: float) -> void:
 		var z: float = 1.0 - sig.build * 0.4 if brk else 1.0
 		z *= 1.35 if calm or brk else 0.75 if peak else 0.9
 		var gobo: float = 0.7 if not brk and not calm and not row else 0.0
-		if row: z *= 0.7   # the row's beams are tight and clean: sharp lines in the haze
+		if row: z *= 0.45   # keep space to see the booth and the rear rig
 		if h.role == "overhead" and not brk:   # the look's beam: narrow, wide or with a gobo
 			z *= look_beam[0]
 			if look_beam[1] >= 0.0: gobo = look_beam[1]
@@ -906,18 +937,29 @@ func _direct(dt: float) -> void:
 		f.zoom = 1.0
 		f.gobo = 0.0
 		f.level = _lamp((maxf(_wash_level * _w.wash, mood.wash) + sig.drop * 0.3 + sig.lift * 0.15) * master) * float(tune.groups.get("wash", 1.0))
+		f.level *= 1.0 - _screen_focus * 0.5 * (1.0 - dropk)
+		f.level *= phrasing.gain(2 if f.group == "roof" else 1, f.mount, dropk)
 		f.color = tint.call(pal[i % pal.size()] if multi else col2 if i % 2 else col)
-		if multi and posmod(_blk_index, 3) == 1: f.color = mono_colour(_blk_index)
+		if single_colour: f.color = tint.call(col)
+		if multi and _mono_block(): f.color = mono_colour(_blk_index + _palette * 137)
 	for i in rig.battens.size():
 		var bt: Rig.Batten = rig.battens[i]
 		_bar_level[i] = _bar_level[i] * exp(-dt * mood.decay)
 		var breathe: float = (0.25 + mood.breathe) * sig.mid * (0.5 + 0.5 * sin(_t * 0.8 + i * 0.6)) if mood.breathe > 0.0 or brk else 0.0
 		var run: float = sig.build * pow(0.5 + 0.5 * sin(bt.u * 5.0 + maxi(bt.truss, 0) + _chase), 4.0) if brk else 0.0   # a chase racing along as the build-up grows
 		var hit: float = sig.accent * (0.5 if i % 2 == _beat % 2 else 0.1)
-		bt.level = _lamp(maxf(maxf(maxf(_bar_level[i], breathe), maxf(run, hit)) * _w.bars, maxf(sig.drop, sig.lift * 0.45)) * master) * float(tune.groups.get("batten", 1.0)) * (seq_gain[3] if multi and not brk else 1.0)
-		bt.color = mono_colour(_blk_index) if multi and posmod(_blk_index, 3) == 1 else pal[i % pal.size()] if multi else col2 if i % 2 else col
-		bt.chase_amount = 0.0
-		bt.strobe = flash * strobe_k * (0.0 if manual.blackout else 1.0) * float(tune.groups.get("batten", 1.0))
+		bt.level = _lamp(maxf(maxf(maxf(_bar_level[i], breathe), maxf(run, hit)) * _w.bars, maxf(sig.drop, sig.lift * 0.45)) * master) * float(tune.groups.get("batten", 1.0))
+		bt.color = mono_colour(_blk_index + _palette * 137) if multi and _mono_block() else pal[i % pal.size()] if multi else col2 if i % 2 else col
+		if single_colour: bt.color = col
+		bt.level *= phrasing.gain(2 if bt.group in ["front", "back"] else 1, bt.mount, dropk)
+		if safe and not manual.strobe:
+			var glow: float = (0.04 + sig.mid * 0.08) * (0.8 + 0.2 * sin(sig.phase_clock * TAU / 32.0 + bt.u))
+			bt.level = _lamp(glow * _w.bars * master) * float(tune.groups.get("batten", 1.0))
+
+		# Pixel movement adds detail without more whole-room flashes.
+		bt.chase = fposmod(sig.phase_clock / (8.0 if safe else 4.0) * (-1.0 if i % 2 else 1.0) + bt.u, 1.0)
+		bt.chase_amount = (0.55 if safe else 0.85) * (1.0 - dropk) if gestures.name == "spatial_sequence" and gestures.mix > 0.5 and not calm and not brk else 0.0
+		bt.strobe = flash * strobe_k * master * float(tune.groups.get("batten", 1.0))
 
 	# ----- the trusses on their winches -----
 	# Heavy trusses hold a formation for minutes. In a break they sink further as the build grows, in a measured
@@ -931,13 +973,16 @@ func _direct(dt: float) -> void:
 		rig.truss_rolls[i] = 0.0 if brk else L.truss_roll(_truss_look, i)
 
 	# the room itself: how much of all this lands on walls, floor and crowd, and in what colour
-	var room_base := mono_colour(_blk_index) if multi and posmod(_blk_index, 3) == 1 else col
+	var room_base := mono_colour(_blk_index + _palette * 137) if multi and _mono_block() else col
 	rig.room_color = room_base.lerp(Color.WHITE, maxf(flash, blind * 0.7))
 	rig.room_level = (1.5 + sig.energy * 7.0 + sig.kick * 26.0 + sig.build * 6.0 + sig.lift * 14.0 + flash * 100.0 + blind * 50.0) * master
 	hall_look = [head_name, truss_name, L.ROW_LOOKS[row_look][0]]
 	status = ("build-up" if sig.build > 0.45 else "break") if brk else SECTION_NAME.get(sec, sec) + " · " + head_name
 	_shown = [col, col2]
-	colours_in_use = [mono_colour(_blk_index)] if multi and posmod(_blk_index, 3) == 1 else pal if multi else _shown
+	colours_in_use = [mono_colour(_blk_index + _palette * 137)] if multi and _mono_block() else pal if multi else _shown
+	if single_colour: colours_in_use = [col]
+	gestures.update(dt, sig.phase_clock, sec, sig.drop, safe, mood.flow, "%s:%s" % [genre, title], bpm, _multi())
+	if not held: gestures.apply(rig, master, tune.groups, safe)
 
 # SV in the browser draws a level of 1 as a full beam and its renderer is exposed for levels around 0.2 to 0.5;
 # this rig's lamps are linear up to 1. A soft knee keeps the order of things (calm, groove, drop) and lets the
@@ -945,12 +990,16 @@ func _direct(dt: float) -> void:
 static func _lamp(I: float) -> float:
 	return 1.0 - exp(-maxf(I, 0.0) * 3.5)
 
+func _mono_block() -> bool:
+	var identity := "%s:%d" % [title, _palette]
+	return posmod(hash("%s:%d:mono" % [identity, _blk_index]), 5) == 1 and posmod(hash("%s:%d:mono" % [identity, _blk_index - 1]), 5) != 1
+
 static func mono_colour(block: int) -> Color:
 	var colours := [Color(0.03, 0.12, 1.0), Color(1.0, 0.02, 0.01), Color(0.03, 1.0, 0.08), Color.WHITE, Color(1.0, 0.58, 0.24)]
-	return colours[posmod(floori(block / 3.0), colours.size())]
+	return colours[posmod(hash("%d:colour" % block), colours.size())]
 
 # How the beam groups weigh against each other (the live faders' groups multiply this).
 const GROUP_LEVEL := {"hall": 1.0, "front": 1.0, "back": 0.9, "rear": 0.85, "side": 0.85, "delay": 0.85, "roof": 0.8}
 
 func scene_text() -> String:
-	return "%s · %s · %s · trusses %s · row %s%s" % [status, PROGRAMS[_program].name, mood.get("family", ""), truss_name, row_look, (" · " + seq_text) if _multi() else ""]
+	return "%s · %s · %s · %s · trusses %s · row %s%s%s" % [status, PROGRAMS[_program].name, mood.get("family", ""), ShowPhrasing.NAMES[phrasing.cue], truss_name, row_look, (" · " + seq_text) if _multi() else "", (" · " + gestures.name) if gestures.mix > 0.01 else ""]

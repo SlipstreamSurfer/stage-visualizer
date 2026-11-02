@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.60.0-test1 — Symmetric stage towers and show source continuity
+
+- Back towers now use eight mirrored positions at an even 6 m spacing, centred around the LED screen.
+- Launching with a saved audio device no longer silently changes the saved source to System + rekordbox.
+- Carries forward the current candidate's calmer stage row, preserved light-desk levels, integrated scene accents,
+  longer evolving depth chase, screen visuals and optional local debug feedback.
+- This is a local review candidate. Bars do not yet have independent LED pixel states, and new roof bars or a second
+  head row on the back towers are not included in this build.
+
+## Unreleased — Show balance, spatial patterns and debug feedback
+
+- Authored light figures form the base show, with shuffled per-track figures and varied phrase durations.
+  Sequencers are occasional episodes in one rig region, with long gaps between episodes. New figures include ceiling ribbons, diamond lattices, wings and mirrored orbits.
+- Lightning accents the current scene without changing its colours or aims. Extended depth chases develop through
+  aligned waves, staggered columns and echoes. Light rain has been removed.
+- The spatial sequencer switches whole fixtures on and off in order. The stage row uses fewer simultaneous heads
+  and lower output, and light-desk group levels are remembered between runs.
+- Six screen scenes follow the actual show colours and dissolve between musical cues. Pixel chases add detail to
+  the existing LED bars, while blackout and the master also control the screen and batten flashes.
+- Gentle mode omits automatic strobes and rapid sequence episodes, with softer transitions and kick modulation.
+- Optional debug feedback rates a recent 5/15/30/60-second window with F7/F8 and optional notes via F6.
+  Diagnostic context is saved locally without audio or video.
+- A model-independent choreography blueprint lives in `docs/choreography-blueprint.md`.
+
 ## 0.58.0 — Stage screen
 
 - A central LED screen above the booth shows animated patterns in the show's colour, with quieter visuals during breaks.

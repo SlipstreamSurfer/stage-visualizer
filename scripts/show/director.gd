@@ -951,6 +951,14 @@ func _direct(dt: float) -> void:
 		bt.level = _lamp(maxf(maxf(maxf(_bar_level[i], breathe), maxf(run, hit)) * _w.bars, maxf(sig.drop, sig.lift * 0.45)) * master) * float(tune.groups.get("batten", 1.0))
 		bt.color = mono_colour(_blk_index + _palette * 137) if multi and _mono_block() else pal[i % pal.size()] if multi else col2 if i % 2 else col
 		if single_colour: bt.color = col
+		var bar_phrase := floori(sig.phase_clock / 32.0)
+		var bar_pattern := BarPixels.pattern_for(bar_phrase, i, bt.group, safe)
+		bt.pixel_levels = BarPixels.levels(bar_pattern, floori(sig.phase_clock / 16.0))
+		for pixel in Rig.Batten.PIXELS:
+			var pixel_color := bt.color
+			if bar_pattern in ["odd", "even"] and not single_colour and not (multi and _mono_block()) and pixel % 2 == 0:
+				pixel_color = col2 if not multi else pal[(i + 1) % pal.size()]
+			bt.pixel_colors[pixel] = pixel_color
 		bt.level *= phrasing.gain(2 if bt.group in ["front", "back"] else 1, bt.mount, dropk)
 		if safe and not manual.strobe:
 			var glow: float = (0.04 + sig.mid * 0.08) * (0.8 + 0.2 * sin(sig.phase_clock * TAU / 32.0 + bt.u))

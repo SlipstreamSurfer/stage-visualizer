@@ -37,6 +37,7 @@ GODOT=/path/to/Godot_v4.7.2-stable
 "$GODOT" --headless --path . --script tools/test_show_checks.gd
 "$GODOT" --headless --path . --script tools/test_feedback.gd
 "$GODOT" --headless --path . --script tools/test_choreography.gd
+"$GODOT" --headless --path . --script tools/test_bar_pixels.gd
 "$GODOT" --headless --path . --script tools/test_session.gd
 "$GODOT" --headless --path . --script tools/test_rekordbox.gd
 "$GODOT" --headless --path . --script tools/test_listen_ear.gd

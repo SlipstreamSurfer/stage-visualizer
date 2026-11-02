@@ -61,6 +61,7 @@ class Fixture:
 	var ifx_phase := 0.0
 
 class Batten:
+	const PIXELS := BarPixels.COUNT
 	var mount := Vector3.ZERO
 	var truss := -1
 	var axis := Vector3.RIGHT
@@ -76,6 +77,8 @@ class Batten:
 	var x01 := 0.5
 	var z01 := 0.0
 	var ifx_phase := 0.0
+	var pixel_levels := PackedFloat32Array()
+	var pixel_colors: Array[Color] = []
 
 var fixtures: Array[Fixture] = []
 var battens: Array[Batten] = []
@@ -100,6 +103,7 @@ var _mm := []              # per kind: {base, yoke, head, lens, beam}
 var _mm_nodes := {}        # MultiMesh -> the node that draws it
 var _batten_body: MultiMesh
 var _batten_line: MultiMesh
+var _batten_pixels: MultiMeshInstance3D
 var _blinder_lamps: MultiMesh
 var _blinder_xf: Array[Transform3D] = []
 var _blinder_lights: Array[SpotLight3D] = []
@@ -404,6 +408,10 @@ func _batten(group: String, mount: Vector3, truss: int, axis: Vector3, face: Vec
 	b.axis = axis
 	b.face = face
 	b.u = u
+	b.pixel_levels.resize(Batten.PIXELS)
+	b.pixel_levels.fill(1.0)
+	b.pixel_colors.resize(Batten.PIXELS)
+	b.pixel_colors.fill(Color.BLACK)
 	battens.append(b)
 
 func _blinder(at: Vector3, towards: Vector3) -> void:
@@ -491,6 +499,18 @@ func _batten_batches() -> void:
 	line.size = Vector3(1.0, 0.05, 0.01)
 	_batten_body = _multimesh(body, battens.size(), _body)
 	_batten_line = _multimesh(line, battens.size(), Kit.shader("res://shaders/batten.gdshader"), true, true, false)
+	var led := BoxMesh.new()
+	led.size = Vector3(0.061, 0.07, 0.025)
+	var pixel_mm := _multimesh(led, battens.size() * Batten.PIXELS, Kit.shader("res://shaders/batten_pixel.gdshader"), true, false, false)
+	_batten_pixels = _mm_nodes[pixel_mm] as MultiMeshInstance3D
+	for i in battens.size():
+		var b: Batten = battens[i]
+		var at := _hung_at(b.mount, b.truss)
+		var y := b.face.cross(b.axis)
+		var bb := Basis(b.axis, y, b.face)
+		for pixel in Batten.PIXELS:
+			var offset := (float(pixel) + 0.5) / Batten.PIXELS - 0.5
+			_batten_pixels.multimesh.set_instance_transform(i * Batten.PIXELS + pixel, Transform3D(bb, at + b.axis * offset))
 	var lamp := CylinderMesh.new()
 	lamp.top_radius = 0.12
 	lamp.bottom_radius = 0.12
@@ -598,9 +618,11 @@ func update(dt: float, beat: float) -> void:
 		var bb := Basis(b.axis, y, b.face)
 		_batten_body.set_instance_transform(i, Transform3D(bb, at))
 		_batten_line.set_instance_transform(i, Transform3D(bb, at + b.face * 0.085))
-		var c := b.color * b.level
-		_batten_line.set_instance_color(i, Color(c.r, c.g, c.b, 1.0))
-		_batten_line.set_instance_custom_data(i, Color(b.strobe, b.chase, b.chase_amount, 0))
+		_batten_line.set_instance_color(i, Color.BLACK)
+		_batten_line.set_instance_custom_data(i, Color(b.strobe, 0.0, 0.0, 0.0))
+		for pixel in Batten.PIXELS:
+			var pixel_color: Color = b.pixel_colors[pixel] * b.pixel_levels[pixel] * b.level
+			_batten_pixels.multimesh.set_instance_color(i * Batten.PIXELS + pixel, Color(pixel_color.r, pixel_color.g, pixel_color.b, 1.0))
 	for o in _strobe_lights:
 		o.visible = strobe > 0.02
 		o.light_energy = 16.0 * strobe

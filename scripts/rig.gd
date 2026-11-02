@@ -184,6 +184,7 @@ func build() -> void:
 		var z := Hall.BACK + 1.0
 		Kit.truss(chords, braces, Vector3(x, Hall.DECK, z), Vector3(x, 13.8, z), 0.3)
 		for j in 3: _add(BEAM, "back", Vector3(x, 6.5 + j * 3.0, z + 0.15), Vector3.BACK, -1, k / 7.0, j)
+		_add(SPOT, "back", Vector3(x, 13.0, z + 0.15), Vector3.BACK, -1, k / 7.0, 3)
 		for j in 2: _batten("back", Vector3(x, 8.0 + j * 3.0, z + 0.22), -1, Vector3.UP, Vector3.BACK, k / 7.0)
 
 	# roof: two trusses over the stage, spots, washes and blinders at the crowd
@@ -195,6 +196,10 @@ func build() -> void:
 	for k in 8:
 		var u := k / 7.0
 		_add(WASH, "roof", Vector3(-17.5 + u * 35.0, 11.55, rz - 5.0), Vector3.DOWN, -1, u, 1)
+	# Eight addressable bars fill the gaps between the rear roof-truss washes.
+	for k in 8:
+		var u := (k + 0.5) / 8.0
+		_batten("roof", Vector3(-17.5 + u * 35.0, 11.1, rz - 5.0), -1, Vector3.RIGHT, Vector3.DOWN, u)
 	for k in 8:
 		var x := -17.5 + k * 5.0
 		_blinder(Vector3(x, 11.4, rz + 0.35), Vector3(x * 1.3, 1.5, 6.0))

@@ -180,6 +180,12 @@ Lever per stap één onveranderlijke lokale kandidaat met een kleine, duidelijke
 - De barpatronen omvatten aangehouden 50/50-vlakken, even/oneven cellen, midden, uiteinden en een langzaam verplaatsend venster. Afwisselende kleuren volgen het bestaande showpalet en monochrome scènes blijven monochroom.
 - `tools/test_bar_pixels.gd` controleert het aantal cellen, patroonvormen, determinisme en de gebatchte renderstructuur.
 
+## Uitgevoerd in kandidaat 0.60.0-test3
+
+- Acht roof-bars vullen de gelijk verdeelde openingen op de tweede rooftruss, naast de roof spots en washes.
+- Elke back tower heeft een vierde kop boven de bestaande drie beams, als spot voor een aanvullende rol.
+- De show-tests controleren tellingen en spiegeling van beide uitbreidingen.
+
 ## Resterende uitvoering
 
-Volgende stappen zijn de visuele beoordeling van pixelbars en towergeometrie, een roof-spotpassage die zonder Stage row en Hall beams leesbaar blijft, daarna pas nieuwe roof-bars en een extra spotrij op de back towers. Vervolgens volgen samenhang, comfortlogging, prestaties, scherm/zaal/camera, langere praktijkbeoordeling en lokale iteraties. De candidate status is geen artistieke goedkeuring.
+Volgende stappen zijn de artistieke beoordeling van de uitgebreide rig en een roof-spotpassage die zonder Stage row en Hall beams leesbaar blijft. Vervolgens volgen samenhang, comfortlogging, prestaties, scherm/zaal/camera, langere praktijkbeoordeling en lokale iteraties. De candidate status is geen artistieke goedkeuring.

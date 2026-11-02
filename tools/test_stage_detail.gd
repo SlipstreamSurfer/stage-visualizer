@@ -16,7 +16,7 @@ func _run() -> void:
 	var rig := Rig.new()
 	root.add_child(rig)
 	rig.build()
-	check(rig.fixtures.size() == 212, "The symmetric back towers add only their three planned heads")
+	check(rig.fixtures.size() == 220, "The rig adds one roof spot per symmetric back tower")
 	var tower_x := {}
 	for f in rig.fixtures:
 		if f.group == "back": tower_x[snappedf(f.mount.x, 0.01)] = true
@@ -27,6 +27,18 @@ func _run() -> void:
 		for i in range(ordered_towers.size()):
 			check(is_equal_approx(float(ordered_towers[i]), -float(ordered_towers[7 - i])), "Back towers must mirror around the screen centre")
 			if i > 0: check(is_equal_approx(float(ordered_towers[i]) - float(ordered_towers[i - 1]), 6.0), "Back towers must have equal 6 m spacing")
+	var upper_spots := rig.fixtures.filter(func(f): return f.group == "back" and f.kind == Rig.SPOT)
+	check(upper_spots.size() == 8, "Every back tower must carry one top-row spot")
+	for f in upper_spots:
+		check(is_equal_approx(f.mount.y, 13.0) and f.row == 3, "Top-row spots must sit above the beams and below the tower cap")
+	var roof_bars := rig.battens.filter(func(b): return b.group == "roof")
+	check(roof_bars.size() == 8, "The stage roof adds eight pixel bars between the washes")
+	var roof_x: Array = roof_bars.map(func(b): return b.mount.x)
+	roof_x.sort()
+	if roof_x.size() == 8:
+		for i in range(roof_x.size()):
+			check(is_equal_approx(float(roof_x[i]), -float(roof_x[7 - i])), "Roof bars must mirror around the screen centre")
+			if i > 0: check(is_equal_approx(float(roof_x[i]) - float(roof_x[i - 1]), 4.375), "Roof bars must keep equal spacing")
 	for label in ["DelayMounts", "DelaySafeties", "TowerFeet"]:
 		check_batch(rig, label)
 	var mounts := rig.get_node_or_null("DelayMounts") as MultiMeshInstance3D

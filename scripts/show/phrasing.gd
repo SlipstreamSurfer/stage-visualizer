@@ -16,8 +16,11 @@ var _recent: Array = []
 var _period := 16.0
 var _offset := 0.0
 var _direction := 1.0
+var _follow := -1
 
-func update(dt: float, clock: float, section: String, build: float, drop: float, flowing: bool, gentle: bool, identity := "show") -> void:
+# follow: the director's passage; when given, the composition changes with it instead of on its own clock.
+# travel: whether travelling waves may play (only while the hall leads).
+func update(dt: float, clock: float, section: String, build: float, drop: float, flowing: bool, gentle: bool, identity := "show", follow := -1, travel := true) -> void:
 	if identity != _identity or clock < grid - 4.0:
 		_identity = identity
 		_rng.seed = hash(identity)
@@ -25,7 +28,9 @@ func update(dt: float, clock: float, section: String, build: float, drop: float,
 		_recent.clear()
 	grid = clock
 	var quiet := section in ["intro", "low", "break", "outro"]
-	if clock >= next_at:
+	var due := clock >= next_at if follow < 0 else follow != _follow
+	_follow = follow
+	if due:
 		var pool: Array = [0, 1, 5, 7] if quiet or flowing else range(NAMES.size())
 		var fresh := pool.filter(func(i): return i != cue and not i in _recent)
 		if fresh.is_empty(): fresh = pool.filter(func(i): return i != cue)
@@ -41,7 +46,7 @@ func update(dt: float, clock: float, section: String, build: float, drop: float,
 	if quiet: target = target.lerp(Vector3(0.4, 0.35, 1.0), clampf(build, 0.0, 1.0))
 	var opening := clampf(drop * 2.0, 0.0, 1.0)
 	banks = banks.lerp(target, 1.0 - exp(-dt / 2.0)).lerp(Vector3.ONE, opening)
-	var active := not quiet and not flowing and not gentle
+	var active := not quiet and not flowing and not gentle and travel
 	wave = lerpf(wave, 1.0 if active and cue in [2, 3, 6, 8] else 0.0, 1.0 - exp(-dt / 2.0))
 	stereo = lerpf(stereo, 1.0 if active and cue in [3, 5, 8] else 0.0, 1.0 - exp(-dt / 2.0))
 

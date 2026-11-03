@@ -28,6 +28,7 @@ var bass := 0.0           # 0..1, the three bands
 var mid := 0.0
 var treble := 0.0
 var accent := 0.0         # 1 on a high hit, falling away
+var parts := ListenParts.new()   # kick, bass, body, lead, clap, hats: level, hits and layers coming in
 var hype := 0.0           # stays up for a while after a drop
 var ev_drop := false      # this frame: the kick came back after a break (the drop)
 var ev_broke := false     # this frame: a break began
@@ -184,6 +185,7 @@ func stop() -> void:
 	mid = 0.0
 	treble = 0.0
 	accent = 0.0
+	parts.reset()
 	hype = 0.0
 	kick = false
 	begin_frame()
@@ -225,6 +227,7 @@ func update(dt: float) -> void:
 
 func begin_frame() -> void:
 	kick = false
+	parts.clear_events()
 	ev_drop = false
 	ev_broke = false
 	ev_back = false
@@ -265,6 +268,7 @@ func _hear(bands: Array, rms: float, t: float) -> void:
 	ev_lift = ev_lift or ev.lift
 	ev_silent = ev_silent or (ev.silent and not was_silent)
 	accent = maxf(accent, a.accent)
+	if bands.size() >= 9: parts.update(bands.slice(3), t, STEP, clampf((rms - 0.0025) / 0.0075, 0.0, 1.0))
 	bass = a.bass
 	mid = minf(1.0, a.mid)
 	treble = a.high
@@ -391,6 +395,7 @@ func _reset_detection() -> void:
 	_tempo_hits = 0
 
 func _new_track() -> void:
+	parts.new_track()
 	_reset_detection()
 	_listener.new_track()
 	_stable_bpm = 0.0

@@ -111,12 +111,12 @@ func _run() -> void:
 		if result.mean_lit < 0.3 or result.looks < 3 or result.longest_rest_beats > 4.0:
 			printerr("Presence/variation contract failed: ", genre)
 			failed = true
-		# Raw / Deep / Hypnotic is the one genre asked to vary more: many head looks, three or more colours at once.
-		if genre == raw_genre and (result.head_looks < 8 or result.most_hues < 3):
+		# Raw / Deep / Hypnotic varies by passage (16 or 32 bars): several head looks in four minutes, three or more colours at once.
+		if genre == raw_genre and (result.head_looks < 5 or result.most_hues < 3):
 			printerr("Raw / Deep / Hypnotic variation contract failed: ", JSON.stringify(result))
 			failed = true
 		# ...and its looks are combined with other movements, gates, colour spreads and beams, with washes that are not a room lamp.
-		if genre == raw_genre and (result.combos < 14 or result.wash_mean > 0.75 * results["techno-peak-time-driving"].wash_mean):
+		if genre == raw_genre and (result.combos < result.head_looks or result.wash_mean > 0.75 * results["techno-peak-time-driving"].wash_mean):
 			printerr("Raw / Deep / Hypnotic stack or wash contract failed: ", JSON.stringify(result))
 			failed = true
 		# ...played by the light sequencer: blocks of several lengths, and the lanes pulse on the grid.

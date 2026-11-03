@@ -91,7 +91,10 @@ func push(samples: PackedFloat32Array, step: Callable) -> void:
 		if count >= next:
 			next += every
 			var rms: float = spectrum()
-			step.call([band(35, 170), band(250, 3000), band(4000, 14000)], rms, count / rate)
+			# the three bands of SV's listening, then the six parts (listen_parts.gd)
+			var bands := [band(35, 170), band(250, 3000), band(4000, 14000)]
+			for b in ListenParts.BANDS: bands.append(band(b[0], b[1]))
+			step.call(bands, rms, count / rate)
 
 func skip(frames: int) -> void:
 	count += frames

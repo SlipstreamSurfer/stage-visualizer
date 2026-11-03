@@ -46,7 +46,8 @@ func start(effect: String, grid: float, seed_value: int, gentle := false) -> voi
 		point.x = clampf(point.x, -18.0, 18.0)
 		point.z = clampf(point.z, -34.0, 33.0)
 
-func update(dt: float, grid: float, section: String, drop: float, gentle: bool, flowing: bool, identity: String, _tempo := 120.0, sequences := false) -> void:
+# opening: whether a passage is just beginning; an episode only enters there, so it never cuts into a figure.
+func update(dt: float, grid: float, section: String, drop: float, gentle: bool, flowing: bool, identity: String, _tempo := 120.0, sequences := false, opening := true) -> void:
 	if identity != _identity or grid < _last_grid - 4.0:
 		_identity = identity
 		_rng.seed = hash(identity + ":gestures")
@@ -60,10 +61,12 @@ func update(dt: float, grid: float, section: String, drop: float, gentle: bool, 
 	var allowed := section in ["groove", "peak"] and drop < 0.1 and not flowing
 	if boundary != _boundary:
 		_boundary = boundary
-		if allowed and grid >= next_at and mix < 0.01:
+		if allowed and opening and grid >= next_at and mix < 0.01:
 			var choices := ["lightning"]
 			if sequences and not gentle: choices.append("spatial_sequence")
 			if grid >= 256.0: choices.append("depth_chase")
+			# hypnotic techno travels: the depth chase is part of its base, not a rare guest
+			if sequences and not gentle and grid >= 64.0: choices = ["depth_chase", "depth_chase", "lightning"] + (["spatial_sequence"] if grid >= 256.0 else [])
 			if gentle: choices = ["depth_chase"] if grid >= 256.0 else []
 			if choices.is_empty():
 				next_at = grid + 128.0
@@ -71,7 +74,9 @@ func update(dt: float, grid: float, section: String, drop: float, gentle: bool, 
 			var effect: String = choices[_rng.randi_range(0, choices.size() - 1)]
 			start(effect, grid, _rng.randi(), gentle)
 			# Every episode buys at least four times its duration of ordinary choreography.
-			next_at = grid + duration + maxf(128.0, duration * 4.0) + [0.0, 32.0, 64.0][_rng.randi_range(0, 2)]
+			var rest := maxf(128.0, duration * 4.0)
+			if sequences and not gentle and name == "depth_chase": rest = duration * 3.0   # passages of its own figures, then it travels again
+			next_at = grid + duration + rest + [0.0, 32.0, 64.0][_rng.randi_range(0, 2)]
 	_gentle = gentle
 	if gentle and name == "lightning": name = ""
 	if not allowed: duration = minf(duration, elapsed)
@@ -106,11 +111,18 @@ func weight(position: Vector3) -> float:
 		var fork := maxf(0.0, 1.0 - here.distance_to(branch) / 8.0) * 0.45
 		return maxf(core, fork) * (1.0 - smoothstep(0.45, 0.95, fposmod(step, 1.0)))
 	if name == "depth_chase":
-		var phrase := floori(elapsed / 16.0)
-		var current := variants[posmod(phrase, variants.size())]
-		var previous := variants[posmod(phrase - 1, variants.size())] if phrase > 0 else current
+		# One chase that develops: it starts as an aligned wave, grows into its own variant for the middle of the
+		# passage (staggered columns, an echo or breathing columns, one after the other), and returns to the wave.
+		var part := floori(elapsed / 16.0)
+		var last := maxi(0, ceili(duration / 16.0) - 1)
+		var current := _variant(part, last)
+		var previous := _variant(part - 1, last) if part > 0 else current
 		return lerpf(_chase(position, previous), _chase(position, current), smoothstep(0.0, 2.0, fposmod(elapsed, 16.0)))
 	return 0.0
+
+func _variant(part: int, last: int) -> int:
+	if part <= 0 or part >= last: return 0
+	return variants[1] if part * 2 <= last else variants[2]   # the passage's own development: one variant, then a second
 
 func apply(rig: Rig, master: float, groups: Dictionary, _gentle_mode: bool) -> void:
 	if mix <= 0.0 or name == "": return

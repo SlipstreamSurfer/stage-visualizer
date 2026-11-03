@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.61.0-test1 — Passages: one idea at a time
+
+- The show plays in passages of 16 or 32 bars. Each passage has one spatial idea: one group leads it, others
+  support it, the rest hold a quiet figure. A passage begins, develops and ends; it does not restart every few bars.
+- Scenes, room compositions, single-colour blocks and bar figures change with the passage instead of on their own
+  clocks. Raw / Deep / Hypnotic no longer changes look, movement, gate, colour spread and beam every eight bars.
+- Five stage figures that read with the hall beams and the stage row off: crossing planes and a held asymmetric
+  rake from the back towers, columns that slowly open and lean into the hall, and a diagonal cross and a widening
+  fan from the roof spots. With the hall fader down, the stage carries every passage.
+- Fewer whole-rig brightness steps with the strobes off: only the leading group pulses with the kick, holding
+  groups keep their light, the stage no longer switches halves every two beats, and the foreground accent moves
+  every four bars instead of every two beats. The screen dims while the stage leads.
+- Episodes (lightning, depth chase, spatial sequence) only enter at the start of a passage. A depth chase starts as
+  an aligned wave, develops two variants and returns to the wave.
+- Repetition memory looks at figure, lean and roles; a colour change is not a new passage.
+- Listening hears six parts of the track from the spectrum (kick, bass, body, lead, clap, hats): how loud each
+  is, when it hits and when it comes in as a new layer. A new lead or body opens the figure, the bass widens it.
+- Groove: the bars tick with the hats, and without part data the beat grid plays hats on the off-beat.
+- Techno and Hard: the heads stand still. Each passage holds a position for a quarter of its length and moves only
+  in the dark. The rhythm is in the light: the leading group plays a beat-locked chase (across, from the centre
+  out, bottom to top, odd/even, ping-pong), quarters, and eighths late in a peak. The passage opens and closes
+  with everything on.
+- The roof spots weave instead of crossing on one line, and the support figures keep each beam in its own lane,
+  so beams no longer pile up into one knot from the DJ's view.
+- Depth chases and lightning come by more often in Raw / Deep / Hypnotic.
+- `tools/measure_show.gd` measures a sixteen-minute generated set: changes per minute, changes at once, light
+  jumps with the strobes off, stage-head level and quick returns.
+
 ## 0.60.0-test3 — Roof bars and upper back-tower spots
 
 - Adds eight individually addressable LED bars along the stage roof, evenly placed between the existing washes.

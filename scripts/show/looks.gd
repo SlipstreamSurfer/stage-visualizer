@@ -383,5 +383,6 @@ static func row_aim(name: String, h: Head, p: Vector3, k: Dictionary) -> Vector3
 		"pairs": return Vector3(p.x + (6.0 if h.slot % 2 else -6.0), ROW_UP, p.z + 5.0)
 		"chase": return Vector3(p.x, ROW_UP, p.z + 3.0)
 		"sunburst": return Vector3(p.x * 3.5, ROW_UP * 0.8, p.z + 9.0)
-		"crowd": return Vector3(p.x * 1.4 + sin(k.m * 0.4) * 4.0, 4.6, p.z + 24.0)
+		# a wide fan rising over the heads: aimed low and long, the row piles up on the horizon from the DJ's eyes
+		"crowd": return Vector3(p.x * 2.2 + sin(k.m * 0.4) * 3.0, 9.0, p.z + 16.0)
 	return Vector3(p.x, ROW_UP, p.z + 2.5)

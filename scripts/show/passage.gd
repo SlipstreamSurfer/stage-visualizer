@@ -15,7 +15,12 @@ const FIGURES := {
 	"roof_cross": ["roof", ["back", "bars"]],   # the roof spots weave: neighbours lean opposite ways, reaching out into the hall
 	"roof_fan": ["roof", ["back"]],             # a mirrored fan from the roof that widens and reaches further
 	"overhead": ["hall", ["back"]],             # the hall's own looks lead; the stage holds a quiet figure
+	"rain": ["rear", ["delay"]],                # beam rain: every beam falls on its own from 45° up to 45° down
 }
+# Beam rain: one fall takes RAIN_FALL of a cycle of RAIN_BEATS (about 2.5 s at 128 BPM); the beam goes back up dark.
+const RAIN_BEATS := 8.0
+const RAIN_FALL := 0.7
+const RAIN_GROUPS := ["rear", "delay"]
 const LEVEL := {"lead": 1.0, "support": 0.6, "hold": 0.3}
 # How much of the kick a role may show: the lead breathes with it, the rest barely.
 const PULSE := {"lead": 0.75, "support": 0.3, "hold": 0.08}
@@ -37,6 +42,7 @@ var stepped := false      # techno: heads stand still and change position only i
 var route := "across"     # the passage's rhythm: how the lead's light travels from fixture to fixture on the beat
 const ROUTES := ["across", "centre", "ladder", "alternate", "pingpong"]
 var _open := 0.0
+var _clock := 0.0         # the beat grid now, for figures that move on their own
 var _grid := 0.0          # a new layer (a lead) came in: the figure opens up, then settles
 
 func open() -> void:
@@ -45,6 +51,7 @@ func open() -> void:
 # Called every frame on the beat grid. Returns true when a new passage starts.
 func update(grid: float, section: String, dropped: bool, faders: Dictionary, identity: String) -> bool:
 	_hall_on = float(faders.get("hall", 1.0)) > 0.3
+	_clock = grid
 	if identity != _identity or grid < started - 8.0:
 		_identity = identity
 		_rng.seed = hash(identity + ":passage")
@@ -81,6 +88,7 @@ func _start(at: float, section: String) -> void:
 	length = 128.0 if quiet else [128.0, 128.0, 64.0][_rng.randi_range(0, 2)]
 	var pool: Array = FIGURES.keys()
 	if not _hall_on: pool.erase("overhead")   # the hall is off on the desk: the stage carries every passage
+	if not stepped: pool.erase("rain")         # rain is a techno figure: the other heads stand still meanwhile
 	var options := []
 	for name in pool:
 		for lean in [-1.0, 1.0]:
@@ -101,6 +109,11 @@ func role(group: String) -> String:
 	if group in def[1]: return "support"
 	if figure == "overhead" and group in ["rear", "side"]: return "support"
 	return "hold"
+
+# How strong a group plays in this passage; in the rain the hall steps back almost to dark, so the rain reads.
+func level(group: String, part: String) -> float:
+	if figure == "rain" and group == "hall": return 0.05
+	return LEVEL[part]
 
 func stage_leads() -> bool:
 	return figure != "overhead"
@@ -148,6 +161,7 @@ func stage_target(group: String, row: int, mount: Vector3, xn: float, u: float, 
 	var b := begin()
 	var side := -1.0 if mount.x < 0.0 else 1.0
 	var drift := sin(m * 0.18 + u * 0.9) * 0.8
+	if figure == "rain" and group in RAIN_GROUPS: return _rain(mount)
 	match group:
 		"back":
 			if row == 3: return _back_spot(mount, u, d, m)
@@ -197,6 +211,25 @@ func stage_target(group: String, row: int, mount: Vector3, xn: float, u: float, 
 			# straight across, slightly rising, staggered by height: parallel lines, no knot
 			return Vector3(-side * 6.0, mount.y + 1.5, mount.z + (u - 0.5) * 4.0 + mirror * d * 3.0)
 	return Vector3.INF
+
+# Where a falling beam aims: from 45° up to 45° down towards the stage, each beam on its own moment, in its own lane.
+func _rain(mount: Vector3) -> Vector3:
+	var t := _rain_t(mount)
+	var a := deg_to_rad(lerpf(45.0, -45.0, minf(t / RAIN_FALL, 1.0)))
+	var d := Vector3(0.0, sin(a), -cos(a))
+	# aim at the point where the ray meets the roof or the floor, so the angle survives the hall's limits
+	var reach := (14.4 - mount.y) / d.y if d.y > 0.01 else (mount.y - 0.2) / -d.y if d.y < -0.01 else 30.0
+	return mount + d * clampf(reach, 1.0, 30.0)
+
+# How lit a falling beam is: it fades in at the top, out near the bottom, and goes back up in the dark.
+func rain_level(mount: Vector3) -> float:
+	var f := _rain_t(mount) / RAIN_FALL
+	if f >= 1.0: return 0.0
+	return smoothstep(0.0, 0.1, f) * (1.0 - smoothstep(0.75, 1.0, f))
+
+func _rain_t(mount: Vector3) -> float:
+	var own := fposmod(sin(mount.x * 12.9898 + mount.y * 78.233 + mount.z * 3.7) * 43758.5453, 1.0)
+	return fposmod(_clock / RAIN_BEATS + own, 1.0)
 
 # Across the hall without piling up at a wall: a soft limit keeps every head's order and some of its spacing.
 static func _lane(x: float) -> float:

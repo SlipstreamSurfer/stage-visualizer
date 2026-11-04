@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.61.0-test3 — Rings, dots and beam rain
+
+- LED rings under the rear truss and on the back towers: a full circle that swells on every kick.
+- A grid of dots on the far wall that flashes on the melody in quiet moments and breaks.
+- Beam rain (Techno and Hard): the rear truss and the delay towers' beams each fall from 45° up to 45° down in
+  about two and a half seconds, every beam on its own moment, and go back up in the dark. The hall steps back.
+
 ## 0.61.0-test2 — A generic club booth
 
 - The players and the mixer are generic club gear in the familiar layout, without real brand or model names.

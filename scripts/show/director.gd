@@ -224,7 +224,10 @@ var phrasing := ShowPhrasing.new()
 var passage := ShowPassage.new()
 var _passage_seen := -1
 # The groove: what the parts of the track do, each with its own place in the rig (see _groove).
-var groove := {"clap": 0.0, "hats": 0.0, "body": 0.0, "bass": 0.0, "claps": 0, "hat_count": 0, "bodies": 0}
+var groove := {"clap": 0.0, "hats": 0.0, "body": 0.0, "bass": 0.0, "claps": 0, "hat_count": 0, "bodies": 0, "leads": 0}
+var _dot_flash := 0.0
+var _dot_seen := 0
+var _dot_pick := 0
 var _grid_step := -1
 var _frozen := {"m": 0.0, "spin": 0.0, "phase": 0.0}   # where the movement stood when the passage began (techno holds it)
 var gestures := ShowGestures.new()
@@ -851,6 +854,7 @@ func _direct(dt: float) -> void:
 		var row: bool = h.role == "row"
 		var role: String = "stage" if row else h.role
 		var prole: String = passage.role(f.group) if passages and not row else ""
+		var rain: bool = passages and passage.figure == "rain" and f.group in ShowPassage.RAIN_GROUPS
 		var a: Vector2
 		if h.role == "overhead":
 			if brk: a = _toward(p, _break_target(h, p, k, s, sig) if multi else L.floor_target(h, p, k, _beat, sec, sig.build, sig.energy, sig.drop))
@@ -874,32 +878,33 @@ func _direct(dt: float) -> void:
 			h.cue = cue
 		var moving: bool = _t - h.move_at < 5.0 and gap > 0.2
 		h.move_level += ((0.2 if moving else 1.0) - h.move_level) * (e_moving if moving else e_settle)
-		if _t - h.move_at > 0.18:
+		if rain: h.aim = a   # a falling beam follows its path itself; the motors still limit it
+		elif _t - h.move_at > 0.18:
 			h.aim.x += pan_gap * e25
 			h.aim.y += (a.y - h.aim.y) * e25
 		f.target = p + _dir(h.aim) * 30.0
 		var I: float = I_base if prole == "" else I_still + kick_term * ShowPassage.PULSE[prole] / 0.55
 		var pg := 1.0
-		if chase_gate and not row and role == "overhead" and prole in ["", "lead"]:
+		if chase_gate and not row and role == "overhead" and prole in ["", "lead"] and not rain:
 			pg = 0.1 + 0.9 * pow(maxf(0.0, cos(h.u * TAU * 1.5 - sig.phase_clock * TAU / 4.0 + h.row * 1.1)), 3.0)
-		I = (I * (_row_w if row else _w[role] if prole == "" else ShowPassage.LEVEL[prole]) * pg + I_drop) * master
+		I = (I * (_row_w if row else _w[role] if prole == "" else passage.level(f.group, prole)) * pg + I_drop) * master
 		# give the centre, the sides and the stage turns in the foreground; a drop opens the full rig
 		var bank: int = h.bank
 		if not brk and accent_bank == bank: I += I_accent
 		# the genre's share of lit heads: the rest stay dark outside a drop
-		if not brk and not row and h.lit_key > lit_share and not (prole != "" and role == "stage"): I *= dropk * 0.9
+		if not brk and not row and h.lit_key > lit_share and not (prole != "" and role == "stage") and not rain: I *= dropk * 0.9
 		var foreground: bool = bank == foreground_bank
 		var lv: float = 1.0 if foreground or prole != "" else 0.28 if calm or brk else 0.45
 		h.level += (lv - h.level) * e18
 		I *= h.level + (1.0 - h.level) * dropk
-		if not (prole != "" and role == "stage"): I *= phrasing.gain(bank, f.mount, dropk)
+		if not (prole != "" and role == "stage") and not rain: I *= phrasing.gain(bank, f.mount, dropk)
 		I *= 1.0 - _screen_focus * (0.6 if row or role == "stage" else 0.3) * (1.0 - dropk)
 		# hold each figure for 32 kicks; builds leave a small group near the stage
 		var build_on: bool = absf(h.xn) <= 1.0 - bld * 0.85 and (bld < 0.65 or bank == 2 or h.row % 3 == 0)
 		var gate_name: String = look_gate if h.role == "overhead" else row_gate if row else "patterns"
 		if safe and not row: gate_name = "all"
 		# in a passage the figure owns the stage's selection, and only the lead plays the look's gate
-		if prole != "" and (role == "stage" or prole != "lead"): gate_name = "all"
+		if prole != "" and (role == "stage" or prole != "lead" or rain): gate_name = "all"
 		var on: bool = build_on if brk else L.gate(gate_name, h, counted, pattern)
 		if prole != "" and role == "stage": on = passage.stage_on(f.group, f.row)
 		if row and dropk < 0.5: on = on and posmod(h.slot, 4) == posmod(floori(sig.phase_clock / 8.0) + _scene, 4)
@@ -909,7 +914,8 @@ func _direct(dt: float) -> void:
 		I *= h.move_level + (1.0 - h.move_level) * dropk
 
 		# the lead's rhythm: light travels between its fixtures on the beat
-		if still and prole == "lead": I *= passage.chase(f.group, f.row, h.u, sig.phase_clock, sec) + (1.0 - passage.chase(f.group, f.row, h.u, sig.phase_clock, sec)) * dropk
+		if rain: I *= passage.rain_level(f.mount)
+		elif still and prole == "lead": I *= passage.chase(f.group, f.row, h.u, sig.phase_clock, sec) + (1.0 - passage.chase(f.group, f.row, h.u, sig.phase_clock, sec)) * dropk
 		f.level = _lamp(I) * float(faders.get(f.group, 1.0))
 		# the look spreads the two colours, through a slow colour fade
 		var cname: String = look_colour if h.role == "overhead" else row_colour if row else "sides"
@@ -989,6 +995,24 @@ func _direct(dt: float) -> void:
 		bt.chase_amount = (0.55 if safe else 0.85) * (1.0 - dropk) if gestures.name == "spatial_sequence" and gestures.mix > 0.5 and not calm and not brk else 0.0
 		bt.strobe = flash * strobe_k * master * float(tune.groups.get("batten", 1.0))
 
+	# ----- set pieces: the rings swell on the kick, the dot grid flashes on the melody in a quiet moment -----
+	var piece: Color = mono_colour(_colour_block() + _palette * 137) if multi and _mono_block() else col
+	rig.piece_color = col if single_colour else piece
+	var pieces: float = float(tune.groups.get("batten", 1.0))
+	var swell: float = sig.build * 0.25 if brk else sig.kick * (0.3 if safe else 1.0)
+	for i in rig.ring_at.size():
+		rig.ring_levels[i] = _lamp((0.05 + swell * 0.9 + sig.drop * 0.4) * master) * pieces
+	var melodic: bool = brk or sig.energy < 0.45
+	if int(groove.leads) != _dot_seen:
+		_dot_seen = int(groove.leads)
+		if melodic:
+			_dot_flash = 1.0
+			_dot_pick += 1
+	_dot_flash *= exp(-dt * (4.0 if safe else 8.0))
+	for i in rig.dot_at.size():
+		var lit: bool = posmod(hash("%d:%d" % [i, _dot_pick]), 3) != 0
+		rig.dot_levels[i] = _lamp((0.02 + (_dot_flash * (0.4 if safe else 1.0) if lit else 0.0) + sig.drop * 0.3) * master) * pieces
+
 	# ----- the trusses on their winches -----
 	# Heavy trusses hold a formation for minutes. In a break they sink further as the build grows, in a measured
 	# wave, and level out; the drop takes them back up to the formation.
@@ -1032,6 +1056,7 @@ func _groove(dt: float, grid: float, brk: bool) -> void:
 		groove.claps = p.hits[4]
 		groove.hat_count = p.hits[5]
 		groove.bodies = p.hits[2]
+		groove.leads = p.hits[3]
 		groove.bass = p.level[1] * p.present[1]
 		if p.came_in[3] or p.came_in[2]: passage.open()
 	elif not brk and _activity > 0.3:

@@ -1,4 +1,4 @@
-// CDJ glass, jog LCD and transport rings; no waveform samples are supplied by rkbx_link.
+// Player glass, jog LCD and transport rings; no waveform samples are supplied by rkbx_link.
 shader_type spatial;
 render_mode unshaded, shadows_disabled;
 global uniform float sv_beat;

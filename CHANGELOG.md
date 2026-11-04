@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.61.0-test2 — A generic club booth
+
+- The players and the mixer are generic club gear in the familiar layout, without real brand or model names.
+- Lit hot-cue pads in eight colours, a lit ring round each jog, lit channel cue buttons, a lit Beat FX screen.
+- Headphones lie on the table beside the gear.
+- The light sequencer no longer computes a lane gain that no light used.
+
 ## 0.61.0-test1 — Passages: one idea at a time
 
 - The show plays in passages of 16 or 32 bars. Each passage has one spatial idea: one group leads it, others

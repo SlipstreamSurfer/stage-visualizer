@@ -68,7 +68,7 @@ func _run() -> void:
 		check(is_equal_approx(top.position.y + (top.mesh as BoxMesh).size.y / 2.0, Hall.TABLE), "Keep table working height")
 		var occupied := []
 		for i in decks:
-			var player := hall.get_node("CDJ3000X_Deck%d" % (i + 1)) as Node3D
+			var player := hall.get_node("Player%d" % (i + 1)) as Node3D
 			check(is_equal_approx(player.position.y, Hall.TABLE), "Player feet stay on table")
 			check(is_equal_approx(player.position.z, Hall.BOOTH_Z - 0.53), "Do not move players away from DJ")
 			occupied.append(Vector2(player.position.x - 0.3446 / 2.0, player.position.x + 0.3446 / 2.0))

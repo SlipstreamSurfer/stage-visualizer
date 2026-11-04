@@ -23,7 +23,7 @@
 ![The hangar from the crowd: steel roof girders in the haze, beams crossing over raised hands](docs/screenshots/hangar-hall.jpg)
 
 SV is for someone who DJs at home and wants the real thing around them: one hall, one stage over the full width, one
-DJ booth with two CDJ-3000X players and a DJM-A9, flightcase edging and routed cables. Play from rekordbox or any
+DJ booth with two club players and a four-channel mixer in the familiar club layout, flightcase edging and routed cables. Play from rekordbox or any
 music on your computer, and a lighting designer runs the show: a mood for every genre, one palette per track,
 looks held for a phrase, a build-up that
 lowers the trusses, and a drop that opens the whole rig.
@@ -33,7 +33,7 @@ history of this repository, up to [v0.40.1](https://github.com/SlipstreamSurfer/
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/hangar-booth.jpg" alt="Through the DJ's eyes: two CDJ-3000X players and a DJM-A9, the stage row and the hall heads in front" width="100%"></td>
+    <td width="50%"><img src="docs/screenshots/hangar-booth.jpg" alt="Through the DJ's eyes: two club players and a four-channel mixer, the stage row and the hall heads in front" width="100%"></td>
     <td width="50%"><img src="docs/screenshots/hangar-drop.jpg" alt="The drop: the whole rig opens, blinders light the crowd" width="100%"></td>
   </tr>
   <tr>

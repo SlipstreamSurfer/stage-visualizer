@@ -1030,13 +1030,13 @@ func _direct(dt: float) -> void:
 		var part: int = rig.set_part[i]
 		var place: float = rig.set_place[i]
 		var v: float
-		if part >= 10:
-			v = ShowSet.frame(frames, part - 10, place, grid, kick_k) if not brk else 0.06 + 0.25 * sig.build
+		if part >= Rig.FRAME:
+			v = ShowSet.frame(frames, part - Rig.FRAME, place, grid, kick_k) if not brk else 0.06 + 0.25 * sig.build
 		elif brk:
 			v = 1.0 if place <= sig.build else ShowSet.DIM
 		else:
 			v = ShowSet.tube(tubes, part, place, grid, kick_k)
-		if melodic and part < 10 and posmod(hash("%d:%d" % [part, _dot_pick]), 3) != 0: v = maxf(v, _dot_flash)
+		if melodic and part < Rig.FRAME and posmod(hash("%d:%d" % [part, _dot_pick]), 3) != 0: v = maxf(v, _dot_flash)
 		if safe: v = minf(v, 0.4)
 		rig.set_levels[i] = _lamp((v * 0.8 + sig.drop * 0.4) * master) * pieces
 

@@ -44,6 +44,10 @@ func update(dt: float, show: Show) -> void:
 	elif _camera >= 3:
 		pos = [Vector3(0, 2.1, -8), Vector3(0, 2.8, 25), Vector3(12, 4.6, Hall.BOOTH_Z - 1.0)][_camera - 3]
 		look = Vector3(0, Hall.DECK + 3.0, Hall.BOOTH_Z + (5.0 if _camera == 5 else 0.0))
+		if Hall.venue == "room":
+			# in the room: from the far wall, from a high corner and from the side, all inside its walls
+			pos = [Vector3(0, Hall.DECK + 2.0, Hall.ROOM_Z1 - 1.2), Vector3(6.6, Hall.ROOM_TOP - 1.0, Hall.ROOM_Z1 - 1.0), Vector3(6.8, Hall.DECK + 3.0, Hall.BOOTH_Z - 1.0)][_camera - 3]
+			look = Vector3(0, Hall.DECK + 2.2, Hall.BOOTH_Z - 1.0)
 		fov = 72.0 if _camera == 3 else 68.0 if _camera == 5 else 60.0
 	else:
 		# a person standing: never quite still, a little give in the knees on the beat

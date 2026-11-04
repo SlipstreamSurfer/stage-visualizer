@@ -14,6 +14,13 @@ const BOOTH_Z := -33.0      # the front of the DJ table
 const RISER := 0.4
 const TABLE := DECK + RISER + 1.05
 const BARRIER := -24.0
+# The place: "hangar" (the festival hall) or "room" (only the DJ, in a closed room full of light).
+static var venue := "hangar"
+# The room: 16 × 16 m round the booth, its floor at the deck's height so the booth and the cameras stay put.
+const ROOM_X := 8.0
+const ROOM_Z0 := -42.4
+const ROOM_Z1 := -26.4
+const ROOM_TOP := DECK + 7.0
 
 @export_enum("Two decks:2", "Festival — four decks:4") var booth_decks := 2
 var screens: Array[ShaderMaterial] = []
@@ -29,6 +36,9 @@ var stage_screen_material: ShaderMaterial
 
 func build() -> void:
 	var black := Kit.mat(Color(0.018, 0.018, 0.02), 0.8)
+	if venue == "room":
+		_room(black)
+		return
 	var frame := _hall_material(Color(0.17, 0.20, 0.19), 0.73, 0.12, 0.3)
 	var boxes := Kit.Batch.new(Kit.unit_box(), frame)
 	var dark := Kit.Batch.new(Kit.unit_box(), black)
@@ -79,8 +89,35 @@ func build() -> void:
 	boxes.build(self)
 	dark.build(self)
 
+# A closed room: dark concrete floor, walls and ceiling that take the colour of the light, the booth in the middle,
+# a screen on the wall in front of the DJ, and haze that fills it.
+func _room(black: Material) -> void:
+	var size := Vector3(ROOM_X * 2.0, ROOM_TOP - DECK, ROOM_Z1 - ROOM_Z0)
+	var middle := Vector3(0.0, DECK, (ROOM_Z0 + ROOM_Z1) / 2.0)
+	var floor_mesh := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(size.x, size.z)
+	floor_mesh.mesh = plane
+	floor_mesh.material_override = _concrete()
+	floor_mesh.position = middle + Vector3(0.0, 0.001, 0.0)
+	add_child(floor_mesh)
+	var walls := Kit.Batch.new(Kit.unit_box(), _hall_material(Color(0.07, 0.07, 0.075), 0.9, 0.0, 0.45))
+	walls.add(Kit.block(Vector3(size.x, DECK, size.z), middle - Vector3(0.0, DECK / 2.0, 0.0)))   # the slab under the floor
+	walls.add(Kit.block(Vector3(size.x + 0.6, 0.3, size.z + 0.6), middle + Vector3(0.0, size.y + 0.15, 0.0)))
+	for side in [-1.0, 1.0]:
+		walls.add(Kit.block(Vector3(0.3, size.y, size.z), middle + Vector3(side * (ROOM_X + 0.15), size.y / 2.0, 0.0)))
+		walls.add(Kit.block(Vector3(size.x, size.y, 0.3), middle + Vector3(0.0, size.y / 2.0, side * (size.z / 2.0 + 0.15))))
+	walls.build(self).name = "RoomWalls"
+	var dark := Kit.Batch.new(Kit.unit_box(), black)
+	dark.add(Kit.block(Vector3(6, RISER, 3.2), Vector3(0, DECK + RISER / 2, BOOTH_Z - 0.6)))
+	dark.build(self)
+	_stage_screen()
+	_booth(black)
+	_fog("RoomHaze", middle + Vector3(0.0, size.y / 2.0, 0.0), size - Vector3(0.4, 0.4, 0.4), 0.016)
+
 func _stage_screen() -> void:
 	var center := Vector3(0, DECK + 2.8 + 3.5, -36.3)
+	if venue == "room": center = Vector3(0, DECK + 3.6, ROOM_Z1 - 0.12)
 	var frame := Kit.mat(Color(0.012, 0.012, 0.014), 0.8)
 	stage_screen = Node3D.new()
 	stage_screen.name = "StageScreen"
@@ -95,6 +132,12 @@ func _stage_screen() -> void:
 	face.material_override = stage_screen_material
 	face.position = center
 	stage_screen.add_child(face)
+	if venue == "room":
+		# on the wall in front of the DJ, smaller, turned to face the booth
+		for child in stage_screen.get_children():
+			child.position = center + (child.position - center) * Vector3(0.55, 0.55, -0.55)   # its frame behind it
+			child.scale = Vector3(0.55, 0.55, 0.55)
+			child.rotation.y = PI
 
 # Two floor hazers at the rear, with recessed outlets facing the crowd.
 func _hazers(boxes: Kit.Batch, dark: Kit.Batch) -> void:

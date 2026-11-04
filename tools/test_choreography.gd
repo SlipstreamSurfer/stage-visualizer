@@ -34,7 +34,6 @@ func _run() -> void:
 		var head_looks := {}
 		var combos := {}
 		var block_lengths := {}
-		var lowest_gain := 1.0
 		var wash_sum := 0.0
 		var wash_n := 0
 		var most_hues := 0
@@ -83,7 +82,6 @@ func _run() -> void:
 			head_looks[show.head_name] = true
 			if not breaking:
 				block_lengths[show._blk_len] = true
-				lowest_gain = minf(lowest_gain, minf(minf(show.seq_gain[0], show.seq_gain[1]), minf(show.seq_gain[2], show.seq_gain[3])))
 			combos[show.head_name + " | " + show.stack_name] = true
 			if listen.section in ["groove", "peak"] and b > 40.0:
 				for fixture in rig.fixtures:
@@ -100,7 +98,7 @@ func _run() -> void:
 			measured += 1
 		var result := {"mean_lit": total / measured, "min_lit": minimum, "max_lit": maximum,
 			"dark_frames": dark, "frames": measured, "looks": looks.size(), "formations": spaces.size(), "longest_rest_beats": longest_rest,
-			"head_looks": head_looks.size(), "combos": combos.size(), "block_lengths": block_lengths.keys().size(), "lowest_gain": lowest_gain, "wash_mean": wash_sum / maxf(1.0, wash_n), "most_hues": most_hues}
+			"head_looks": head_looks.size(), "combos": combos.size(), "block_lengths": block_lengths.keys().size(), "wash_mean": wash_sum / maxf(1.0, wash_n), "most_hues": most_hues}
 		results[genre] = result
 		print(genre, " ", JSON.stringify(result))
 		var row_count := rig.fixtures.filter(func(f): return f.group == "front").size()
@@ -119,11 +117,11 @@ func _run() -> void:
 		if genre == raw_genre and (result.combos < result.head_looks or result.wash_mean > 0.75 * results["techno-peak-time-driving"].wash_mean):
 			printerr("Raw / Deep / Hypnotic stack or wash contract failed: ", JSON.stringify(result))
 			failed = true
-		# ...played by the light sequencer: blocks of several lengths, and the lanes pulse on the grid.
-		if genre == raw_genre and (result.block_lengths < 2 or result.lowest_gain > 0.7):
+		# ...held in sequencer blocks of several lengths.
+		if genre == raw_genre and (result.block_lengths < 2):
 			printerr("Raw / Deep / Hypnotic sequencer contract failed: ", JSON.stringify(result))
 			failed = true
-		if genre != raw_genre and (result.lowest_gain != 1.0 or result.block_lengths > 1):
+		if genre != raw_genre and (result.block_lengths > 1):
 			printerr("Another genre is sequenced: ", genre, " ", JSON.stringify(result))
 			failed = true
 		# Each genre keeps its figures and can play several spatial combinations per figure.

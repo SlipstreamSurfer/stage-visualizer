@@ -200,10 +200,7 @@ var _blk_start := 0          # the bar the block began on
 var _blk_len := 8            # its length in bars
 var _blk_index := 0
 var _blk_section := ""
-var _seq_step := -1
 var _seq_bar := -1
-var _seq_env := [0.0, 0.0, 0.0, 0.0]    # the hits of the lanes, falling away between them
-var seq_gain := [1.0, 1.0, 1.0, 1.0]    # what each lane does to the light now: 1 when nothing, down to 1 - depth between hits
 var seq_text := ""
 var _multi_was := false
 var _head_recent: Array = []   # the head looks that played last (Raw / Deep / Hypnotic does not repeat them at once)
@@ -312,10 +309,9 @@ func _stack(look: Array, tier: String) -> Array:
 
 # The sequencer, once a frame: the bar line and the step of the beat grid, a new block on its first bar (and with it a
 # new scene, and another every eight bars of a long block), and the hits of each lane. The depth of a hit is 45%; with gentle strobes quarter notes and 20%.
-func _sequence(dt: float, grid: float, sec: String) -> void:
+func _sequence(_dt: float, grid: float, sec: String) -> void:
 	var salt := hash("%s:%s:%d" % [genre, title, _palette])
 	var bar := floori(grid / 4.0)
-	var step := floori(grid * 4.0)
 	if bar < _blk_start or bar >= _blk_start + _blk_len or sec != _blk_section:
 		var first := _blk_section == "" or bar < _blk_start
 		_blk_index = 0 if first else _blk_index + 1
@@ -324,17 +320,6 @@ func _sequence(dt: float, grid: float, sec: String) -> void:
 		_blk_len = LightSequencer.length_for(sec, _blk_index, salt)
 	# Scenes change with the passage (passage.gd), not with every block: the block only keeps the grid.
 	_seq_bar = bar
-	if step != _seq_step:
-		_seq_step = step
-		for lane in LightSequencer.LANES:
-			if LightSequencer.hit(LightSequencer.pattern(lane, _blk_index, bar - _blk_start, _blk_len, safe, salt), step): _seq_env[lane] = 1.0
-	var depth := 0.2 if safe else 0.45
-	for lane in LightSequencer.LANES:
-		_seq_env[lane] *= exp(-dt * 5.0)
-		var mask := LightSequencer.pattern(lane, _blk_index, bar - _blk_start, _blk_len, safe, salt)
-		if not safe and lane == 2 and mask in [0x5555, 0xFFFF]:
-			seq_gain[lane] = 0.25 + 0.75 * LightSequencer.pulse(mask, grid)
-		else: seq_gain[lane] = 1.0 - depth + depth * _seq_env[lane]
 	seq_text = "bar %d of %d · block %d" % [bar - _blk_start + 1, _blk_len, _blk_index + 1]
 
 # Where a beam may be aimed: inside the hall. The moves scale with the distance of their target, so a combination of a far
@@ -733,7 +718,6 @@ func _direct(dt: float) -> void:
 			_pending = {}
 
 	if _multi() and not brk: _sequence(dt, sig.phase_clock, sec)
-	else: seq_gain = [1.0, 1.0, 1.0, 1.0]
 
 	# One passage at a time: a new one is a new scene, and the room, the bars and the episodes follow it.
 	if not mood.flow and passage.update(sig.phase_clock, sec, ev.drop, tune.groups, "%s:%s" % [genre, title]):

@@ -98,6 +98,7 @@ func _ready() -> void:
 	if args.has("seed"): seed(int(args.seed))
 	for n in ["sv_beat", "sv_energy", "sv_hands", "sv_haze", "sv_phones"]:
 		RenderingServer.global_shader_parameter_add(n, RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 1.0 if n == "sv_haze" else 0.0)
+	Hall.venue = str(args.get("venue", settings.values.get("venue", "hangar")))
 	hall = Hall.new()
 	add_child(hall)
 	hall.build()
@@ -106,7 +107,7 @@ func _ready() -> void:
 	rig.build()
 	crowd = Crowd.new()
 	add_child(crowd)
-	crowd.build(3000)
+	crowd.build(0 if Hall.venue == "room" else 3000)   # the room has no crowd: only the DJ
 	_environment()
 	view = View.new()
 	add_child(view)
@@ -282,6 +283,10 @@ func _hud() -> void:
 
 # The source and the graphics, from the settings screen (and once at the start).
 func _apply_settings(options: Dictionary) -> void:
+	# another place is another build: the scene loads again, in the new place
+	if str(options.get("venue", Hall.venue)) != Hall.venue and not args.has("venue"):
+		get_tree().call_deferred("reload_current_scene")
+		return
 	if hall.stage_screen: hall.stage_screen.visible = bool(options.get("stage_screen", true))
 	show.genre = options.get("genre", show.genre)
 	show.safe = args.has("safe") or bool(options.get("safe", show.safe))

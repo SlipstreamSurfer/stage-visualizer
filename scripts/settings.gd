@@ -6,10 +6,12 @@ signal applied(options: Dictionary)
 signal closed
 
 const DEFAULTS := {"source": "both", "device": "", "track": "", "latency": 0.08, "quality": "auto", "genre": "auto", "osc_port": 4460,
-	"rekordbox_local": false, "setup_done": false, "safe": false, "stage_screen": true, "screen": -1, "fullscreen": false, "fps_limit": 60, "camera": 1}
+	"rekordbox_local": false, "setup_done": false, "safe": false, "stage_screen": true, "screen": -1, "fullscreen": false, "fps_limit": 60, "camera": 1, "venue": "hangar"}
 const SOURCES := ["system", "both", "rekordbox", "file"]
 const SOURCE_LABELS := ["System audio", "System audio + rekordbox", "Rekordbox", "Music file"]
 const QUALITIES := ["auto", "low", "light", "normal", "high", "ultra"]
+const VENUES := ["hangar", "room"]
+const VENUE_LABELS := ["Hangar: a festival stage", "Room: only you and the light"]
 
 var values := DEFAULTS.duplicate()
 var config_path := "user://settings.cfg"
@@ -18,6 +20,7 @@ var _audio_state := {}
 var _root: Control
 var _source: OptionButton
 var _genre: OptionButton
+var _venue: OptionButton
 var _device: OptionButton
 var _track: LineEdit
 var _latency: SpinBox
@@ -95,8 +98,9 @@ func _save_config(config: ConfigFile) -> Error:
 
 static func _validated(options: Dictionary) -> Dictionary:
 	var result := DEFAULTS.duplicate()
-	for key in ["source", "device", "track", "quality", "genre"]:
+	for key in ["source", "device", "track", "quality", "genre", "venue"]:
 		if options.get(key) is String: result[key] = options[key]
+	if result.venue not in VENUES: result.venue = DEFAULTS.venue
 	if result.genre not in Show.GENRE_ORDER: result.genre = DEFAULTS.genre
 	if result.source not in SOURCES: result.source = DEFAULTS.source
 	if result.quality not in QUALITIES: result.quality = DEFAULTS.quality
@@ -193,6 +197,12 @@ func _ready() -> void:
 	_genre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	for id in Show.GENRE_ORDER: _genre.add_item(Show.genre_name(id))
 	_row(show_options, "Genre", _genre)
+	_venue = OptionButton.new()
+	_venue.fit_to_longest_item = false
+	_venue.custom_minimum_size.x = 280
+	_venue.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	for text in VENUE_LABELS: _venue.add_item(text)
+	_row(show_options, "Place", _venue)
 	_source.item_selected.connect(func(_index: int): _source_rows())
 	_device = OptionButton.new()
 	_device.fit_to_longest_item = false
@@ -287,6 +297,7 @@ func _row(parent: VBoxContainer, caption: String, control: Control) -> HBoxConta
 func _sync() -> void:
 	_source.select(SOURCES.find(values.source))
 	_genre.select(Show.GENRE_ORDER.find(values.genre))
+	_venue.select(maxi(0, VENUES.find(values.get("venue", "hangar"))))
 	_device.clear()
 	_device.add_item("Automatic / default")
 	_device.set_item_metadata(0, "")
@@ -330,7 +341,7 @@ func _source_rows() -> void:
 
 func _apply() -> void:
 	var options := values.duplicate()
-	options.merge({"source": SOURCES[_source.selected], "genre": Show.GENRE_ORDER[_genre.selected], "device": _device.get_selected_metadata(),
+	options.merge({"source": SOURCES[_source.selected], "genre": Show.GENRE_ORDER[_genre.selected], "venue": VENUES[_venue.selected], "device": _device.get_selected_metadata(),
 		"track": _track.text.strip_edges(), "latency": _latency.value / 1000.0,
 		"quality": QUALITIES[_quality.selected], "osc_port": int(_port.value), "rekordbox_local": _rekordbox_page.same_computer,
 		"safe": _safe.button_pressed, "stage_screen": _stage_screen.button_pressed, "fullscreen": _fullscreen.button_pressed,

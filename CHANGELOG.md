@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.61.0-test4 — Every move on the beat
+
+- Heads no longer turn, drift or circle on a clock of their own. Every head moves in steps on the beat: a step
+  lands on the kick and holds until the next one. Each passage picks a motion: scissors (odd and even cross),
+  a nod of the whole rig, a fan that opens and closes, a ladder that travels along and up, or a wave.
+- Two beats a step, every beat in the second half of a peak; in a break a step a bar, growing with the build.
+  A clap nods the rig a little. Gobos turn with the tempo.
+- A second place, Room (Settings → Show → Place): only the DJ and the booth in a closed 16 × 16 m room full of
+  light. A grid of beams in the ceiling, three rows of beams and spots on the wall behind the DJ, a row of floor
+  beams in front of the booth, beams on the wall ahead, on both side walls and in two corner towers, spots round
+  the ceiling, LED tubes floor to ceiling on every wall, rings and two LED frames round a screen on the wall
+  ahead, and LED bars along the foot of the walls. The same show plays it; cameras 3–5 stay inside the room.
+- Beam rain is removed, and so are the dot grid on the far wall and the rings under the rear truss.
+- A stage set in the main stage: two LED frames round the centre screen, six vertical LED tubes between the towers
+  in a V (tall at the outside) and a grid of LED rings on the back wall. The rings swell on the kick; per passage
+  the tubes rise, drop, pulse or alternate and the frames orbit, take turns or hit on the kick; in quiet moments
+  the tubes flash on the melody, in a break they fill with the build, and a drop lights the whole set.
+- More rhythm in the light, in every genre: besides the chases the lead can fill up beat by beat, pump with the
+  kick, sparkle on the sixteenths, bounce between the edges and the middle, or split left and right. The supporting
+  groups pump with the kick under it (not with gentle strobes).
+
 ## 0.61.0-test3 — Rings, dots and beam rain
 
 - LED rings under the rear truss and on the back towers: a full circle that swells on every kick.

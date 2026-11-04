@@ -97,17 +97,23 @@ var laser_spread := 0.6
 var laser_tilt := 0.0
 var laser_pan := 0.0
 var beam_strength := 1.0
-# Set pieces: LED rings that swell on the kick, and a grid of dots that flashes on the melody. The show sets their
-# levels (0..1) and one colour; they light only themselves, so they cost no lights.
+# The stage set: a grid of LED rings on the back wall, vertical LED tubes between the towers (a V, tall at the
+# outside), and two LED frames round the centre screen. The show sets every level (0..1) and the colours; the set
+# lights only itself, so it costs no lights. Tube and frame pixels share one batch.
 var ring_levels := PackedFloat32Array()
-var dot_levels := PackedFloat32Array()
 var ring_at: Array[Vector3] = []
-var dot_at: Array[Vector3] = []
+var set_pixels: Array[Vector3] = []
+var set_part := PackedInt32Array()      # per pixel: a tube (0, 1, ...), or FRAME the inner frame, FRAME + 1 the outer one
+const FRAME := 100
+var _frame_sizes: Array = []
+var _frame_centre := Vector3.ZERO
+var set_place := PackedFloat32Array()   # per pixel: up a tube 0..1, or round a frame 0..1 (from the bottom middle)
+var set_levels := PackedFloat32Array()
 var piece_color := Color.WHITE
+var frame_color := Color.WHITE
 var _rings: MultiMesh
-var _dots: MultiMesh
-const DOT_COLUMNS := 18
-const DOT_ROWS := 7
+var _set: MultiMesh
+const TUBES := [[-18.0, 13.4], [-12.0, 11.8], [-6.0, 10.2], [6.0, 10.2], [12.0, 11.8], [18.0, 13.4]]   # x, top
 var _blinder_glow := 0.0
 var _by_kind := [[], [], []]
 var _mm := []              # per kind: {base, yoke, head, lens, beam}
@@ -182,6 +188,51 @@ func build() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--trusses="): shape = a.get_slice("=", 1)
 
+	if Hall.venue == "room": _room_rig(chords, braces, plates, feet)
+	else: _hangar_rig(chords, braces, plates, mounts, safeties, feet, F)
+
+	chords.build(self)
+	braces.build(self)
+	plates.build(self)
+	mounts.build(self).name = "DelayMounts"
+	safeties.build(self).name = "DelaySafeties"
+	feet.build(self).name = "TowerFeet"
+
+	var room := Hall.venue == "room"
+	var x_half := Hall.ROOM_X if room else 21.0
+	var z_near := Hall.ROOM_Z0 if room else Hall.FRONT
+	var z_far := Hall.ROOM_Z1 if room else 26.0
+	for f in fixtures:
+		f.x01 = clampf((f.mount.x + x_half) / (2.0 * x_half), 0.0, 1.0)
+		f.z01 = clampf((f.mount.z - z_near) / (z_far - z_near), 0.0, 1.0)
+		f.stage = f.group in ["front", "back", "roof"]
+	for b in battens:
+		b.x01 = clampf((b.mount.x + x_half) / (2.0 * x_half), 0.0, 1.0)
+		b.z01 = clampf((b.mount.z - z_near) / (z_far - z_near), 0.0, 1.0)
+	for i in fixtures.size():
+		fixtures[i].idx = i
+		fixtures[i].rp = randf()
+		fixtures[i].rt = randf()
+	for k in 3: _mm.append(_kind_batches(k))
+	_batten_batches()
+	_set_pieces()
+	if LASERS: _laser_batches()
+	# the strobes light the hall through a few shared lamps
+	var lamps := [Vector3(0, Hall.ROOM_TOP - 1.0, -34.4), Vector3(0, Hall.DECK + 2.5, -28.0)] if room else [Vector3(0, 9, Hall.BACK + 2), Vector3(0, 3, F - 0.5), Vector3(0, 10.5, -8), Vector3(0, 10, 22)]
+	for p in lamps:
+		var o := OmniLight3D.new()
+		o.position = p
+		o.omni_range = 30
+		o.light_energy = 0.0
+		o.light_color = Color(0.92, 0.95, 1.0)
+		o.light_volumetric_fog_energy = 0.12
+		o.visible = false
+		add_child(o)
+		_strobe_lights.append(o)
+
+# Two omega rails under each fixed delay head, clamped round the crossbar's upper chords.
+# The closed safety loop joins the base to the bar independently of those rails.
+func _hangar_rig(chords: Kit.Batch, braces: Kit.Batch, plates: Kit.Batch, mounts: Kit.Batch, safeties: Kit.Batch, feet: Kit.Batch, F: float) -> void:
 	# front: beams along the edge of the deck, with a gap where the PA hangs, battens between them
 	for k in 30:
 		var x := -20.3 + k * 1.4
@@ -223,8 +274,8 @@ func build() -> void:
 		t.position = Vector3(0, TRUSS_Y[i], TRUSS_Z[i])
 		add_child(t)
 		trusses.append(t)
-		var c := Kit.Batch.new(Kit.unit_tube(), alu)
-		var b := Kit.Batch.new(Kit.unit_tube(), alu)
+		var c := Kit.Batch.new(Kit.unit_tube(), chords.material)
+		var b := Kit.Batch.new(Kit.unit_tube(), chords.material)
 		if shape == "v":
 			Kit.truss(c, b, Vector3(-19, 0, V_DEPTH), Vector3(0, 0, 0))
 			Kit.truss(c, b, Vector3(0, 0, 0), Vector3(19, 0, V_DEPTH))
@@ -293,42 +344,68 @@ func build() -> void:
 				f.xn = s
 			_batten("side", Vector3(x - s * 0.22, 5.25, z), -1, Vector3.UP, Vector3(-s, 0, 0), (z + 19.0) / 40.0)
 
-	chords.build(self)
-	braces.build(self)
-	plates.build(self)
-	mounts.build(self).name = "DelayMounts"
-	safeties.build(self).name = "DelaySafeties"
-	feet.build(self).name = "TowerFeet"
 
-	for f in fixtures:
-		f.x01 = clampf((f.mount.x + 21.0) / 42.0, 0.0, 1.0)
-		f.z01 = clampf((f.mount.z - Hall.FRONT) / (26.0 - Hall.FRONT), 0.0, 1.0)
-		f.stage = f.group in ["front", "back", "roof"]
-	for b in battens:
-		b.x01 = clampf((b.mount.x + 21.0) / 42.0, 0.0, 1.0)
-		b.z01 = clampf((b.mount.z - Hall.FRONT) / (26.0 - Hall.FRONT), 0.0, 1.0)
-	for i in fixtures.size():
-		fixtures[i].idx = i
-		fixtures[i].rp = randf()
-		fixtures[i].rt = randf()
-	for k in 3: _mm.append(_kind_batches(k))
-	_batten_batches()
-	_set_pieces()
-	if LASERS: _laser_batches()
-	# the strobes light the hall through a few shared lamps
-	for p in [Vector3(0, 9, Hall.BACK + 2), Vector3(0, 3, F - 0.5), Vector3(0, 10.5, -8), Vector3(0, 10, 22)]:
-		var o := OmniLight3D.new()
-		o.position = p
-		o.omni_range = 30
-		o.light_energy = 0.0
-		o.light_color = Color(0.92, 0.95, 1.0)
-		o.light_volumetric_fog_energy = 0.12
-		o.visible = false
-		add_child(o)
-		_strobe_lights.append(o)
+# The room: light on every surface round the DJ. A grid of beams in the ceiling (the "hall" group), three rows of
+# beams and a row of spots on the wall behind the DJ ("back"), a row of beams on the floor in front of the booth
+# ("front"), beams on the wall the DJ faces ("rear"), on both side walls ("side"), in the two far corners
+# ("delay"), spots round the ceiling's edge ("roof"), washes in the ceiling, and LED bars along the foot of the walls.
+func _room_rig(chords: Kit.Batch, braces: Kit.Batch, plates: Kit.Batch, feet: Kit.Batch) -> void:
+	var top := Hall.ROOM_TOP
+	var base_y := Hall.DECK
+	var x0 := Hall.ROOM_X
+	var z0 := Hall.ROOM_Z0
+	var z1 := Hall.ROOM_Z1
+	# a ceiling grid of pipes, the beams hanging from it
+	for i in 4:
+		var z := z0 + 2.5 + i * 3.8
+		chords.add(Kit.tube(Vector3(-x0 + 0.5, top - 0.25, z), Vector3(x0 - 0.5, top - 0.25, z), 0.025))
+		for k in 5:
+			var x := -6.0 + k * 3.0
+			_add(BEAM, "hall", Vector3(x, top - 0.45, z), Vector3.DOWN, -1, k / 4.0, i)
+		for x in [-4.5, 4.5]: _add(WASH, "hall", Vector3(x, top - 0.45, z + 1.9), Vector3.DOWN, -1, 0.5 + x / 9.0, i)
+	# behind the DJ: three rows of beams and a row of spots on the wall
+	for k in 6:
+		var x := -6.25 + k * 2.5
+		for j in 3: _add(BEAM, "back", Vector3(x, base_y + 1.4 + j * 1.6, z0 + 0.35), Vector3.BACK, -1, k / 5.0, j)
+		_add(SPOT, "back", Vector3(x, top - 0.9, z0 + 0.4), Vector3.BACK, -1, k / 5.0, 3)
+	# on the base_y in front of the booth, a row of beams pointing up
+	for k in 12:
+		var x := -6.6 + k * 1.2
+		_add(BEAM, "front", Vector3(x, base_y, -29.6), Vector3.UP, -1, k / 11.0, 0)
+		plates.add(Kit.block(Vector3(0.45, 0.04, 0.45), Vector3(x, base_y + 0.02, -29.6)))
+	# the wall in front of the DJ: beams in a row under the ceiling, looking back into the room
+	for k in 10:
+		var x := -6.75 + k * 1.5
+		_add(BEAM, "rear", Vector3(x, top - 1.2, z1 - 0.35), Vector3.FORWARD, -1, k / 9.0, 0)
+	# both side walls: two heights
+	for s in [-1.0, 1.0]:
+		for i in 4:
+			var z := z0 + 2.0 + i * 4.0
+			for j in 2:
+				var f := _add(BEAM, "side", Vector3(s * (x0 - 0.35), base_y + 2.0 + j * 2.6, z), Vector3(-s, 0, 0), -1, i / 3.0, j)
+				f.xn = s
+	# the two far corners: a column of beams each, on a short tower
+	for s in [-1.0, 1.0]:
+		var x: float = s * (x0 - 0.8)
+		var z := z1 - 0.8
+		Kit.truss(chords, braces, Vector3(x, base_y, z), Vector3(x, base_y + 4.5, z), 0.3)
+		feet.add(Kit.block(Vector3(0.6, 0.05, 0.6), Vector3(x, base_y + 0.025, z)))
+		for j in 4:
+			var f := _add(BEAM, "delay", Vector3(x + (j - 1.5) * 0.35, base_y + 4.7, z), Vector3.UP, -1, j / 3.0, 0)
+			f.xn = s
+	# spots round the edge of the ceiling
+	for k in 8:
+		var a := TAU * (k + 0.5) / 8.0
+		_add(SPOT, "roof", Vector3(sin(a) * (x0 - 1.2), top - 0.45, -34.4 + cos(a) * 6.8), Vector3.DOWN, -1, k / 7.0, 0)
+	# LED bars along the foot of all four walls, facing into the room
+	for s in [-1.0, 1.0]:
+		for i in 7:
+			var z := z0 + 1.6 + i * 2.2
+			_batten("side", Vector3(s * (x0 - 0.12), base_y + 0.25, z), -1, Vector3(0, 0, 1), Vector3(-s, 0, 0), i / 6.0)
+		for i in 7:
+			var x := -6.6 + i * 2.2
+			_batten("back" if s < 0 else "rear", Vector3(x, base_y + 0.25, (z0 + 0.12) if s < 0 else (z1 - 0.12)), -1, Vector3.RIGHT, Vector3.BACK if s < 0 else Vector3.FORWARD, i / 6.0)
 
-# Two omega rails under each fixed delay head, clamped round the crossbar's upper chords.
-# The closed safety loop joins the base to the bar independently of those rails.
 func _delay_mount(mounts: Kit.Batch, safeties: Kit.Batch, at: Vector3) -> void:
 	for dx in [-0.105, 0.105]:
 		mounts.add(Kit.tube(at + Vector3(dx, -0.015, -0.19), at + Vector3(dx, -0.015, 0.19), 0.015))
@@ -510,36 +587,84 @@ func _yoke_mesh(r: float) -> ArrayMesh:
 	return st.commit()
 
 func _set_pieces() -> void:
-	var facing_stage := Basis(Vector3.RIGHT, PI / 2.0)   # a torus lies flat; stood up, it faces along Z
-	var xfs: Array[Transform3D] = []
-	# under the rear truss, between its beams, facing the stage and the DJ
-	for k in 8:
-		ring_at.append(Vector3(-15.75 + k * 4.5, 9.75, 26.3))
-	# on the back towers, below their beams, facing the hall
-	for k in 8:
-		ring_at.append(Vector3(-21.0 + k * 6.0, 4.4, Hall.BACK + 1.35))
-	for at in ring_at: xfs.append(Transform3D(facing_stage, at))
+	var room := Hall.venue == "room"
+	var wall := Hall.BACK + 0.45
+	var material := Kit.shader("res://shaders/batten_pixel.gdshader", {"gain": 6.0})
+	var facing_z := Basis(Vector3.RIGHT, PI / 2.0)   # a torus lies flat; stood up, it faces along Z
+	var ring_bases: Array[Basis] = []
+	if room:
+		# rings on the wall in front of the DJ, either side of the screen, low and high
+		for x in [-6.1, -3.5, 3.5, 6.1]:
+			for y in [Hall.DECK + 1.6, Hall.DECK + 5.6]:
+				ring_at.append(Vector3(x, y, Hall.ROOM_Z1 - 0.15))
+				ring_bases.append(facing_z)
+	else:
+		# rings on the back wall in the gaps between the towers, low and high
+		for x in [-18.0, -12.0, -6.0, 6.0, 12.0, 18.0]:
+			for y in [3.6, 13.9]:
+				ring_at.append(Vector3(x, y, wall))
+				ring_bases.append(facing_z)
 	var torus := TorusMesh.new()
-	torus.inner_radius = 0.5
-	torus.outer_radius = 0.6
+	torus.inner_radius = 0.42 if room else 0.55
+	torus.outer_radius = 0.5 if room else 0.66
 	torus.rings = 48
 	torus.ring_segments = 8
-	var material := Kit.shader("res://shaders/batten_pixel.gdshader", {"gain": 6.0})
 	_rings = _multimesh(torus, ring_at.size(), material, true, false, false)
-	for i in xfs.size(): _rings.set_instance_transform(i, xfs[i])
-	# a grid of dots on the far wall, over the crowd, seen from the booth
-	for r in DOT_ROWS:
-		for c in DOT_COLUMNS:
-			dot_at.append(Vector3(-20.4 + c * 2.4, 4.0 + r * 1.35, Hall.D / 2.0 - 0.35))
-	var dot := SphereMesh.new()
-	dot.radius = 0.14
-	dot.height = 0.28
-	dot.radial_segments = 10
-	dot.rings = 5
-	_dots = _multimesh(dot, dot_at.size(), material, true, false, false)
-	for i in dot_at.size(): _dots.set_instance_transform(i, Transform3D(Basis.IDENTITY, dot_at[i]))
+	for i in ring_at.size(): _rings.set_instance_transform(i, Transform3D(ring_bases[i], ring_at[i]))
 	ring_levels.resize(ring_at.size())
-	dot_levels.resize(dot_at.size())
+	# tubes: [bottom, top] of each, one pixel every 40 cm; in the room they stand on every wall, floor to ceiling
+	var tubes: Array = []
+	if room:
+		var low := Hall.DECK + 0.6
+		var high := Hall.ROOM_TOP - 0.5
+		for x in [-5.0, -2.5, 0.0, 2.5, 5.0]: tubes.append([Vector3(x, low, Hall.ROOM_Z0 + 0.15), high])
+		for side in [-1.0, 1.0]:
+			for z in [-38.4, -34.4, -30.4]: tubes.append([Vector3(side * (Hall.ROOM_X - 0.15), low, z), high])
+		for x in [-7.4, -4.8, -2.2, 2.2, 4.8, 7.4]: tubes.append([Vector3(x, low, Hall.ROOM_Z1 - 0.15), high - 1.6])
+	else:
+		for t in TUBES: tubes.append([Vector3(t[0], Hall.DECK + 3.3, wall + 0.05), t[1]])
+	for t in tubes.size():
+		var bottom: Vector3 = tubes[t][0]
+		var top: float = tubes[t][1]
+		var n := int((top - bottom.y) / 0.4) + 1
+		for i in n:
+			set_pixels.append(bottom + Vector3(0.0, i * 0.4, 0.0))
+			set_part.append(t)
+			set_place.append(float(i) / float(n - 1))
+	# frames round the screen: one close round it, one taller and wider outside it
+	var centre := Vector3(0.0, Hall.DECK + 3.6, Hall.ROOM_Z1 - 0.2) if room else Vector3(0.0, Hall.DECK + 6.3, -36.05)
+	_frame_sizes = [Vector2(3.15, 4.3), Vector2(3.8, 5.8)] if room else [Vector2(5.7, 7.8), Vector2(6.9, 10.6)]
+	_frame_centre = centre
+	for f in 2:
+		var size: Vector2 = _frame_sizes[f]
+		var perimeter := 2.0 * (size.x + size.y)
+		var n := int(perimeter / 0.35)
+		for i in n:
+			var d := float(i) / float(n) * perimeter
+			# from the bottom middle round to the right, up, across the top and down the left
+			var at := Vector2.ZERO
+			var hx := size.x / 2.0
+			var hy := size.y / 2.0
+			if d < hx: at = Vector2(d, -hy)
+			elif d < hx + size.y: at = Vector2(hx, -hy + (d - hx))
+			elif d < hx + size.y + size.x: at = Vector2(hx - (d - hx - size.y), hy)
+			elif d < hx + 2.0 * size.y + size.x: at = Vector2(-hx, hy - (d - hx - size.y - size.x))
+			else: at = Vector2(-hx + (d - hx - 2.0 * size.y - size.x), -hy)
+			set_pixels.append(centre + Vector3(at.x, at.y, (-0.02 if room else 0.02) * f))
+			set_part.append(FRAME + f)
+			set_place.append(float(i) / float(n))
+	var pixel := BoxMesh.new()
+	pixel.size = Vector3(0.16, 0.3, 0.08)
+	_set = _multimesh(pixel, set_pixels.size(), material, true, false, false)
+	for i in set_pixels.size():
+		var basis := Basis.IDENTITY
+		# a frame's pixels lie along their edge
+		if set_part[i] >= FRAME:
+			var local := set_pixels[i] - _frame_centre
+			var size: Vector2 = _frame_sizes[set_part[i] - FRAME]
+			if absf(absf(local.y) - size.y / 2.0) < 0.01: basis = Basis(Vector3.BACK, PI / 2.0)
+		_set.set_instance_transform(i, Transform3D(basis, set_pixels[i]))
+	set_levels.resize(set_pixels.size())
 
 func _batten_batches() -> void:
 	var body := BoxMesh.new()
@@ -675,9 +800,9 @@ func update(dt: float, beat: float) -> void:
 	for i in ring_at.size():
 		var c := piece_color * ring_levels[i]
 		_rings.set_instance_color(i, Color(c.r, c.g, c.b, 1.0))
-	for i in dot_at.size():
-		var c := piece_color * dot_levels[i]
-		_dots.set_instance_color(i, Color(c.r, c.g, c.b, 1.0))
+	for i in set_pixels.size():
+		var c := (frame_color if set_part[i] >= FRAME else piece_color) * set_levels[i]
+		_set.set_instance_color(i, Color(c.r, c.g, c.b, 1.0))
 	for o in _strobe_lights:
 		o.visible = strobe > 0.02
 		o.light_energy = 16.0 * strobe

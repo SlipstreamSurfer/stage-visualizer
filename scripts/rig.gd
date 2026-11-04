@@ -97,17 +97,20 @@ var laser_spread := 0.6
 var laser_tilt := 0.0
 var laser_pan := 0.0
 var beam_strength := 1.0
-# Set pieces: LED rings that swell on the kick, and a grid of dots that flashes on the melody. The show sets their
-# levels (0..1) and one colour; they light only themselves, so they cost no lights.
+# The stage set: a grid of LED rings on the back wall, vertical LED tubes between the towers (a V, tall at the
+# outside), and two LED frames round the centre screen. The show sets every level (0..1) and the colours; the set
+# lights only itself, so it costs no lights. Tube and frame pixels share one batch.
 var ring_levels := PackedFloat32Array()
-var dot_levels := PackedFloat32Array()
 var ring_at: Array[Vector3] = []
-var dot_at: Array[Vector3] = []
+var set_pixels: Array[Vector3] = []
+var set_part := PackedInt32Array()      # per pixel: 0..5 a tube (left to right), 10 the inner frame, 11 the outer frame
+var set_place := PackedFloat32Array()   # per pixel: up a tube 0..1, or round a frame 0..1 (from the bottom middle)
+var set_levels := PackedFloat32Array()
 var piece_color := Color.WHITE
+var frame_color := Color.WHITE
 var _rings: MultiMesh
-var _dots: MultiMesh
-const DOT_COLUMNS := 18
-const DOT_ROWS := 7
+var _set: MultiMesh
+const TUBES := [[-18.0, 13.4], [-12.0, 11.8], [-6.0, 10.2], [6.0, 10.2], [12.0, 11.8], [18.0, 13.4]]   # x, top
 var _blinder_glow := 0.0
 var _by_kind := [[], [], []]
 var _mm := []              # per kind: {base, yoke, head, lens, beam}
@@ -510,36 +513,61 @@ func _yoke_mesh(r: float) -> ArrayMesh:
 	return st.commit()
 
 func _set_pieces() -> void:
-	var facing_stage := Basis(Vector3.RIGHT, PI / 2.0)   # a torus lies flat; stood up, it faces along Z
-	var xfs: Array[Transform3D] = []
-	# under the rear truss, between its beams, facing the stage and the DJ
-	for k in 8:
-		ring_at.append(Vector3(-15.75 + k * 4.5, 9.75, 26.3))
-	# on the back towers, below their beams, facing the hall
-	for k in 8:
-		ring_at.append(Vector3(-21.0 + k * 6.0, 4.4, Hall.BACK + 1.35))
-	for at in ring_at: xfs.append(Transform3D(facing_stage, at))
+	var wall := Hall.BACK + 0.45
+	var material := Kit.shader("res://shaders/batten_pixel.gdshader", {"gain": 6.0})
+	# rings on the back wall in the gaps between the towers, low and high
+	for x in [-18.0, -12.0, -6.0, 6.0, 12.0, 18.0]:
+		for y in [3.6, 13.9]: ring_at.append(Vector3(x, y, wall))
 	var torus := TorusMesh.new()
-	torus.inner_radius = 0.5
-	torus.outer_radius = 0.6
+	torus.inner_radius = 0.55
+	torus.outer_radius = 0.66
 	torus.rings = 48
 	torus.ring_segments = 8
-	var material := Kit.shader("res://shaders/batten_pixel.gdshader", {"gain": 6.0})
 	_rings = _multimesh(torus, ring_at.size(), material, true, false, false)
-	for i in xfs.size(): _rings.set_instance_transform(i, xfs[i])
-	# a grid of dots on the far wall, over the crowd, seen from the booth
-	for r in DOT_ROWS:
-		for c in DOT_COLUMNS:
-			dot_at.append(Vector3(-20.4 + c * 2.4, 4.0 + r * 1.35, Hall.D / 2.0 - 0.35))
-	var dot := SphereMesh.new()
-	dot.radius = 0.14
-	dot.height = 0.28
-	dot.radial_segments = 10
-	dot.rings = 5
-	_dots = _multimesh(dot, dot_at.size(), material, true, false, false)
-	for i in dot_at.size(): _dots.set_instance_transform(i, Transform3D(Basis.IDENTITY, dot_at[i]))
+	for i in ring_at.size(): _rings.set_instance_transform(i, Transform3D(Basis(Vector3.RIGHT, PI / 2.0), ring_at[i]))
 	ring_levels.resize(ring_at.size())
-	dot_levels.resize(dot_at.size())
+	# tubes: one pixel every 40 cm from the deck up
+	for t in TUBES.size():
+		var bottom := Hall.DECK + 3.0 + 0.3
+		var top: float = TUBES[t][1]
+		var n := int((top - bottom) / 0.4) + 1
+		for i in n:
+			set_pixels.append(Vector3(TUBES[t][0], bottom + i * 0.4, wall + 0.05))
+			set_part.append(t)
+			set_place.append(float(i) / float(n - 1))
+	# frames round the screen (5 × 7 m, centre 7.9 m up): one close round it, one taller and narrower outside it
+	var centre := Vector3(0.0, Hall.DECK + 6.3, -36.05)
+	for f in 2:
+		var size := Vector2(5.7, 7.8) if f == 0 else Vector2(6.9, 10.6)
+		var perimeter := 2.0 * (size.x + size.y)
+		var n := int(perimeter / 0.35)
+		for i in n:
+			var d := float(i) / float(n) * perimeter
+			# from the bottom middle round to the right, up, across the top and down the left
+			var at := Vector2.ZERO
+			var hx := size.x / 2.0
+			var hy := size.y / 2.0
+			if d < hx: at = Vector2(d, -hy)
+			elif d < hx + size.y: at = Vector2(hx, -hy + (d - hx))
+			elif d < hx + size.y + size.x: at = Vector2(hx - (d - hx - size.y), hy)
+			elif d < hx + 2.0 * size.y + size.x: at = Vector2(-hx, hy - (d - hx - size.y - size.x))
+			else: at = Vector2(-hx + (d - hx - 2.0 * size.y - size.x), -hy)
+			set_pixels.append(centre + Vector3(at.x, at.y, 0.02 * f))
+			set_part.append(10 + f)
+			set_place.append(float(i) / float(n))
+	var pixel := BoxMesh.new()
+	pixel.size = Vector3(0.16, 0.3, 0.08)
+	_set = _multimesh(pixel, set_pixels.size(), material, true, false, false)
+	for i in set_pixels.size():
+		var frame_side := set_part[i] >= 10
+		var basis := Basis.IDENTITY
+		# a frame's pixels lie along their edge
+		if frame_side:
+			var local := set_pixels[i] - centre
+			var size := Vector2(5.7, 7.8) if set_part[i] == 10 else Vector2(6.9, 10.6)
+			if absf(absf(local.y) - size.y / 2.0) < 0.01: basis = Basis(Vector3.BACK, PI / 2.0)
+		_set.set_instance_transform(i, Transform3D(basis, set_pixels[i]))
+	set_levels.resize(set_pixels.size())
 
 func _batten_batches() -> void:
 	var body := BoxMesh.new()
@@ -675,9 +703,9 @@ func update(dt: float, beat: float) -> void:
 	for i in ring_at.size():
 		var c := piece_color * ring_levels[i]
 		_rings.set_instance_color(i, Color(c.r, c.g, c.b, 1.0))
-	for i in dot_at.size():
-		var c := piece_color * dot_levels[i]
-		_dots.set_instance_color(i, Color(c.r, c.g, c.b, 1.0))
+	for i in set_pixels.size():
+		var c := (frame_color if set_part[i] >= 10 else piece_color) * set_levels[i]
+		_set.set_instance_color(i, Color(c.r, c.g, c.b, 1.0))
 	for o in _strobe_lights:
 		o.visible = strobe > 0.02
 		o.light_energy = 16.0 * strobe

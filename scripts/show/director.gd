@@ -1005,11 +1005,14 @@ func _direct(dt: float) -> void:
 		bt.chase_amount = (0.55 if safe else 0.85) * (1.0 - dropk) if gestures.name == "spatial_sequence" and gestures.mix > 0.5 and not calm and not brk else 0.0
 		bt.strobe = flash * strobe_k * master * float(tune.groups.get("batten", 1.0))
 
-	# ----- set pieces: the rings swell on the kick, the dot grid flashes on the melody in a quiet moment -----
+	# ----- the stage set: rings swell on the kick; tubes and frames play a figure per passage on the beat; in a quiet
+	# moment the tubes flash on the melody instead; a break fills the tubes with the build; a drop lights it all -----
 	var piece: Color = mono_colour(_colour_block() + _palette * 137) if multi and _mono_block() else col
 	rig.piece_color = col if single_colour else piece
+	rig.frame_color = rig.piece_color.lerp(Color.WHITE, 0.35)
 	var pieces: float = float(tune.groups.get("batten", 1.0))
-	var swell: float = sig.build * 0.25 if brk else sig.kick * (0.3 if safe else 1.0)
+	var kick_k: float = sig.kick * (0.3 if safe else 1.0)
+	var swell: float = sig.build * 0.25 if brk else kick_k
 	for i in rig.ring_at.size():
 		rig.ring_levels[i] = _lamp((0.05 + swell * 0.9 + sig.drop * 0.4) * master) * pieces
 	var melodic: bool = brk or sig.energy < 0.45
@@ -1019,9 +1022,23 @@ func _direct(dt: float) -> void:
 			_dot_flash = 1.0
 			_dot_pick += 1
 	_dot_flash *= exp(-dt * (4.0 if safe else 8.0))
-	for i in rig.dot_at.size():
-		var lit: bool = posmod(hash("%d:%d" % [i, _dot_pick]), 3) != 0
-		rig.dot_levels[i] = _lamp((0.02 + (_dot_flash * (0.4 if safe else 1.0) if lit else 0.0) + sig.drop * 0.3) * master) * pieces
+	var block := passage.index if passages else floori(sig.phase_clock / 64.0)
+	var tubes := ShowSet.tube_mode(block)
+	var frames := ShowSet.frame_mode(block)
+	var grid: float = sig.phase_clock
+	for i in rig.set_pixels.size():
+		var part: int = rig.set_part[i]
+		var place: float = rig.set_place[i]
+		var v: float
+		if part >= 10:
+			v = ShowSet.frame(frames, part - 10, place, grid, kick_k) if not brk else 0.06 + 0.25 * sig.build
+		elif brk:
+			v = 1.0 if place <= sig.build else ShowSet.DIM
+		else:
+			v = ShowSet.tube(tubes, part, place, grid, kick_k)
+		if melodic and part < 10 and posmod(hash("%d:%d" % [part, _dot_pick]), 3) != 0: v = maxf(v, _dot_flash)
+		if safe: v = minf(v, 0.4)
+		rig.set_levels[i] = _lamp((v * 0.8 + sig.drop * 0.4) * master) * pieces
 
 	# ----- the trusses on their winches -----
 	# Heavy trusses hold a formation for minutes. In a break they sink further as the build grows, in a measured

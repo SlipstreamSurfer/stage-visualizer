@@ -96,6 +96,8 @@ To make an app for Windows, macOS or Linux, see [builds](docs/builds.md).
 | S | Gentle strobes |
 | I | Info screen |
 | H | Hide everything |
+| F | Full screen |
+| Q | Quality |
 | P | Settings |
 
 A DJ controller can work the same buttons: Pause menu → DJ controller → Learn, then press a pad.
@@ -105,9 +107,10 @@ A DJ controller can work the same buttons: Pause menu → DJ controller → Lear
 - **Hall**: an industrial hangar of 44 × 76 m, 15 m high: steel girders and columns, cladding, exits, haze, a
   concrete floor that shines when wet, and a crowd of 3,000 that moves to the music.
 - **Rig**: five hall trusses in a V on chain hoists, a truss at the back, towers behind the DJ, delay towers and
-  side towers: beams, spots with gobos, washes, strobe battens and blinders.
-- **Show**: SV's lighting director, with 36 genres from Beatport, 25 looks for the heads, 15 truss formations and
-  9 looks for the stage row ([how it works](docs/choreografie.md)).
+  side towers, spots and LED bars on the stage roof: beams, spots with gobos, washes, strobe battens and blinders.
+- **Show**: SV's lighting director, with 36 genres from Beatport, 35 looks for the heads, 15 truss formations and
+  9 looks for the stage row. It plays in passages of 16 or 32 bars: one group leads, the others support or hold
+  ([how it works](docs/choreografie.md)).
 - **Graphics**: Low to Ultra, or Auto, measured on your own computer.
 
 ## Record and replay

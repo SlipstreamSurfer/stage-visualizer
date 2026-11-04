@@ -451,9 +451,10 @@ func _booth(black: Material) -> void:
 		elif arg in ["--booth=club", "--booth=2"]: booth_decks = 2
 	var positions := [0.7566, 0.394, -0.394, -0.7566] if booth_decks == 4 else [0.394, -0.394]
 	for i in positions.size():
-		_cdj_3000x(Vector3(positions[i], TABLE, zt - 0.08), i + 1)   # 0.2 m nearer the DJ than before: the gear sits close to the table edge the DJ stands at
-	_djm_a9(Vector3(0, TABLE, zt - 0.09605))
+		_player(Vector3(positions[i], TABLE, zt - 0.08), i + 1)   # 0.2 m nearer the DJ than before: the gear sits close to the table edge the DJ stands at
+	_mixer(Vector3(0, TABLE, zt - 0.09605))
 	_booth_detail(base, zt, positions)
+	_headphones(Vector3(-0.86 if booth_decks == 2 else -1.22, TABLE, zt - 0.14))
 	for batch: Kit.Batch in _gear_batches.values(): batch.build(self)
 	_gear_batches.clear()
 	var lamp := SpotLight3D.new()
@@ -518,10 +519,12 @@ func _booth_detail(base: float, zt: float, players: Array) -> void:
 	hardware.build(self).name = "BoothHardware"
 	cables.build(self).name = "BoothCables"
 
-func _gear_part(p: Node3D, size: Vector3, at: Vector3, color: Color, round_part := false) -> void:
-	var key := str(color) + str(round_part)
+# glow > 0: a lit pad or LED (emissive, the same in every light).
+func _gear_part(p: Node3D, size: Vector3, at: Vector3, color: Color, round_part := false, glow := 0.0) -> void:
+	var key := str(color) + str(round_part) + str(glow)
 	if not _gear_batches.has(key):
-		_gear_batches[key] = Kit.Batch.new(Kit.unit_tube() if round_part else Kit.unit_box(), Kit.mat(color, 0.72, 0.15))
+		var material := Kit.glowing(color, glow) if glow > 0.0 else Kit.mat(color, 0.72, 0.15)
+		_gear_batches[key] = Kit.Batch.new(Kit.unit_tube() if round_part else Kit.unit_box(), material, glow <= 0.0)
 	var batch: Kit.Batch = _gear_batches[key]
 	batch.add(p.transform * Transform3D(Basis.from_scale(size), at))
 
@@ -580,9 +583,11 @@ func _gear_fader(p: Node3D, x: float, z: float, length: float, horizontal := fal
 	_gear_part(p, Vector3(0.007, 0.008, 0.022) if horizontal else Vector3(0.022, 0.008, 0.007), Vector3(x, y + 0.005, z), Color(0.19, 0.2, 0.21))
 	_gear_part(p, Vector3(0.001, 0.001, 0.02) if horizontal else Vector3(0.02, 0.001, 0.001), Vector3(x, y + 0.0095, z), Color(0.85, 0.86, 0.87))
 
-func _cdj_3000x(at: Vector3, deck_id: int) -> void:
+# A generic club player in the familiar layout (no real brand or model): screen at the back, eight hot cues below
+# it, the jog in the middle, cue over play at the front left, a long tempo fader on the right.
+func _player(at: Vector3, deck_id: int) -> void:
 	var p := Node3D.new()
-	p.name = "CDJ3000X_Deck%d" % deck_id
+	p.name = "Player%d" % deck_id
 	p.position = at
 	# Local X follows the front-panel photograph; camera faces world +Z.
 	p.scale.x = -1.0
@@ -611,6 +616,10 @@ func _cdj_3000x(at: Vector3, deck_id: int) -> void:
 		var a := TAU * float(i) / 40
 		_gear_part(p, Vector3(0.004, 0.003, 0.004), Vector3(-0.018 + cos(a) * 0.098, 0.093, -0.062 + sin(a) * 0.098), Color(0.11, 0.115, 0.12), true)
 	_gear_disc(p, 0.091, 0.002, Vector3(-0.018, 0.093, -0.062), Kit.mat(Color(0.32, 0.34, 0.36), 0.32, 0.8))
+	# the lit jog ring, a thin line of light round the platter
+	for i in 72:
+		var a := TAU * float(i) / 72
+		_gear_part(p, Vector3(0.0045, 0.001, 0.0045), Vector3(-0.018 + cos(a) * 0.0935, 0.0942, -0.062 + sin(a) * 0.0935), Color(0.25, 0.55, 1.0), true, 0.8)
 	_gear_disc(p, 0.088, 0.002, Vector3(-0.018, 0.095, -0.062), black)
 	var jog := Kit.shader("res://shaders/booth.gdshader", {"kind": 2, "deck": float(deck_id)})
 	_gear_face(p, Vector2(0.065, 0.065), Vector3(-0.018, 0.0965, -0.062), jog)
@@ -627,8 +636,9 @@ func _cdj_3000x(at: Vector3, deck_id: int) -> void:
 	for i in 8:
 		var x := -0.098 + i * 0.031
 		_gear_part(p, Vector3(0.023, 0.003, 0.012), Vector3(x, 0.081, 0.056), Color(0.1, 0.12, 0.13))
-		_gear_part(p, Vector3(0.018, 0.001, 0.0015), Vector3(x, 0.083, 0.052), Color(0.15, 0.6, 0.45) if i % 2 == 0 else Color(0.36, 0.45, 0.7))
-		_gear_text(p, String.chr(65 + i), Vector3(x, 0.084, 0.057), 0.006)
+		# rubber pads lit from below in the hot-cue colours
+		_gear_part(p, Vector3(0.021, 0.001, 0.010), Vector3(x, 0.0826, 0.056), HOT_CUES[i], false, 0.9)
+		_gear_text(p, String.chr(65 + i), Vector3(x, 0.084, 0.064), 0.006)
 	for z in [-0.103, -0.073, -0.043, -0.013, 0.018]:
 		for x in [-0.145, -0.12]: _gear_part(p, Vector3(0.018, 0.004, 0.009), Vector3(x, 0.081, z), Color(0.13, 0.14, 0.15))
 	for z in [0.09, 0.12, 0.15, 0.18, 0.21]: _gear_part(p, Vector3(0.019, 0.004, 0.012), Vector3(-0.148, 0.081, z), Color(0.12, 0.13, 0.14))
@@ -636,12 +646,16 @@ func _cdj_3000x(at: Vector3, deck_id: int) -> void:
 	_gear_knob(p, 0.115, 0.012, 0.008)
 	_gear_knob(p, 0.115, -0.022)
 	for z in [0.04, -0.052, -0.074]: _gear_part(p, Vector3(0.033, 0.003, 0.01), Vector3(0.135, 0.081, z), Color(0.13, 0.14, 0.15))
-	_gear_text(p, "AlphaTheta", Vector3(-0.095, 0.079, -0.229), 0.075)
-	_gear_text(p, "CDJ-3000X", Vector3(0.11, 0.079, -0.229), 0.06)
+	_gear_text(p, "SV", Vector3(-0.12, 0.079, -0.229), 0.03)
+	_gear_text(p, "CDX-10", Vector3(0.11, 0.079, -0.229), 0.05)
 
-func _djm_a9(at: Vector3) -> void:
+const HOT_CUES := [Color(0.1, 0.9, 0.3), Color(1.0, 0.1, 0.25), Color(1.0, 0.55, 0.05), Color(0.1, 0.55, 1.0),
+	Color(0.9, 0.85, 0.1), Color(0.75, 0.2, 1.0), Color(0.1, 0.85, 0.85), Color(1.0, 0.3, 0.6)]
+
+# A generic four-channel club mixer in the familiar layout (no real brand or model).
+func _mixer(at: Vector3) -> void:
 	var p := Node3D.new()
-	p.name = "DJM_A9"
+	p.name = "Mixer"
 	p.position = at
 	# Local X follows the front-panel photograph; camera faces world +Z.
 	p.scale.x = -1.0
@@ -651,8 +665,8 @@ func _djm_a9(at: Vector3) -> void:
 		for z in [-0.18, 0.18]: _gear_disc(p, 0.016, 0.01, Vector3(x, 0.005, z), black)
 	Kit.box(p, Vector3(0.4074, 0.070, 0.4583), Vector3(0, 0.045, 0), black)
 	Kit.box(p, Vector3(0.4034, 0.003, 0.4543), Vector3(0, 0.0815, 0), black)
-	_gear_text(p, "Pioneer DJ", Vector3(-0.006, 0.084, 0.213), 0.072)
-	_gear_text(p, "DJM-A9", Vector3(0.163, 0.084, -0.216), 0.044)
+	_gear_text(p, "SV", Vector3(-0.006, 0.084, 0.213), 0.03)
+	_gear_text(p, "MX-4", Vector3(0.163, 0.084, -0.216), 0.034)
 	# Centre: input selectors, TRIM, three-band EQ, COLOR, dual headphone cues, channel faders.
 	for ch in 4:
 		var x := -0.080 + ch * 0.043
@@ -660,14 +674,14 @@ func _djm_a9(at: Vector3) -> void:
 		for z in [0.185, 0.153, 0.12, 0.085, 0.05, 0.002]: _gear_knob(p, x, z, 0.008 if z < 0.14 else 0.006)
 		for r in 4: _gear_text(p, ["TRIM", "HI", "MID", "LOW"][r], Vector3(x, 0.084, 0.166 - r * 0.035), 0.018)
 		_gear_text(p, "COLOR", Vector3(x, 0.084, 0.020), 0.021)
-		for dx in [-0.008, 0.01]: _gear_part(p, Vector3(0.013, 0.003, 0.009), Vector3(x + dx, 0.085, -0.038), Color(0.8, 0.32, 0.035))
+		for dx in [-0.008, 0.01]: _gear_part(p, Vector3(0.013, 0.003, 0.009), Vector3(x + dx, 0.085, -0.038), Color(1.0, 0.42, 0.05), false, 0.5 if dx < 0.0 else 0.0)
 		_gear_fader(p, x, -0.112, 0.057)
 		_gear_part(p, Vector3(0.011, 0.004, 0.006), Vector3(x, 0.085, -0.168), Color(0.2, 0.21, 0.22))
 		var meter := Kit.shader("res://shaders/booth.gdshader", {"kind": 3, "deck": float(ch + 1)})
 		_gear_face(p, Vector2(0.003, 0.108), Vector3(x - 0.018, 0.084, 0.11), meter)
 		_gear_part(p, Vector3(0.0006, 0.001, 0.365), Vector3(x - 0.024, 0.084, 0), Color(0.32, 0.33, 0.35))
 	_gear_fader(p, -0.016, -0.207, 0.06, true)
-	_gear_text(p, "MAGVEL FADER", Vector3(-0.016, 0.084, -0.183), 0.055)
+	_gear_text(p, "CROSSFADER", Vector3(-0.016, 0.084, -0.183), 0.05)
 	# Left: mic, six Sound Color FX, headphone A. Right: master, booth EQ, headphone B, Beat FX.
 	for x in [-0.178, -0.131, 0.094]:
 		for z in [0.145, 0.116, 0.086, 0.059, -0.062, -0.12, -0.16]: _gear_knob(p, x, z)
@@ -686,13 +700,40 @@ func _djm_a9(at: Vector3) -> void:
 	_gear_text(p, "PHONES A", Vector3(-0.131, 0.084, -0.094), 0.035)
 	_gear_text(p, "PHONES B", Vector3(0.094, 0.084, -0.094), 0.035)
 	for z in [0.18, 0.15, -0.04, -0.12, -0.158]: _gear_knob(p, 0.158, z, 0.008)
-	_gear_face(p, Vector2(0.065, 0.047), Vector3(0.157, 0.084, 0.104), Kit.mat(Color(0.01, 0.015, 0.02)))
+	_gear_face(p, Vector2(0.065, 0.047), Vector3(0.157, 0.084, 0.104), Kit.glowing(Color(0.05, 0.12, 0.25), 0.6))
 	_gear_text(p, "BEAT FX", Vector3(0.157, 0.0845, 0.139), 0.036)
 	_gear_text(p, "120.0 BPM\nECHO\n1/2   1   2", Vector3(0.157, 0.085, 0.104), 0.052)
 	_gear_part(p, Vector3(0.062, 0.002, 0.012), Vector3(0.157, 0.084, 0.067), Color(0.1, 0.12, 0.16))
 	for row in 2:
-		for col in 4: _gear_part(p, Vector3(0.011, 0.003, 0.007), Vector3(0.133 + col * 0.016, 0.085, -0.073 - row * 0.018), Color(0.07, 0.28, 0.55))
+		for col in 4: _gear_part(p, Vector3(0.011, 0.003, 0.007), Vector3(0.133 + col * 0.016, 0.085, -0.073 - row * 0.018), Color(0.07, 0.28, 0.55), false, 0.4 if row == 0 and col == 1 else 0.0)
 	_gear_disc(p, 0.01, 0.003, Vector3(0.158, 0.085, -0.198), Kit.glowing(Color(0.08, 0.3, 1), 0.7))
+
+# Closed-back headphones laid on the table beside the gear, cups down, the cable coiled towards the mixer.
+func _headphones(at: Vector3) -> void:
+	var p := Node3D.new()
+	p.name = "Headphones"
+	p.position = at
+	p.rotation_degrees.y = 18.0
+	add_child(p)
+	var shell := Kit.mat(Color(0.03, 0.03, 0.033), 0.55, 0.2)
+	var pad := Kit.mat(Color(0.015, 0.015, 0.016), 0.95)
+	var metal := Kit.mat(Color(0.45, 0.46, 0.48), 0.3, 0.9)
+	for side in [-1.0, 1.0]:
+		_gear_disc(p, 0.048, 0.022, Vector3(side * 0.085, 0.011, 0), pad)
+		_gear_disc(p, 0.044, 0.026, Vector3(side * 0.085, 0.035, 0), shell)
+		_gear_disc(p, 0.02, 0.002, Vector3(side * 0.085, 0.049, 0), metal)
+	# the band arches over the cups and lies flat behind them
+	var band := Kit.Batch.new(Kit.unit_tube(), shell, false)
+	var points: Array[Vector3] = []
+	for i in 13:
+		var a := PI * float(i) / 12.0
+		points.append(Vector3(-cos(a) * 0.085, 0.04 + sin(a) * 0.02, 0.05 + sin(a) * 0.05))
+	Kit.cable(band, points, 0.009)
+	var cord := Kit.Batch.new(Kit.unit_tube(), Kit.mat(Color(0.02, 0.02, 0.022), 0.9), false)
+	Kit.cable(cord, [Vector3(-0.12, 0.02, 0), Vector3(-0.16, 0.004, -0.02), Vector3(-0.15, 0.004, 0.08), Vector3(-0.05, 0.004, 0.11),
+		Vector3(0.08, 0.004, 0.09), Vector3(0.17, 0.004, 0.04)], 0.002)
+	band.build(p).name = "Band"
+	cord.build(p).name = "Cord"
 
 func _process(dt: float) -> void:
 	_update_return(dt)

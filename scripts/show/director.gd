@@ -730,9 +730,10 @@ func _direct(dt: float) -> void:
 		_passage_seen = passage.index
 		_frozen = {"m": _motion, "spin": _spin, "phase": sig.phase_clock}
 	var passages: bool = not mood.flow and not brk
-	# Techno: the heads stand still and the rhythm comes from light moving between them, as in a depth chase.
-	var still: bool = passages and mood.family in ["Techno", "Hard"]
-	passage.stepped = still
+	# A figure changes its place only in steps, in the dark; on top of it every head moves in steps on the beat, and
+	# the rhythm travels through the light: the lead plays a pattern, the support pumps with the kick.
+	var still: bool = passages   # every genre: the lead plays a pattern on the beat, the support pumps with the kick
+	passage.stepped = passages
 	_groove(dt, sig.phase_clock, brk)
 
 	# the DJ asked for the next look: a new scene now, with the next look and formation
@@ -792,7 +793,7 @@ func _direct(dt: float) -> void:
 	rig.blinder = blind * master
 
 	# ----- the moving heads -----
-	var k := {"m": _frozen.m if still else _motion, "spin": _frozen.spin if still else _spin, "phase": _frozen.phase if still else sig.phase_clock, "build": sig.build, "hangar_look": _scene % 3}
+	var k := {"m": _frozen.m, "spin": _frozen.spin, "phase": _frozen.phase, "build": sig.build, "hangar_look": _scene % 3}
 	_hangar_looks(tier, brk)
 	var look: Array = L.HEAD_LOOKS[_head_look]
 	var stage_z := Rig.TRUSS_Z[0] - 8.0   # over the booth
@@ -820,10 +821,15 @@ func _direct(dt: float) -> void:
 	var e_moving: float = ease.call(0.1)
 	var e_settle: float = ease.call(0.7)
 	var e_gate: float = ease.call(0.65 if safe else 0.22)
+	# Every head moves in steps on the beat: two beats a step, every beat late in a peak; in a break the steps slow
+	# to a bar and grow with the build. A clap nods the rig a little.
+	var step_beats: float = 4.0 if brk or mood.flow else 1.0 if sec == "peak" and passage.progress >= 0.5 else 2.0
+	var clap_nod: float = 0.0 if safe or brk else float(groove.clap) * 0.05
+	var step_size: float = (0.25 + bld * 0.75 if brk else 0.35 if mood.flow else 1.0) * (0.5 if safe else 1.0)
 	var cue := "%d:%d:%d" % [_scene, floori((_beat - 1) / 16.0), floori(passage.progress * 4.0) if passage.stepped else 0]   # a step of a still figure moves in the dark
 	# what is the same for every head this frame, worked out once
 	var stack := _stack(look, tier)
-	var look_move: String = "still" if still else stack[0]
+	var look_move: String = "still"
 	var look_gate: String = stack[1]
 	var look_colour: String = stack[2]
 	var look_beam: Array = L.BEAMS[stack[3]]
@@ -854,7 +860,6 @@ func _direct(dt: float) -> void:
 		var row: bool = h.role == "row"
 		var role: String = "stage" if row else h.role
 		var prole: String = passage.role(f.group) if passages and not row else ""
-		var rain: bool = passages and passage.figure == "rain" and f.group in ShowPassage.RAIN_GROUPS
 		var a: Vector2
 		if h.role == "overhead":
 			if brk: a = _toward(p, _break_target(h, p, k, s, sig) if multi else L.floor_target(h, p, k, _beat, sec, sig.build, sig.energy, sig.drop))
@@ -867,6 +872,8 @@ func _direct(dt: float) -> void:
 		else:
 			var pt := passage.stage_target(f.group, f.row, f.mount, h.xn, h.u, k.m) if passages else Vector3.INF
 			a = _program_aim("break" if brk else P.name, h.hanging, h, k) if pt == Vector3.INF else _toward(p, _inside(pt))
+		# a break holds the figure it came in with; the build is in the light, not in the movement
+		if brk and h.aimed: a = h.aim
 		# crossfade the asked aim as well as limiting the motors; a head dims while it travels far
 		if not h.aimed:
 			h.aim = _toward(p, p + f.dir)
@@ -878,33 +885,32 @@ func _direct(dt: float) -> void:
 			h.cue = cue
 		var moving: bool = _t - h.move_at < 5.0 and gap > 0.2
 		h.move_level += ((0.2 if moving else 1.0) - h.move_level) * (e_moving if moving else e_settle)
-		if rain: h.aim = a   # a falling beam follows its path itself; the motors still limit it
-		elif _t - h.move_at > 0.18:
+		if _t - h.move_at > 0.18:
 			h.aim.x += pan_gap * e25
 			h.aim.y += (a.y - h.aim.y) * e25
-		f.target = p + _dir(h.aim) * 30.0
+		f.target = p + _dir(h.aim + passage.step(h.slot, h.row, h.u, h.xn, sig.phase_clock, step_beats, step_size) + Vector2(0.0, clap_nod)) * 30.0
 		var I: float = I_base if prole == "" else I_still + kick_term * ShowPassage.PULSE[prole] / 0.55
 		var pg := 1.0
-		if chase_gate and not row and role == "overhead" and prole in ["", "lead"] and not rain:
+		if chase_gate and not row and role == "overhead" and prole in ["", "lead"]:
 			pg = 0.1 + 0.9 * pow(maxf(0.0, cos(h.u * TAU * 1.5 - sig.phase_clock * TAU / 4.0 + h.row * 1.1)), 3.0)
 		I = (I * (_row_w if row else _w[role] if prole == "" else passage.level(f.group, prole)) * pg + I_drop) * master
 		# give the centre, the sides and the stage turns in the foreground; a drop opens the full rig
 		var bank: int = h.bank
 		if not brk and accent_bank == bank: I += I_accent
 		# the genre's share of lit heads: the rest stay dark outside a drop
-		if not brk and not row and h.lit_key > lit_share and not (prole != "" and role == "stage") and not rain: I *= dropk * 0.9
+		if not brk and not row and h.lit_key > lit_share and not (prole != "" and role == "stage"): I *= dropk * 0.9
 		var foreground: bool = bank == foreground_bank
 		var lv: float = 1.0 if foreground or prole != "" else 0.28 if calm or brk else 0.45
 		h.level += (lv - h.level) * e18
 		I *= h.level + (1.0 - h.level) * dropk
-		if not (prole != "" and role == "stage") and not rain: I *= phrasing.gain(bank, f.mount, dropk)
+		if not (prole != "" and role == "stage"): I *= phrasing.gain(bank, f.mount, dropk)
 		I *= 1.0 - _screen_focus * (0.6 if row or role == "stage" else 0.3) * (1.0 - dropk)
 		# hold each figure for 32 kicks; builds leave a small group near the stage
 		var build_on: bool = absf(h.xn) <= 1.0 - bld * 0.85 and (bld < 0.65 or bank == 2 or h.row % 3 == 0)
 		var gate_name: String = look_gate if h.role == "overhead" else row_gate if row else "patterns"
 		if safe and not row: gate_name = "all"
 		# in a passage the figure owns the stage's selection, and only the lead plays the look's gate
-		if prole != "" and (role == "stage" or prole != "lead" or rain): gate_name = "all"
+		if prole != "" and (role == "stage" or prole != "lead"): gate_name = "all"
 		var on: bool = build_on if brk else L.gate(gate_name, h, counted, pattern)
 		if prole != "" and role == "stage": on = passage.stage_on(f.group, f.row)
 		if row and dropk < 0.5: on = on and posmod(h.slot, 4) == posmod(floori(sig.phase_clock / 8.0) + _scene, 4)
@@ -914,8 +920,12 @@ func _direct(dt: float) -> void:
 		I *= h.move_level + (1.0 - h.move_level) * dropk
 
 		# the lead's rhythm: light travels between its fixtures on the beat
-		if rain: I *= passage.rain_level(f.mount)
-		elif still and prole == "lead": I *= passage.chase(f.group, f.row, h.u, sig.phase_clock, sec) + (1.0 - passage.chase(f.group, f.row, h.u, sig.phase_clock, sec)) * dropk
+		if still and prole == "lead":
+			var lit := passage.chase(f.group, f.row, h.u, sig.phase_clock, sec)
+			I *= lit + (1.0 - lit) * dropk
+		elif still and prole == "support" and not safe:
+			var pumped := ShowPassage.pump(sig.phase_clock)
+			I *= pumped + (1.0 - pumped) * dropk
 		f.level = _lamp(I) * float(faders.get(f.group, 1.0))
 		# the look spreads the two colours, through a slow colour fade
 		var cname: String = look_colour if h.role == "overhead" else row_colour if row else "sides"
@@ -942,7 +952,7 @@ func _direct(dt: float) -> void:
 		if f.kind == Rig.SPOT: gobo = 1.0
 		f.zoom = z
 		f.gobo = gobo
-		f.spin = 0.06 if gobo > 0.0 else 0.0
+		f.spin = 0.06 if gobo > 0.0 else 0.0   # turns per beat: the gobos turn with the tempo
 
 	# ----- washes and bars -----
 	# Washes are the colour under the beams: a steady level for the part of the track that changes over a couple of

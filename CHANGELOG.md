@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.61.0-test4 — Every move on the beat
+
+- Heads no longer turn, drift or circle on a clock of their own. Every head moves in steps on the beat: a step
+  lands on the kick and holds until the next one. Each passage picks a motion: scissors (odd and even cross),
+  a nod of the whole rig, a fan that opens and closes, a ladder that travels along and up, or a wave.
+- Two beats a step, every beat in the second half of a peak; in a break a step a bar, growing with the build.
+  A clap nods the rig a little. Gobos turn with the tempo.
+- Beam rain is removed.
+- More rhythm in the light, in every genre: besides the chases the lead can fill up beat by beat, pump with the
+  kick, sparkle on the sixteenths, bounce between the edges and the middle, or split left and right. The supporting
+  groups pump with the kick under it (not with gentle strobes).
+
 ## 0.61.0-test3 — Rings, dots and beam rain
 
 - LED rings under the rear truss and on the back towers: a full circle that swells on every kick.
